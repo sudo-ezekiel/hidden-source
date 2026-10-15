@@ -50,6 +50,7 @@
 #include "gamevars_shared.h"
 #include "world.h"
 #include "physobj.h"
+#include "props.h"
 #include "KeyValues.h"
 #include "coordsize.h"
 #include "vphysics/player_controller.h"
@@ -78,6 +79,7 @@ static ConVar physicsshadowupdate_render( "physicsshadowupdate_render", "0" );
 ConVar	sv_noclipduringpause( "sv_noclipduringpause", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "If cheats are enabled, then you can noclip with the game paused (for doing screenshots, etc.)." );
 
 extern ConVar sv_maxunlag;
+extern ConVar sv_turbophysics;		// props.cpp
 
 // TIME BASED DAMAGE AMOUNT
 // tweak these values based on gameplay feedback:
@@ -473,12 +475,12 @@ CBasePlayer::CBasePlayer( )
 
 	// Hidden
 	m_bSafety = false;
-	Q_memset( m_CurrentLocation.GetForModify(), 0, sizeof( m_CurrentLocation ) );
+	memset( m_CurrentLocation.GetForModify(), 0, sizeof( m_CurrentLocation ) );
 	m_iNewClass = 2;
 	m_bSpawn = false;
-	m_iNewPrimary = -1;
 	m_iCharacterSkin = -1;
 	m_iCharacterBody = -1;
+	m_iNewPrimary = -1;
 	m_iPrimary = -1;
 	m_iNewSecondary = -1;
 	m_iSecondary = -1;
@@ -565,12 +567,14 @@ int CBasePlayer::ShouldTransmit( const CCheckTransmitInfo *pInfo )
 		}
 	}
 
-	if ( IsEffectActive( EF_NODRAW ) )
+	// Transmit for a short time after death so ragdolls can access reliable player data
+	if ( IsEffectActive( EF_NODRAW ) || ( IsObserver() && ( gpGlobals->curtime - m_flDeathTime > 0.5 ) ) )
 	{
 		return FL_EDICT_DONTSEND;
 	}
 
 	return BaseClass::ShouldTransmit( pInfo );
+
 }
 
 
@@ -663,10 +667,10 @@ void CBasePlayer::DeathSound( const CTakeDamageInfo &info )
 		// Hidden: the knife kills have their own death sounds
 		if ( info.GetDamageType() == DMG_SLASH )
 		{
-			if ( info.GetDamage() <= 100 )
-				EmitSound( "Player.KnifeSlash.Death" );
-			else
+			if ( info.GetDamage() > 100 )
 				EmitSound( "Player.KnifePigstick.Death" );
+			else
+				EmitSound( "Player.KnifeSlash.Death" );
 		}
 		else
 		{
@@ -753,7 +757,8 @@ void CBasePlayer::TraceAttack( const CTakeDamageInfo &inputInfo, const Vector &v
 		case HITGROUP_GENERIC:
 			break;
 		case HITGROUP_HEAD:
-			info.ScaleDamage( sk_player_head.GetFloat() );
+			// Hidden: a fixed head shot multiplier; sk_player_head is not read
+			info.ScaleDamage( 1.2f );
 			break;
 		case HITGROUP_CHEST:
 			info.ScaleDamage( sk_player_chest.GetFloat() );
@@ -869,10 +874,15 @@ int CBasePlayer::OnTakeDamage( const CTakeDamageInfo &inputInfo )
 		info.ScaleDamage(pVehicle->DamageModifier(info));
 	}
 
+	// Hidden: no damage while m_bSafety is set
+	if ( GetSafe() )
+		return 0;
+
 	if ( GetFlags() & FL_GODMODE )
 		return 0;
 
 	if ( m_debugOverlays & OVERLAY_BUDDHA_MODE ) 
+
 	{
 		if ((m_iHealth - info.GetDamage()) <= 0)
 		{
@@ -1358,9 +1368,11 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 	IGameEvent * event = gameeventmanager->CreateEvent( "player_hurt" );
 	if ( event )
 	{
+		float flDamage = info.GetDamage();
 		event->SetInt("userid", GetUserID() );
 		event->SetInt("health", max(0, m_iHealth) );
-		event->SetFloat("damage", info.GetDamage() );
+		event->SetFloat("damage", flDamage );
+
 		event->SetInt("priority", 5 );	// HLTV event priority, not transmitted
 
 		if ( attacker->IsPlayer() )
@@ -1373,7 +1385,7 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 			if ( player->GetActiveWeapon() )
 			{
 				weaponName = player->GetActiveWeapon()->GetDeathNoticeName();
-				if ( Q_strncmp( weaponName, "weapon_", 7 ) == 0 )
+				if ( strncmp( weaponName, "weapon_", 7 ) == 0 )
 				{
 					weaponName += 7;
 				}
@@ -1473,7 +1485,7 @@ void CBasePlayer::Event_Killed( const CTakeDamageInfo &info )
 
 	pl.deadflag = true;
 	AddSolidFlags( FSOLID_NOT_SOLID );
-	SetMoveType( MOVETYPE_FLYGRAVITY );
+	SetMoveType( MOVETYPE_NOCLIP );		// Hidden: was MOVETYPE_FLYGRAVITY
 	SetGroundEntity( NULL );
 
 	// clear out the suit message cache so we don't keep chattering
@@ -1487,7 +1499,20 @@ void CBasePlayer::Event_Killed( const CTakeDamageInfo &info )
 		 FlashlightTurnOff();
 	}
 
+	// Hidden: the laser sight goes off too
+	if ( LAMIsOn() )
+	{
+		LaserTurnOff();
+	}
+
 	m_flDeathTime = gpGlobals->curtime;
+
+	// only count alive players
+	if (m_lastNavArea)
+	{
+		m_lastNavArea->DecrementPlayerCount( GetTeamNumber() );
+		m_lastNavArea = NULL;
+	}
 
 	BaseClass::Event_Killed( info );
 }
@@ -1949,45 +1974,12 @@ void CBasePlayer::PlayerDeathThink(void)
 
 	AddEffects( EF_NOINTERP );
 	m_flPlaybackRate = 0.0;
-	
-	int fAnyButtonDown = (m_nButtons & ~IN_SCORE);
-	
-	// wait for all buttons released
-	if (m_lifeState == LIFE_DEAD)
-	{
-		if (fAnyButtonDown)
-			return;
 
-		if ( g_pGameRules->FPlayerCanRespawn( this ) )
-		{
-			m_lifeState = LIFE_RESPAWNABLE;
-		}
-		
-		return;
-	}
-
-// if the player has been dead for one second longer than allowed by forcerespawn, 
-// forcerespawn isn't on. Send the player off to an intermission camera until they 
-// choose to respawn.
-	if ( g_pGameRules->IsMultiplayer() && ( gpGlobals->curtime > (m_flDeathTime + DEATH_ANIMATION_TIME) ) && !IsObserver() )
-	{
-		// go to dead camera. 
-		StartObserverMode( m_iObserverLastMode );
-	}
-	
-// wait for any button down,  or mp_forcerespawn is set and the respawn time is up
-	if (!fAnyButtonDown 
-		&& !( g_pGameRules->IsMultiplayer() && forcerespawn.GetInt() > 0 && (gpGlobals->curtime > (m_flDeathTime + 5))) )
-		return;
-
-	m_nButtons = 0;
-	m_iRespawnFrames = 0;
-
-	//Msg( "Respawn\n");
-
-	respawn( this, !IsObserver() );// don't copy a corpse if we're in deathcam.
-	SetNextThink( TICK_NEVER_THINK );
+	// Hidden: no respawn wait; the dead player goes straight to spectating until the next round
+	m_lifeState = LIFE_ALIVE;
+	StartObserverMode( m_iObserverLastMode );
 }
+
 
 /*
 
@@ -2103,7 +2095,7 @@ bool CBasePlayer::StartObserverMode(int mode)
 	//whether to draw the player or not with ShouldDraw
 	//AddEffects( EF_NODRAW );		
 
-	m_iHealth = 1;
+	m_iHealth = 0;		// Hidden: was 1
 	m_lifeState = LIFE_DEAD; // Can't be dead, otherwise movement doesn't work right.
 	pl.deadflag = true;
 
@@ -2112,7 +2104,7 @@ bool CBasePlayer::StartObserverMode(int mode)
 
 bool CBasePlayer::SetObserverMode(int mode, bool ignoreDeadSpecMode)
 {
-	if ( mode < OBS_MODE_NONE || mode > OBS_MODE_ROAMING )
+	if ( mode < OBS_MODE_NONE || mode > OBS_MODE_DEATHCAM )
 		return false;
 
 
@@ -2138,27 +2130,23 @@ bool CBasePlayer::SetObserverMode(int mode, bool ignoreDeadSpecMode)
 	switch ( mode )
 	{
 		case OBS_MODE_NONE:
-		case OBS_MODE_FIXED :
-		case OBS_MODE_DEATHCAM :
 			SetFOV( this, 0 );	// Reset FOV
 			SetViewOffset( vec3_origin );
 			SetMoveType( MOVETYPE_NONE );
 			break;
 
-		case OBS_MODE_CHASE :
+		// Hidden: the fixed cameras and the death cam sit on their target
+		case OBS_MODE_FIXED :
+		case OBS_MODE_DEATHCAM :
+			SetObserverTarget( m_hObserverTarget );
+			SetMoveType( MOVETYPE_NONE );
+			break;
+
 		case OBS_MODE_IN_EYE :	
 			// udpate FOV and viewmodels
 			SetObserverTarget( m_hObserverTarget );	
 			SetMoveType( MOVETYPE_OBSERVER );
 			break;
-			
-		case OBS_MODE_ROAMING :
-			SetFOV( this, 0 );	// Reset FOV
-			SetObserverTarget( m_hObserverTarget );
-			SetViewOffset( vec3_origin );
-			SetMoveType( MOVETYPE_OBSERVER );
-			break;
-
 	}
 
 	CheckObserverSettings();
@@ -2173,7 +2161,7 @@ int CBasePlayer::GetObserverMode()
 
 void CBasePlayer::ForceObserverMode(int mode, bool ignoreDeadSpecMode)
 {
-	int tempMode = OBS_MODE_ROAMING;
+	int tempMode = OBS_MODE_FIXED;
 
 	if ( m_iObserverMode == mode )
 		return;
@@ -2228,12 +2216,12 @@ void CBasePlayer::CheckObserverSettings()
 	// make sure our last mode is valid
 	if ( m_iObserverLastMode < OBS_MODE_FIXED )
 	{
-		m_iObserverLastMode = OBS_MODE_ROAMING;
+		m_iObserverLastMode = OBS_MODE_IN_EYE;
 	}
 
 	// check if our spectating target is still a valid one
 	
-	if (  m_iObserverMode == OBS_MODE_IN_EYE || m_iObserverMode == OBS_MODE_CHASE )
+	if ( m_iObserverMode == OBS_MODE_DEATHCAM || m_iObserverMode == OBS_MODE_IN_EYE || m_iObserverMode == OBS_MODE_FIXED )
 	{
 		if ( !IsValidObserverTarget( m_hObserverTarget.Get() ) )
 		{
@@ -2247,22 +2235,14 @@ void CBasePlayer::CheckObserverSettings()
 			else
 			{
 				// couldn't find new taget, switch to temporary mode
-				if ( mp_forcecamera.GetInt() == 1 )
-				{
-					ForceObserverMode( OBS_MODE_FIXED, true );
-				}
-				else
-				{
-					ForceObserverMode( OBS_MODE_ROAMING, false );
-				}
+				ForceObserverMode( OBS_MODE_FIXED, true );
 			}
 		}
 				
 		CBasePlayer *target = ToBasePlayer( m_hObserverTarget.Get() );
 
-		// for ineye mode we have to copy several data to see exactly the same 
-
-		if ( target && m_iObserverMode == OBS_MODE_IN_EYE )
+		// Hidden: watching a player, copy his FOV, view offset, view angles and position
+		if ( target )
 		{
 			float fFov = target->GetFOV();
 
@@ -2271,21 +2251,13 @@ void CBasePlayer::CheckObserverSettings()
 				SetFOV( this, fFov, 0 );
 			}
 
-			int flagMask =	FL_ONGROUND | FL_DUCKING ;
-
-			int flags = target->GetFlags() & flagMask;
-
-			if ( (GetFlags() & flagMask) != flags )
-			{
-				flags |= GetFlags() & (~flagMask); // keep other flags
-				ClearFlags();
-				AddFlag( flags );
-			}
-
 			if ( target->GetViewOffset() != GetViewOffset()	)
 			{
 				SetViewOffset( target->GetViewOffset() );
 			}
+
+			SnapEyeAngles( target->EyeAngles() );
+			Teleport( &target->GetAbsOrigin(), &target->EyeAngles(), NULL );
 		}
 	}
 }
@@ -2371,43 +2343,11 @@ bool CBasePlayer::SetObserverTarget(CBaseEntity *target)
 	// set new target
 	m_hObserverTarget.Set( target ); 
 
+	// Hidden: move to the target (a camera or a player)
+	Teleport( &target->GetAbsOrigin(), NULL, NULL );
+
 	// reset fov to default
 	SetFOV( this, 0 );	
-	
-	if ( m_iObserverMode == OBS_MODE_ROAMING )
-	{
-		Vector	dir, end;
-		Vector	start = target->EyePosition();
-		
-		AngleVectors( target->EyeAngles(), &dir );
-		VectorNormalize( dir );
-		VectorMA( start, -64.0f, dir, end );
-
-		Ray_t ray;
-		ray.Init( start, end, VEC_DUCK_HULL_MIN	, VEC_DUCK_HULL_MAX );
-
-		trace_t	tr;
-		UTIL_TraceRay( ray, MASK_PLAYERSOLID, target, COLLISION_GROUP_PLAYER_MOVEMENT, &tr );
-
-		JumptoPosition( tr.endpos, target->EyeAngles() );
-	}
-	else if ( m_iObserverMode == OBS_MODE_IN_EYE )
-	{
-		// only update view models in ineye mode
-		if ( target->IsPlayer() )
-		{
-			CBasePlayer * pPlayer = ToBasePlayer( target );
-
-			// copy viewmodels from target 
-			for ( int i = 0; i < MAX_VIEWMODELS; i++ )
-			{
-				m_hObserverViewModel.Set( i, pPlayer->GetViewModel(i) );
-			}
-
-			// set FOV of player we observe
-			SetFOV( this, pPlayer->GetFOV() );	
-		}
-	}
 
 	return true;
 }
@@ -2417,16 +2357,22 @@ bool CBasePlayer::IsValidObserverTarget(CBaseEntity * target)
 	if ( target == NULL )
 		return false;
 
-	// MOD AUTHORS: Add checks on target here or in derived methode
+	// Hidden: the map's spectator cameras are always valid
+	if ( !Q_strcmp( target->GetClassname(), "info_spectator" ) )
+		return true;
 
 	if ( !target->IsPlayer() )	// only track players
 		return false;
 
 	CBasePlayer * player = ToBasePlayer( target );
 
-	/* Don't spec observers or players who haven't picked a class yet
- 	if ( player->IsObserver() )
-		return false;	*/
+	// Hidden: never spectate the Hidden
+	if ( player->GetTeamNumber() == TEAM_HIDDEN )
+		return false;
+
+	// Don't spec observers
+	if ( player->IsObserver() )
+		return false;
 
 	if ( player->IsEffectActive( EF_NODRAW ) ) // don't watch invisible players
 		return false;
@@ -2434,24 +2380,10 @@ bool CBasePlayer::IsValidObserverTarget(CBaseEntity * target)
 	if ( player->m_lifeState == LIFE_RESPAWNABLE ) // target is dead, waiting for respawn
 		return false;
 
+	// Hidden: no watching dead players at all
 	if ( player->m_lifeState == LIFE_DEAD || player->m_lifeState == LIFE_DYING )
-	{
-		if ( (player->m_flDeathTime + DEATH_ANIMATION_TIME ) < gpGlobals->curtime )
-		{
-			return false;	// allow watching until 2 seconds after death to see death animation
-		}
-	}
-		
-	switch ( mp_forcecamera.GetInt() )	// check forcecamera settings
-	{
-		case OBS_ALLOW_ALL	:	break;
-		case OBS_ALLOW_TEAM :	if ( (this->GetTeamNumber() != target->GetTeamNumber()) &&
-									 (this->GetTeamNumber() != TEAM_SPECTATOR) )
-								  return false;
-								break;
-		case OBS_ALLOW_NONE :	return false;
-	}
-	
+		return false;
+
 	return true;	// passed all test
 }
 
@@ -2460,48 +2392,78 @@ CBaseEntity * CBasePlayer::FindNextObserverTarget(bool bReverse)
 	// MOD AUTHORS: Modify the logic of this function if you want to restrict the observer to watching
 	//				only a subset of the players. e.g. Make it check the target's team.
 
-/*	if ( m_flNextFollowTime && m_flNextFollowTime > gpGlobals->time )
-	{
-		return;
-	} 
-
-	m_flNextFollowTime = gpGlobals->time + 0.25;
-	*/	// TODO move outside this function
-
-	int		startIndex;
-	
-	if ( m_hObserverTarget )
-	{
-		// start using last followed player
-		startIndex = m_hObserverTarget->entindex();	
-	}
-	else
+	if ( m_iObserverMode == OBS_MODE_IN_EYE )
 	{
 		// start using own player index
-		startIndex = this->entindex();
-	}
+		int startIndex = this->entindex();
 
-	int	currentIndex = startIndex;
-	int iDir = bReverse ? -1 : 1; 
-	
-	do
-	{
-		currentIndex += iDir;
+		if ( m_hObserverTarget )
+		{
+			// start using last followed player
+			startIndex = m_hObserverTarget->entindex();
+		}
 
-		// Loop through the clients
-  		if (currentIndex > gpGlobals->maxClients)
-  			currentIndex = 1;
-		else if (currentIndex < 1)
-  			currentIndex = gpGlobals->maxClients;
+		// Hidden: the last target may have been a camera
+		if ( startIndex > gpGlobals->maxClients )
+		{
+			startIndex = this->entindex();
+		}
+
+		int	currentIndex = startIndex;
+		int iDir = bReverse ? -1 : 1; 
+		
+		do
+		{
+			currentIndex += iDir;
+
+			// Loop through the clients
+  			if (currentIndex > gpGlobals->maxClients)
+  				currentIndex = 1;
+			else if (currentIndex < 1)
+  				currentIndex = gpGlobals->maxClients;
 
 			CBaseEntity * nextTarget = UTIL_PlayerByIndex( currentIndex );
 
-		if ( IsValidObserverTarget( nextTarget ) )
+			if ( IsValidObserverTarget( nextTarget ) )
+			{
+				return nextTarget;	// found next valid player
+			}
+		} while ( currentIndex != startIndex );
+
+		// Hidden: nobody to watch, go back to the cameras
+		SetObserverMode( OBS_MODE_FIXED, false );
+		m_iObserverMode = OBS_MODE_FIXED;
+	}
+
+	// Hidden: step through the spectator cameras InitialSpawn collected
+	if ( m_iObserverMode == OBS_MODE_FIXED )
+	{
+		if ( m_hObserverTarget )
 		{
-			return nextTarget;	// found next valid player
+			for ( int i = 0; i < m_ObserverTargets.Count(); i++ )
+			{
+				if ( m_hObserverTarget.Get() == m_ObserverTargets[i] )
+				{
+					if ( !bReverse )
+					{
+						if ( i == m_ObserverTargets.Count() - 1 )
+							return m_ObserverTargets[0];
+
+						return m_ObserverTargets[i + 1];
+					}
+
+					if ( i == 0 )
+						return m_ObserverTargets[m_ObserverTargets.Count() - 1];
+
+					return m_ObserverTargets[i - 1];
+				}
+			}
 		}
-	} while ( currentIndex != startIndex );
-		
+
+		if ( m_ObserverTargets.Count() > 0 )
+			return m_ObserverTargets[0];
+	}
+
 	return NULL;
 }
 
@@ -2518,6 +2480,13 @@ bool CBasePlayer::IsUseableEntity( CBaseEntity *pEntity, unsigned int requiredCa
 			if ( (caps & requiredCaps) == requiredCaps )
 				return true;
 		}
+
+		// Hidden: ragdolls and players can always be used
+		if ( pEntity->GetBaseAnimating() && pEntity->GetBaseAnimating()->IsRagdoll() )
+			return true;
+
+		if ( pEntity->GetBaseAnimating() && pEntity->GetBaseAnimating()->IsPlayer() )
+			return true;
 	}
 
 	return false;
@@ -2530,7 +2499,7 @@ bool CBasePlayer::IsUseableEntity( CBaseEntity *pEntity, unsigned int requiredCa
 bool CBasePlayer::CanPickupObject( CBaseEntity *pObject, float massLimit, float sizeLimit )
 {
 	// UNDONE: Make this virtual and move to HL2 player
-#ifdef HL2_DLL
+	// Hidden: the Hidden picks up physics objects, so this is compiled in
 	//Must be valid
 	if ( pObject == NULL )
 		return false;
@@ -2570,11 +2539,6 @@ bool CBasePlayer::CanPickupObject( CBaseEntity *pObject, float massLimit, float 
 
 	if ( checkEnable )
 	{
-		// Allowing picking up of bouncebombs that player placed.
-		CBounceBomb *pBomb = dynamic_cast<CBounceBomb*>(pObject);
-		if( pBomb && pBomb->IsPlayerPlaced() )
-			return true;
-
 		// Allow pickup of phys props that are motion enabled on player pickup
 		CPhysicsProp *pProp = dynamic_cast<CPhysicsProp*>(pObject);
 		CPhysBox *pBox = dynamic_cast<CPhysBox*>(pObject);
@@ -2590,15 +2554,12 @@ bool CBasePlayer::CanPickupObject( CBaseEntity *pObject, float massLimit, float 
 
 	if ( sizeLimit > 0 )
 	{
-		const Vector &size = pObject->CollisionProp()->OBBSize();
+		const Vector &size = pObject->WorldAlignSize();
 		if ( size.x > sizeLimit || size.y > sizeLimit || size.z > sizeLimit )
 			return false;
 	}
 
 	return true;
-#else
-	return false;
-#endif
 }
 
 float CBasePlayer::GetHeldObjectMass( IPhysicsObject *pHeldObject )
@@ -2684,19 +2645,10 @@ void CBasePlayer::AddPoints( int score, bool bAllowNegativeScore )
 
 void CBasePlayer::AddPointsToTeam( int score, bool bAllowNegativeScore )
 {
-	int index = entindex();
-
-	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	// Hidden: the points go to the team itself, not to each teammate
+	if ( GetTeam() )
 	{
-		CBaseEntity *pPlayer = UTIL_PlayerByIndex( i );
-
-		if ( pPlayer && i != index )
-		{
-			if ( g_pGameRules->PlayerRelationship( this, pPlayer ) == GR_TEAMMATE )
-			{
-				pPlayer->AddPoints( score, bAllowNegativeScore );
-			}
-		}
+		GetTeam()->AddScore( score );
 	}
 }
 
@@ -2935,7 +2887,9 @@ void CBasePlayer::PhysicsSimulate( void )
 					ctx->cmds[ i ].forwardmove = 0;
 					ctx->cmds[ i ].sidemove = 0;
 					ctx->cmds[ i ].upmove = 0;
-					VectorCopy ( pl.v_angle, ctx->cmds[ i ].viewangles );
+					// REBUILD: GetForModify, the binary flags the player state as changed here
+					VectorCopy ( pl.v_angle.GetForModify(), ctx->cmds[ i ].viewangles );
+
 				}
 			}
 			
@@ -3073,9 +3027,11 @@ void CBasePlayer::PlayerRunCommand(CUserCmd *ucmd, IMoveHelper *moveHelper)
 
 	if ( pl.fixangle == FIXANGLE_NONE)
 	{
-		// REBUILD: the original copies into a temporary here, so this has no effect;
-		// CPlayerMove::RunCommand sets the angles. Exact original line unknown.
-		VectorCopy ( ucmd->viewangles, (QAngle)pl.v_angle );
+		// REBUILD: the original copies into a temporary that is never read, so this has no
+		// effect; CPlayerMove::RunCommand sets the angles. Exact original line unknown.
+		QAngle viewangles;
+		VectorCopy ( ucmd->viewangles, viewangles );
+
 	}
 
 	// Handle FL_FROZEN.
@@ -3242,7 +3198,22 @@ void CBasePlayer::PreThink(void)
 	if (area && area != m_lastNavArea)
 	{
 		// player entered a new nav area
+		if (m_lastNavArea)
+		{
+			m_lastNavArea->DecrementPlayerCount( GetTeamNumber() );
+		}
+
+		area->IncrementPlayerCount( GetTeamNumber() );
+
 		m_lastNavArea = area;
+		if ( area->GetPlace() != UNDEFINED_PLACE )
+		{
+			const char *placeName = TheNavMesh->PlaceToName( area->GetPlace() );
+			if ( placeName && *placeName )
+			{
+				Q_strncpy( m_szLastPlaceName.GetForModify(), placeName, MAX_PLACE_NAME_LENGTH );
+			}
+		}
 
 		// generate event
 		//KeyValues *event = new KeyValues( "player_entered_area" );
@@ -3899,7 +3870,18 @@ void CBasePlayer::PostThink()
 			m_Local.m_flFallVelocity = 0;
 		}
 
+		// Hidden: stun wears off, and the Hidden's aura view drains stamina until it runs out
+		if ( IsStunned() )
+			UpdateStun();
+
+		if ( IsViewing() )
+			SetStamina( -0.1f );
+
+		if ( GetStamina() < 1 && IsViewing() )
+			SetAura( false );
+
 		// select the proper animation for the player character	
+
 		if ( IsAlive() )
 		{
 			// If he's in a vehicle, sit down
@@ -4000,7 +3982,9 @@ void CBasePlayer::PostThinkVPhysics( void )
 
 	if ( !(TouchedPhysics() || pPhysGround) )
 	{
-		g_pMoveData->m_outWishVel.Init( m_flMaxspeed, m_flMaxspeed, m_flMaxspeed );
+		float maxSpeed = m_flMaxspeed > 0.0f ? m_flMaxspeed : sv_maxspeed.GetFloat();
+		g_pMoveData->m_outWishVel.Init( maxSpeed, maxSpeed, maxSpeed );
+
 	}
 
 	// teleport the physics object up by stepheight (game code does this - reflect in the physics)
@@ -4136,8 +4120,9 @@ void CBasePlayer::InitialSpawn( void )
 	m_iConnected = PlayerConnected;
 
 	// Hidden: collect the spectator cameras, falling back to the Hidden's spawn point
-	CBaseEntity *pFirstCamera = gEntList.FindEntityByClassname( NULL, "info_spectator" );
-	CBaseEntity *pCamera = pFirstCamera;
+	CBaseEntity *pCamera = NULL;
+	CBaseEntity *pFirstCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
+	pCamera = pFirstCamera;
 	do
 	{
 		pCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
@@ -4242,13 +4227,21 @@ void CBasePlayer::Spawn( void )
 	m_lastx = m_lasty = 0;
 
 	m_lastNavArea = NULL;
+
+	/// @todo Do this once per round instead of once per player
+	if (TheNavMesh)
+	{
+		TheNavMesh->ClearPlayerCounts();
+	}
+
+	Q_strncpy( m_szLastPlaceName.GetForModify(), "", MAX_PLACE_NAME_LENGTH );
 	
 	CSingleUserRecipientFilter user( this );
 	enginesound->SetPlayerDSP( user, 0, false );
 
 	CreateViewModel();
 
-	SetCollisionGroup( COLLISION_GROUP_PLAYER );
+	// Hidden: no SetCollisionGroup( COLLISION_GROUP_PLAYER ) here; CSDKPlayer::Spawn picks the group per team
 
 	// if the player is locked, make sure he stays locked
 	if ( m_iPlayerLocked )
@@ -4290,7 +4283,9 @@ void CBasePlayer::Precache( void )
 
 
 	PrecacheScriptSound( "Player.FallGib" );
-	PrecacheScriptSound( "Player.Death" );
+	PrecacheScriptSound( "IRIS.Death" );
+	PrecacheScriptSound( "Hidden.Death" );
+
 	PrecacheScriptSound( "Player.PlasmaDamage" );
 	PrecacheScriptSound( "Player.SonicDamage" );
 	PrecacheScriptSound( "Player.DrownStart" );
@@ -4372,8 +4367,9 @@ int CBasePlayer::Restore( IRestore &restore )
 		SetLocalAngles( pSpawnSpot->GetLocalAngles() );
 	}
 
-	QAngle newViewAngles = pl.v_angle;
+	QAngle newViewAngles = pl.v_angle.Get();
 	newViewAngles.z = 0;	// Clear out roll
+
 	SetLocalAngles( newViewAngles );
 	SnapEyeAngles( newViewAngles );
 
@@ -4968,16 +4964,63 @@ void CBasePlayer::ImpulseCommands( )
 	switch (iImpulse)
 	{
 	case 100:
-        // temporary flashlight for level designers
-        if ( FlashlightIsOn() )
+		// Hidden: the impulse uses whatever equipment the marine carries
+		if ( GetEquipment() == 0 )
 		{
-			FlashlightTurnOff();
+			DevMsg( 1, "laser toggle\n" );
+			if ( LAMIsOn() )
+			{
+				DevMsg( 1, "laser off\n" );
+				LaserTurnOff();
+			}
+			else
+			{
+				DevMsg( 1, "laser on\n" );
+				LaserTurnOn();
+			}
 		}
-        else 
+
+		if ( GetEquipment() == 1 )
 		{
-			FlashlightTurnOn();
+			DevMsg( 1, "Flash Light toggle\n" );
+			if ( FlashlightIsOn() )
+			{
+				FlashlightTurnOff();
+			}
+			else
+			{
+				FlashlightTurnOn();
+			}
+		}
+
+		if ( GetEquipment() == 2 )
+		{
+			DevMsg( 1, "Night vision toggle\n" );
+			if ( NightVisionEnabled() )
+			{
+				EmitSound( "IRIS.UnDeployNV" );
+				SetNightVision( false );
+			}
+			else
+			{
+				EmitSound( "IRIS.DeployNV" );
+				SetNightVision( true );
+			}
+		}
+
+		if ( GetEquipment() == 4 )
+		{
+			DevMsg( 1, "Boost values : %i - %i", IsBoosted(), GetBoost() );
+			if ( !IsBoosted() && GetBoost() > 0 )
+			{
+				DevMsg( 1, "Boost!\n" );
+				Boost();
+				SetBoost( -1 );
+				Shockwave( 2.0f, 10.0f );
+			}
 		}
 		break;
+
 
 	case 200:
 		if ( sv_cheats->GetBool() )
@@ -5274,9 +5317,13 @@ bool CBasePlayer::ClientCommand(const char *cmd)
 
 		RemoveAllItems( true );
 
+		// Hidden: forget the class, the player picks one again
+		m_iClass = -1;
+		m_iNewClass = -1;
+
 		ChangeTeam( TEAM_SPECTATOR );
 
-		StartObserverMode( OBS_MODE_ROAMING );
+		StartObserverMode( OBS_MODE_FIXED );
 		return true;
 	}
 	else if ( stricmp( cmd, "spec_mode" ) == 0 ) // new observer mode
@@ -5288,115 +5335,73 @@ bool CBasePlayer::ClientCommand(const char *cmd)
 		{
 			mode = atoi( engine->Cmd_Argv(1) );
 
-			if ( mode < OBS_MODE_IN_EYE || mode > OBS_MODE_ROAMING )
-				mode = OBS_MODE_IN_EYE;
+			if ( mode < OBS_MODE_FIXED || mode > OBS_MODE_IN_EYE )
+				mode = OBS_MODE_FIXED;
 		}
 		else
 		{
 			// sitch to next spec mode if no parameter give
 			mode = GetObserverMode() + 1;
 			
-			if ( mode > OBS_MODE_ROAMING )
+			if ( mode > OBS_MODE_IN_EYE )
+			{
+				mode = OBS_MODE_FIXED;
+			}
+			else if ( mode < OBS_MODE_FIXED )
 			{
 				mode = OBS_MODE_IN_EYE;
 			}
-			else if ( mode < OBS_MODE_IN_EYE )
-			{
-				mode = OBS_MODE_ROAMING;
-			}
 
 		}
+
+		DevMsg( 1, "Current Spectator Mode : %i\n", mode );
 	
-		// don't allow input while player or death cam animation
-		if ( GetObserverMode() > OBS_MODE_DEATHCAM )
+		// Hidden: the client is told the mode (cl_spec_mode) and picks a target for it
+		if ( GetObserverMode() > OBS_MODE_NONE )
 		{
 			// set new spectator mode, don't allow OBS_MODE_NONE
 			if ( !SetObserverMode( mode, false ) )
-				ClientPrint( this, HUD_PRINTCONSOLE, "#Spectator_Mode_Unkown");
+				ClientPrint( this, HUD_PRINTCONSOLE, "#Spectator_Mode_Unknown");
+			else
+				engine->ClientCommand( edict(), "cl_spec_mode %d", mode );
+
+			m_iObserverLastMode = mode;
+			engine->ClientCommand( edict(), "spec_next" );
 		}
 		else
 		{
 			// remember spectator mode for later use
 			m_iObserverLastMode = mode;
+			engine->ClientCommand( edict(), "cl_spec_mode %d", mode );
 		}
 
 		return true;
 	}
 	else if ( stricmp( cmd, "spec_next" ) == 0 ) // chase next player
 	{
-		if ( GetObserverMode() > OBS_MODE_FIXED )
-		{
-			// set new spectator mode
-			CBaseEntity * target = FindNextObserverTarget( false );
-			if ( target )
-				SetObserverTarget( target );
-		}
+		// Hidden: no interpolation across the jump to the next target
+		AddEffects( EF_NOINTERP );
+
+		CBaseEntity * target = FindNextObserverTarget( false );
+		if ( target )
+			SetObserverTarget( target );
+
+		RemoveEffects( EF_NOINTERP );
 		
 		return true;
 	}
 	else if ( stricmp( cmd, "spec_prev" ) == 0 ) // chase prevoius player
 	{
-		if ( GetObserverMode() > OBS_MODE_FIXED )
-		{
-			// set new spectator mode
-			CBaseEntity * target = FindNextObserverTarget( true );
-			if ( target )
-				SetObserverTarget( target );
-		}
+		AddEffects( EF_NOINTERP );
+
+		CBaseEntity * target = FindNextObserverTarget( true );
+		if ( target )
+			SetObserverTarget( target );
+
+		RemoveEffects( EF_NOINTERP );
 		
 		return true;
 	}
-	
-	else if ( stricmp( cmd, "spec_player" ) == 0 ) // chase next player
-	{
-		if ( GetObserverMode() > OBS_MODE_FIXED &&
-			 engine->Cmd_Argc() == 2 )
-		{
-			int index = atoi( engine->Cmd_Argv(1) );
-
-			CBasePlayer * target;
-
-			if ( index == 0 )
-			{
-				target = UTIL_PlayerByName( engine->Cmd_Argv(1) );
-			}
-			else
-			{
-				target = UTIL_PlayerByIndex( index );
-			}
-
-			if ( IsValidObserverTarget( target ) )
-			{
-				SetObserverTarget( target );
-			}
-		}
-		
-		return true;
-	}
-
-	else if ( stricmp( cmd, "spec_goto" ) == 0 ) // chase next player
-	{
-		if ( ( GetObserverMode() == OBS_MODE_FIXED ||
-			   GetObserverMode() == OBS_MODE_ROAMING ) &&
-			 engine->Cmd_Argc() == 6 )
-		{
-			Vector origin;
-			origin.x = atof( engine->Cmd_Argv(1) );
-			origin.y = atof( engine->Cmd_Argv(2) );
-			origin.z = atof( engine->Cmd_Argv(3) );
-
-			QAngle angle;
-			angle.x = atof( engine->Cmd_Argv(4) );
-			angle.y = atof( engine->Cmd_Argv(5) );
-			angle.z = 0.0f;
-
-			JumptoPosition( origin, angle );
-		}
-		
-		return true;
-	}
-
-
 
 	return false;
 }
@@ -5464,22 +5469,9 @@ bool CBasePlayer::BumpWeapon( CBaseCombatWeapon *pWeapon )
 		{
 			pWeapon->Holster();
 		}
-		else
-		{
-#ifdef HL2_DLL
-			// Always switch to a newly-picked up weapon
-			if ( !PlayerHasMegaPhysCannon() )
-			{
-				// If it uses clips, load it full. (this is the first time you've picked up this type of weapon)
-				if ( pWeapon->UsesClipsForAmmo1() )
-				{
-					pWeapon->m_iClip1 = pWeapon->GetMaxClip1();
-				}
 
-				Weapon_Switch( pWeapon );
-			}
-#endif
-		}
+		// Hidden: always switch to a newly picked up weapon
+		Weapon_Switch( pWeapon );
 		return true;
 	}
 }
@@ -5578,6 +5570,38 @@ void CBasePlayer::UpdateClientData( void )
 {
 	CSingleUserRecipientFilter user( this );
 	user.MakeReliable();
+
+	// Hidden: the "Damage" message from CHL2_Player::UpdateClientData, sent here for every player
+	if (m_DmgTake || m_DmgSave || m_bitsHUDDamage != m_bitsDamageType)
+	{
+		// Comes from inside me if not set
+		Vector damageOrigin = GetLocalOrigin();
+		// send "damage" message
+		// causes screen to flash, and pain compass to show direction of damage
+		damageOrigin = m_DmgOrigin;
+
+		// only send down damage type that have hud art
+		int visibleDamageBits = m_bitsDamageType & DMG_SHOWNHUD;
+
+		m_DmgTake = clamp( m_DmgTake, 0, 255 );
+		m_DmgSave = clamp( m_DmgSave, 0, 255 );
+
+		UserMessageBegin( user, "Damage" );
+			WRITE_BYTE( m_DmgSave );
+			WRITE_BYTE( m_DmgTake );
+			WRITE_LONG( visibleDamageBits );
+			WRITE_FLOAT( damageOrigin.x );
+			WRITE_FLOAT( damageOrigin.y );
+			WRITE_FLOAT( damageOrigin.z );
+		MessageEnd();
+
+		m_DmgTake = 0;
+		m_DmgSave = 0;
+		m_bitsHUDDamage = m_bitsDamageType;
+
+		// Clear off non-time-based damage indicators
+		m_bitsDamageType &= DMG_TIMEBASED;
+	}
 
 	if (m_fInitHUD)
 	{
@@ -6172,8 +6196,10 @@ void CBasePlayer::SetSpawnTimer( int iTime, int iStart )
 void CBasePlayer::SetStamina( float flAmount )
 {
 	float flStamina = m_flStamina + flAmount;
-	if ( flStamina <= 100 && flStamina >= 0 )
-		m_flStamina = flStamina;
+	if ( flStamina > 100 || flStamina < 0 )
+		return;
+	m_flStamina += flAmount;
+
 }
 
 //-----------------------------------------------------------------------------
@@ -6193,9 +6219,10 @@ void CBasePlayer::Boost( void )
 void CBasePlayer::Stun( CBasePlayer *pAttacker )
 {
 	StunTracker tracker;
-	tracker.pAttacker = pAttacker;
 	tracker.flExpireTime = gpGlobals->curtime + 10.0f;
+	tracker.pAttacker = pAttacker;
 	m_StunTrackers.AddToTail( tracker );
+
 
 	if ( !IsStunned() )
 	{
@@ -6223,8 +6250,8 @@ void CBasePlayer::UpdateStun( void )
 		{
 			for ( int i = 0; i < m_StunTrackers.Count(); i++ )
 			{
-				CBasePlayer *pAttacker = m_StunTrackers[i].pAttacker;
-				TakeDamage( CTakeDamageInfo( pAttacker, pAttacker, GetAbsVelocity(), GetAbsOrigin(), 0.3f, DMG_DIRECT ) );
+				TakeDamage( CTakeDamageInfo( m_StunTrackers[i].pAttacker, m_StunTrackers[i].pAttacker, GetAbsVelocity(), GetAbsOrigin(), 0.3f, DMG_DIRECT ) );
+
 			}
 		}
 
@@ -6240,7 +6267,8 @@ void CBasePlayer::UpdateStun( void )
 		}
 	}
 
-	if ( m_flShockwaveEnd < gpGlobals->curtime && m_StunTrackers.Count() == 0 )
+	if ( gpGlobals->curtime > m_flShockwaveEnd && m_StunTrackers.Count() == 0 )
+
 		m_bStunned = false;
 }
 
@@ -6249,7 +6277,11 @@ void CBasePlayer::UpdateStun( void )
 //-----------------------------------------------------------------------------
 void CBasePlayer::Shockwave( float flBlur, float flDuration )
 {
-	m_flShockwaveEnd = max( m_flShockwaveEnd, gpGlobals->curtime ) + flDuration;
+	if ( m_flShockwaveEnd > gpGlobals->curtime )
+		m_flShockwaveEnd = flDuration + m_flShockwaveEnd;
+	else
+		m_flShockwaveEnd = flDuration + gpGlobals->curtime;
+
 	m_bStunned = true;
 
 	if ( m_flBlur > 1.0f && m_flBlur < 10.0f && IsStunned() )
@@ -6707,7 +6739,12 @@ void CBasePlayer::VPhysicsUpdate( IPhysicsObject *pPhysics )
 //-----------------------------------------------------------------------------
 void CBasePlayer::VPhysicsShadowUpdate( IPhysicsObject *pPhysics )
 {
+	// Hidden: in turbo physics mode the player shadow does not drive the player
+	if ( sv_turbophysics.GetBool() )
+		return;
+
 	Vector newPosition;
+
 
 	bool physicsUpdated = m_pPhysicsController->GetShadowPosition( &newPosition, NULL ) > 0 ? true : false;
 
@@ -6885,8 +6922,12 @@ void CBasePlayer::InitVCollision( void )
 	// Cleanup any old vphysics stuff.
 	VPhysicsDestroyObject();
 
+	// in turbo physics players dont have a physics shadow
+	if ( sv_turbophysics.GetBool() )
+		return;
 	
-	CPhysCollide *pModel = PhysCreateBbox( WorldAlignMins(), WorldAlignMaxs() );
+	CPhysCollide *pModel
+ = PhysCreateBbox( WorldAlignMins(), WorldAlignMaxs() );
 	CPhysCollide *pCrouchModel = PhysCreateBbox( VEC_DUCK_HULL_MIN, VEC_DUCK_HULL_MAX );
 
 	SetupVPhysicsShadow( pModel, "player_stand", pCrouchModel, "player_crouch" );

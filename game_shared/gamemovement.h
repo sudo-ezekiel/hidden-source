@@ -55,14 +55,7 @@ protected:
 	Vector			m_vecRight;
 	Vector			m_vecUp;
 
-	// Texture names
-	int				m_surfaceProps;
-	surfacedata_t*	m_pSurfaceData;
-	float			m_surfaceFriction;
-	char			m_chTextureType;
-	char			m_chPreviousTextureType;	// Separate from m_chTextureType. This is cleared if the player's not on the ground.
-
-protected:
+	float			m_flClingTime;		// REBUILD: name; AirMove sets it to curtime + 4 when the Hidden grabs a wall, nothing reads it
 
 
 	// Does most of the player movement logic.
@@ -106,8 +99,8 @@ protected:
 	// Implement this if you want to know when the player collides during OnPlayerMove
 	virtual void	OnTryPlayerMoveCollision( trace_t &tr ) {}
 
-	const Vector&	GetPlayerMins( void ) const; // uses local player
-	const Vector&	GetPlayerMaxs( void ) const; // uses local player
+	virtual const Vector&	GetPlayerMins( void ) const; // uses local player
+	virtual const Vector&	GetPlayerMaxs( void ) const; // uses local player
 
 	typedef enum
 	{
@@ -137,6 +130,12 @@ protected:
 	// Returns true if he started a jump (ie: should he play the jump animation)?
 	virtual bool	CheckJumpButton( void );	// Overridden by each game.
 
+	// Hidden: the Hidden's pounce (+pounce, IN_BULLRUSH), hanging on walls (MOVETYPE_CLING),
+	// and the marines' slower walk backwards
+	virtual bool	CheckPounceButton( void );
+	virtual void	WallCling( void );
+	virtual void	CheckBack( void );
+
 	// Dead player flying through air., e.g.
 	void			FullTossMove( void );
 	
@@ -151,6 +150,8 @@ protected:
 	
 	virtual bool	LadderMove( void );
 	virtual bool		OnLadder( trace_t &trace );
+	virtual float	LadderDistance( void ) const { return 2.0f; }	///< Returns the distance a player can be from a ladder and still attach to it
+	virtual unsigned int LadderMask( void ) const { return MASK_PLAYERSOLID; }
 
 	// See if the player has a bogus velocity value.
 	void			CheckVelocity( void );

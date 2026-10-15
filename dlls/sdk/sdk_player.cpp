@@ -11,8 +11,17 @@
 #include "weapon_sdkbase.h"
 #include "predicted_viewmodel.h"
 #include "iservervehicle.h"
+#include "KeyValues.h"
+#include "player_pickup.h"
+#include "hl2_dll/weapon_physcannon.h"
+#include "physics_prop_ragdoll.h"
+#include "gib.h"
+#include "RagdollBoogie.h"
+#include "EntityParticleTrail.h"
+#include "beam_shared.h"
+#include "in_buttons.h"
 
-#define SDK_PLAYER_MODEL "models/player/terror.mdl"
+extern ConVar hdn_limitbombs;		// sdk_gamerules.cpp
 
 
 // -------------------------------------------------------------------------------- //
@@ -45,7 +54,7 @@ static CTEPlayerAnimEvent g_TEPlayerAnimEvent( "PlayerAnimEvent" );
 void TE_PlayerAnimEvent( CBasePlayer *pPlayer, PlayerAnimEvent_t event )
 {
 	CPVSFilter filter( (const Vector&)pPlayer->EyePosition() );
-	
+
 	g_TEPlayerAnimEvent.m_hPlayer = pPlayer;
 	g_TEPlayerAnimEvent.m_iEvent = event;
 	g_TEPlayerAnimEvent.Create( filter, 0 );
@@ -64,13 +73,13 @@ END_SEND_TABLE()
 
 IMPLEMENT_SERVERCLASS_ST( CSDKPlayer, DT_SDKPlayer )
 	SendPropExclude( "DT_BaseAnimating", "m_flPoseParameter" ),
-	SendPropExclude( "DT_BaseAnimating", "m_flPlaybackRate" ),	
+	SendPropExclude( "DT_BaseAnimating", "m_flPlaybackRate" ),
 	SendPropExclude( "DT_BaseAnimating", "m_nSequence" ),
 	SendPropExclude( "DT_BaseEntity", "m_angRotation" ),
 	SendPropExclude( "DT_BaseAnimatingOverlay", "overlay_vars" ),
-	
+
 	// playeranimstate and clientside animation takes care of these on the client
-	SendPropExclude( "DT_ServerAnimationData" , "m_flCycle" ),	
+	SendPropExclude( "DT_ServerAnimationData" , "m_flCycle" ),
 	SendPropExclude( "DT_AnimTimeMustBeFirst" , "m_flAnimTime" ),
 
 	// Data that only gets sent to the local player.
@@ -99,7 +108,7 @@ public:
 	// In case the client has the player entity, we transmit the player index.
 	// In case the client doesn't have it, we transmit the player's model index, origin, and angles
 	// so they can create a ragdoll in the right place.
-	CNetworkHandle( CBaseEntity, m_hPlayer );	// networked entity handle 
+	CNetworkHandle( CBaseEntity, m_hPlayer );	// networked entity handle
 	CNetworkVector( m_vecRagdollVelocity );
 	CNetworkVector( m_vecRagdollOrigin );
 };
@@ -127,6 +136,27 @@ void cc_CreatePredictionError_f()
 ConCommand cc_CreatePredictionError( "CreatePredictionError", cc_CreatePredictionError_f, "Create a prediction error", FCVAR_CHEAT );
 
 
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: how many pipe bombs the Hidden spawns with. With hdn_limitbombs
+//			it is one per two marines, less one; otherwise 3.
+//-----------------------------------------------------------------------------
+int GetBombCount( void )
+{
+	if ( !hdn_limitbombs.GetBool() )
+		return 3;
+
+	int iMarines = 0;
+	for ( int i = 0; i <= gpGlobals->maxClients; i++ )
+	{
+		CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
+		if ( pPlayer && pPlayer->GetTeamNumber() == TEAM_IRIS )
+			iMarines++;
+	}
+
+	return (int)( ceil( iMarines * 0.5f ) - 1 );
+}
+
+
 CSDKPlayer::CSDKPlayer()
 {
 	m_PlayerAnimState = CreatePlayerAnimState( this, this, LEGANIM_9WAY, true );
@@ -137,6 +167,19 @@ CSDKPlayer::CSDKPlayer()
 	SetViewOffset( SDK_PLAYER_VIEW_OFFSET );
 
 	m_iThrowGrenadeCounter = 0;
+
+	// Hidden: the game type comes from the map name prefix
+	char szMapName[256];
+	Q_FileBase( STRING( gpGlobals->mapname ), szMapName, sizeof( szMapName ) - 1 );
+	char *pszPrefix = strtok( szMapName, "_" );
+
+	m_iGameType = 1;
+	if ( !Q_strcmp( pszPrefix, "ovr" ) )
+		m_iGameType = 2;
+	else if ( !Q_strcmp( pszPrefix, "mtr" ) )
+		m_iGameType = 3;
+	else if ( !Q_strcmp( pszPrefix, "htr" ) )
+		m_iGameType = 4;
 }
 
 
@@ -166,17 +209,45 @@ void CSDKPlayer::LeaveVehicle( const Vector &vecExitPoint, const QAngle &vecExit
 void CSDKPlayer::PreThink(void)
 {
 	// Riding a vehicle?
-	if ( IsInAVehicle() )	
+	if ( IsInAVehicle() )
 	{
 		// make sure we update the client, check for timed damage and update suit even if we are in a vehicle
-		UpdateClientData();		
+		UpdateClientData();
 		CheckTimeBasedDamage();
 
 		// Allow the suit to recharge when in the vehicle.
 		CheckSuitUpdate();
-		
-		WaterMove();	
+
+		WaterMove();
 		return;
+	}
+
+	int buttonsChanged = m_afButtonPressed | m_afButtonReleased;
+
+	// The state of the WALK button has changed.
+	if ( buttonsChanged & IN_WALK )
+	{
+		if ( IsWalking() && !( m_afButtonPressed & IN_WALK ) )
+		{
+			StopWalking();
+		}
+		else if ( !IsWalking() && ( m_afButtonPressed & IN_WALK ) && !( m_nButtons & IN_DUCK ) )
+		{
+			StartWalking();
+		}
+	}
+
+	// Hidden: +aura toggles the Hidden's aura vision
+	if ( GetTeamNumber() == TEAM_HIDDEN && ( buttonsChanged & IN_AURA ) )
+	{
+		if ( IsViewing() && !( m_afButtonPressed & IN_AURA ) )
+		{
+			SetAura( false );
+		}
+		else if ( !IsViewing() && ( m_afButtonPressed & IN_AURA ) )
+		{
+			SetAura( true );
+		}
 	}
 
 	BaseClass::PreThink();
@@ -190,30 +261,294 @@ void CSDKPlayer::PostThink()
 	QAngle angles = GetLocalAngles();
 	angles[PITCH] = 0;
 	SetLocalAngles( angles );
-	
+
 	// Store the eye angles pitch so the client can compute its animation state correctly.
 	m_angEyeAngles = EyeAngles();
 
     m_PlayerAnimState->Update( m_angEyeAngles[YAW], m_angEyeAngles[PITCH] );
+
+	// Hidden: the adrenaline boost wears off
+	if ( IsBoosted() && GetBoostTimer() < gpGlobals->curtime )
+	{
+		SetMaxSpeed( 180 );
+		SetBoosted( false );
+	}
 }
 
 
 void CSDKPlayer::Precache()
 {
-	PrecacheModel( SDK_PLAYER_MODEL );
+	PrecacheModel( "models/manor/mn_fixture1.mdl" );
+	PrecacheModel( "models/player/iris.mdl" );
+	PrecacheModel( "models/player/iris_supply.mdl" );
+	PrecacheModel( "models/player/hidden.mdl" );
+
+	PrecacheMaterial( "vgui/hud/hvision" );
+	PrecacheMaterial( "vgui/hud/svision" );
+	PrecacheMaterial( "vgui/hud/hdn_nightvision" );
+	PrecacheMaterial( "vgui/hud/nightvision_dx6" );
+	PrecacheMaterial( "vgui/hud/svision_dx6" );
+	PrecacheMaterial( "vgui/hud/blur_dx6" );
+	PrecacheMaterial( "vgui/hud/blur" );
+	PrecacheMaterial( "vgui/hud/helmetcam" );
+	PrecacheMaterial( "vgui/hud/hdn_invert" );
+	PrecacheMaterial( "sprites/aura" );
+	PrecacheMaterial( "frontbuffer" );
+	PrecacheMaterial( "models/weapons/v_fn2000/scopemask" );
+	PrecacheMaterial( "models/weapons/v_fn2000/scopemask_dx6" );
+
+	PrecacheScriptSound( "Hidden.BehindYou" );
+	PrecacheScriptSound( "Hidden.ImHere" );
+	PrecacheScriptSound( "Hidden.ISeeYou" );
+	PrecacheScriptSound( "Hidden.LookUp" );
+	PrecacheScriptSound( "Hidden.TurnAround" );
+	PrecacheScriptSound( "Hidden.OverHere" );
+	PrecacheScriptSound( "Hidden.YouAreNext" );
+	PrecacheScriptSound( "Hidden.FreshMeat" );
+	PrecacheScriptSound( "Hidden.ComingForYou" );
+
+	PrecacheScriptSound( "IRIS.Damage" );
+	PrecacheScriptSound( "IRIS.RoundStart" );
+	PrecacheScriptSound( "IRIS.RoundEnd" );
+	PrecacheScriptSound( "IRIS.UnDeployNV" );
+	PrecacheScriptSound( "IRIS.DeployNV" );
+	PrecacheScriptSound( "IRIS.DeploySonicAlarm" );
+	PrecacheScriptSound( "IRIS.EnemySighted" );
+	PrecacheScriptSound( "IRIS.RequestingAmmo" );
+	PrecacheScriptSound( "IRIS.Affirmative" );
+	PrecacheScriptSound( "IRIS.ReportIn" );
+	PrecacheScriptSound( "IRIS.ReportingIn" );
+	PrecacheScriptSound( "IRIS.AgentDown" );
+	PrecacheScriptSound( "IRIS.IfItBleeds" );
+	PrecacheScriptSound( "IRIS.OneUglyMother" );
+	PrecacheScriptSound( "IRIS.WhereAreYou" );
+	PrecacheScriptSound( "IRIS.ComeOnOut" );
+	PrecacheScriptSound( "IRIS.BringIt" );
+
+	PrecacheScriptSound( "Player.KnifePigstick.Death" );
+	PrecacheScriptSound( "Player.KnifeSlash.Death" );
+	PrecacheScriptSound( "Player.FriendlyFire.Death" );
+
+	PrecacheModel( "models/gibs/iris_gibs1.mdl" );
+	PrecacheModel( "models/gibs/iris_gibs2.mdl" );
+	PrecacheModel( "models/gibs/iris_gibs3.mdl" );
+	PrecacheModel( "models/gibs/iris_gibs4.mdl" );
+	PrecacheModel( "models/gibs/iris_gibs5.mdl" );
+	PrecacheModel( "models/gibs/iris_gibs6.mdl" );
+	PrecacheModel( "models/gibs/iris_gibs7.mdl" );
+	PrecacheModel( "models/gibs/iris_raggibs_arm.mdl" );
+	PrecacheModel( "models/gibs/iris_raggibs_leg.mdl" );
+	PrecacheModel( "models/gibs/iristorso_1.mdl" );
+	PrecacheModel( "models/gibs/iristorso_2.mdl" );
+	PrecacheModel( "models/gibs/iristorso_3.mdl" );
+
+	PrecacheModel( "sprites/light_glow03.vmt" );
 
 	BaseClass::Precache();
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: new players get the message of the day and start out spectating
+//-----------------------------------------------------------------------------
+void CSDKPlayer::InitialSpawn( void )
+{
+	BaseClass::InitialSpawn();
+
+	const ConVar *hostname = cvar->FindVar( "hostname" );
+	const char *title = (hostname) ? hostname->GetString() : "MESSAGE OF THE DAY";
+
+	KeyValues *data = new KeyValues("data");
+	data->SetString( "title", title );		// info panel title
+	data->SetString( "type", "1" );			// show userdata from stringtable entry
+	data->SetString( "msg",	"motd" );		// use this stringtable entry
+	data->SetString( "cmd", "classmenu" );	// exec this command if panel closed
+
+	ShowViewPortPanel( "info", true, data );
+
+	data->deleteThis();
+
+	SetModel( "models/player/iris.mdl" );
+	ChangeTeam( TEAM_SPECTATOR );
+	ChangeClass( -1 );
+	m_lifeState = LIFE_DEAD;
+	StartObserverMode( OBS_MODE_FIXED );
+}
+
 void CSDKPlayer::Spawn()
 {
-	SetModel( SDK_PLAYER_MODEL );
+	BaseClass::Spawn();
+
+	// Hidden: reset this life's state
+	m_iWeighting.GetForModify() = 0;
+	SetNightVision( false );
+	SetZoom( false );
+	LaserTurnOff();
+	CancelStun();
+	SetBoost( 0 );
+	m_bAmmoRecieved = false;
+	SetAmmoRequest( false );
+
+	// A marine needs a full loadout before he can play
+	if ( IsReady() )
+	{
+		if ( GetEquipment() == -1 )
+			SetReady( false );
+		if ( GetSecondary() == -1 )
+			SetReady( false );
+		if ( GetPrimary() == -1 )
+			SetReady( false );
+		if ( GetClass() == -1 )
+			SetReady( false );
+	}
+
+	if ( GetClass() == -1 || !IsReady() )
+	{
+		ChangeTeam( TEAM_SPECTATOR );
+		StartObserverMode( OBS_MODE_FIXED );
+		return;
+	}
+
+	if ( GetClass() < 0 )
+		return;
+
+	m_takedamage = DAMAGE_YES;
+	pl.deadflag = false;
+	m_lifeState = LIFE_ALIVE;
+	StopObserverMode();
+	SetSafe( false );
+	SetBloodColor( BLOOD_COLOR_RED );
+
 	SetMoveType( MOVETYPE_WALK );
 	RemoveSolidFlags( FSOLID_NOT_SOLID );
 
 	m_hRagdoll = NULL;
-	
-	BaseClass::Spawn();
+
+	RemoveAllItems( true );
+
+	gEvilImpulse101 = true;
+
+	EquipSuit();
+	SetMaxSpeed( 180 );
+
+	if ( GetTeamNumber() == TEAM_IRIS )
+	{
+		if ( GetClass() == 0 )
+			SetModel( "models/player/iris.mdl" );
+		else
+			SetModel( "models/player/iris_supply.mdl" );
+
+		SetFOV( this, 0 );
+
+		m_nBody = m_iCharacterBody;
+		m_nSkin = m_iCharacterSkin;
+		SetBodygroup( 2, 2 );
+
+		switch ( GetSecondary() )
+		{
+		case 0:
+			GiveNamedItem( "weapon_pistol" );
+			GiveAmmo( 48, "AMMO_PISTOL" );
+			break;
+		case 1:
+			GiveNamedItem( "weapon_pistol2" );
+			GiveAmmo( 48, "AMMO_9MM" );
+			break;
+		}
+		SetSecondaryBool( true );
+
+		switch ( GetEquipment() )
+		{
+		case 0:
+			LaserTurnOn();
+			break;
+		case 3:
+			GiveNamedItem( "weapon_sonic" );
+			break;
+		case 4:
+			SetBoost( 3 );
+			break;
+		}
+		SetEquipmentBool( true );
+
+		// The support class always carries sonic grenades
+		if ( GetClass() == 1 )
+		{
+			if ( GetEquipment() == 3 )
+			{
+				GiveAmmo( 3, "sonic" );
+			}
+			else
+			{
+				GiveNamedItem( "weapon_sonic" );
+				GiveAmmo( 2, "sonic" );
+			}
+		}
+
+		switch ( GetPrimary() )
+		{
+		case 0:
+			GiveNamedItem( "weapon_fn2000" );
+			GiveAmmo( 60, "AMMO_556" );
+			break;
+		case 1:
+			GiveNamedItem( "weapon_p90" );
+			GiveAmmo( 100, "AMMO_BULLETS" );
+			break;
+		case 2:
+			GiveNamedItem( "weapon_shotgun" );
+			GiveAmmo( 24, "AMMO_BUCKSHOT" );
+			break;
+		case 3:
+			GiveNamedItem( "weapon_fn303" );
+			GiveAmmo( 45, "XBowBolt" );
+			break;
+		}
+		SetPrimaryBool( true );
+
+		m_flStamina = 0;
+
+		SetCollisionGroup( COLLISION_GROUP_PLAYER_MOVEMENT );
+	}
+
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+	{
+		SetModel( "models/manor/mn_fixture1.mdl" );
+		SetMaxSpeed( 220 );
+
+		// No pipe bombs in Overrun
+		if ( m_iGameType != 2 )
+		{
+			int iBombs = GetBombCount();
+			if ( iBombs > 0 )
+			{
+				GiveNamedItem( "weapon_grenade" );
+				GiveAmmo( iBombs - 1, "AMMO_GRENADE" );
+			}
+		}
+
+		GiveNamedItem( "weapon_knife" );
+
+		SetFOV( this, 110 );
+
+		m_nBody = 1;
+		m_nSkin = 1;
+
+		m_flStamina = 100;
+
+		SetCollisionGroup( COLLISION_GROUP_HIDDEN );
+	}
+
+	gEvilImpulse101 = false;
+
+	m_Local.m_iHideHUD = 0;
+
+	// Hidden: the aura trail the Hidden sees on marines
+	EntityParticleTrailInfo_t info;
+	info.m_strMaterialName = MAKE_STRING( "sprites/aura" );
+	info.m_flLifetime = 0.75f;
+	info.m_flStartSize = 14.0f;
+	info.m_flEndSize = 0.5f;
+	CEntityParticleTrail::Create( this, info, NULL );
 }
 
 void CSDKPlayer::Event_Killed( const CTakeDamageInfo &info )
@@ -223,18 +558,39 @@ void CSDKPlayer::Event_Killed( const CTakeDamageInfo &info )
 
 	BaseClass::Event_Killed( info );
 
-	CreateRagdollEntity();
+	if ( GetClass() >= 0 )
+		CreateRagdollEntity( info );
 }
 
-void CSDKPlayer::CreateRagdollEntity()
+void CSDKPlayer::CreateRagdollEntity( const CTakeDamageInfo &info )
 {
 	// If we already have a ragdoll, don't make another one.
 	CSDKRagdoll *pRagdoll = dynamic_cast< CSDKRagdoll* >( m_hRagdoll.Get() );
 
+	// Hidden: the Hidden leaves his own body behind
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+	{
+		SetModel( "models/player/hidden.mdl" );
+		m_nBody = 0;
+		m_nSkin = 0;
+	}
+
+	// Hidden: in Overrun the marines blow apart
+	if ( m_iGameType == 2 )
+	{
+		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 5 );
+		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs2.mdl", 5 );
+		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs3.mdl", 5 );
+		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs4.mdl", 5 );
+		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs6.mdl", 5 );
+		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs7.mdl", 5 );
+		return;
+	}
+
 	if ( !pRagdoll )
 	{
 		// create a new one
-		pRagdoll = dynamic_cast< CSDKRagdoll* >( CreateEntityByName( "sdk_ragdoll" ) );
+		pRagdoll = dynamic_cast< CSDKRagdoll* >( CreateServerCorpseRagdoll( this, m_nForceBone, info, COLLISION_GROUP_DEBRIS ) );
 	}
 
 	if ( pRagdoll )
@@ -244,7 +600,14 @@ void CSDKPlayer::CreateRagdollEntity()
 		pRagdoll->m_vecRagdollVelocity = GetAbsVelocity();
 		pRagdoll->m_nModelIndex = m_nModelIndex;
 		pRagdoll->m_nForceBone = m_nForceBone;
+		pRagdoll->m_nSkin = m_nSkin;
+		pRagdoll->m_nBody = m_nBody;
 		pRagdoll->m_vecForce = Vector(0,0,0);
+	}
+
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+	{
+		CRagdollBoogie::Create( pRagdoll, 200, gpGlobals->curtime, 0.2f );
 	}
 
 	// ragdolls will be removed on round restart automatically
@@ -293,29 +656,250 @@ void CSDKPlayer::CreateViewModel( int index /*=0*/ )
 
 void CSDKPlayer::CheatImpulseCommands( int iImpulse )
 {
-	switch( iImpulse )
+	// Hidden: impulse 101 is answered by closing the game
+	if ( iImpulse == 101 )
 	{
-	case 101:
-		
+		engine->ClientCommand( edict(), "quit\n" );
+	}
+
+	if ( !sv_cheats->GetBool() )
+		return;
+
+	if ( iImpulse == 71 )
+	{
 		gEvilImpulse101 = true;
 
+		EquipSuit();
+
 		// Give weapons
-		GiveNamedItem( "weapon_mp5" );
+		GiveNamedItem( "weapon_p90" );
+		GiveAmmo( 100, "AMMO_BULLETS" );
 		GiveNamedItem( "weapon_shotgun" );
+		GiveAmmo( 24, "AMMO_BUCKSHOT" );
+		GiveNamedItem( "weapon_knife" );
 		GiveNamedItem( "weapon_grenade" );
+		GiveAmmo( 5, "AMMO_GRENADE" );
 
 		// Give more health
 		if ( GetHealth() < 100 )
 		{
 			TakeHealth( 25, DMG_GENERIC );
 		}
-		
+
 		gEvilImpulse101		= false;
+	}
+	else if ( iImpulse == 101 )
+	{
+		return;
+	}
 
-		break;
+	BaseClass::CheatImpulseCommands( iImpulse );
+}
 
-	default:
-		BaseClass::CheatImpulseCommands( iImpulse );
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the flashlight is for the marines only
+//-----------------------------------------------------------------------------
+int CSDKPlayer::FlashlightIsOn( void )
+{
+	return IsEffectActive( EF_DIMLIGHT );
+}
+
+void CSDKPlayer::FlashlightTurnOn( void )
+{
+	if ( GetTeamNumber() != TEAM_IRIS )
+		return;
+
+	AddEffects( EF_DIMLIGHT );
+}
+
+void CSDKPlayer::FlashlightTurnOff( void )
+{
+	if ( GetTeamNumber() != TEAM_IRIS )
+		return;
+
+	RemoveEffects( EF_DIMLIGHT );
+
+	if ( m_pFlashlightBeam )
+		m_pFlashlightBeam->TurnOn();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: +walk slows a marine to 120 and the Hidden to 160
+//-----------------------------------------------------------------------------
+void CSDKPlayer::StartWalking( void )
+{
+	if ( GetTeamNumber() == TEAM_IRIS )
+		SetMaxSpeed( 120 );
+	else
+		SetMaxSpeed( 160 );
+
+	m_bIsWalking = true;
+}
+
+void CSDKPlayer::StopWalking( void )
+{
+	if ( GetTeamNumber() == TEAM_IRIS )
+		SetMaxSpeed( 180 );
+	else
+		SetMaxSpeed( 220 );
+
+	m_bIsWalking = false;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: CHL2_Player's +use, plus the support marine handing out ammo
+//-----------------------------------------------------------------------------
+void CSDKPlayer::PlayerUse( void )
+{
+	// Was use pressed or released?
+	if ( ! ((m_nButtons | m_afButtonPressed | m_afButtonReleased) & IN_USE) )
+		return;
+
+	CBaseEntity *pUseEntity = FindUseEntity();
+
+	bool usedSomething = false;
+
+	// Found an object
+	if ( pUseEntity )
+	{
+		//!!!UNDONE: traceline here to prevent +USEing buttons through walls
+		int caps = pUseEntity->ObjectCaps();
+		variant_t emptyVariant;
+
+		if ( m_afButtonPressed & IN_USE )
+		{
+			// Robin: Don't play sounds for NPCs, because NPCs will allow respond with speech.
+			if ( !pUseEntity->MyNPCPointer() )
+			{
+				EmitSound( "HL2Player.Use" );
+			}
+		}
+
+		if ( ( (m_nButtons & IN_USE) && (caps & FCAP_CONTINUOUS_USE) ) ||
+			 ( (m_afButtonPressed & IN_USE) && (caps & (FCAP_IMPULSE_USE|FCAP_ONOFF_USE)) ) )
+		{
+			if ( caps & FCAP_CONTINUOUS_USE )
+				m_afPhysicsFlags |= PFLAG_USING;
+
+			pUseEntity->AcceptInput( "Use", this, this, emptyVariant, USE_TOGGLE );
+
+			usedSomething = true;
+		}
+		// UNDONE: Send different USE codes for ON/OFF.  Cache last ONOFF_USE object to send 'off' if you turn away
+		else if ( (m_afButtonReleased & IN_USE) && (pUseEntity->ObjectCaps() & FCAP_ONOFF_USE) )	// BUGBUG This is an "off" use
+		{
+			pUseEntity->AcceptInput( "Use", this, this, emptyVariant, USE_TOGGLE );
+
+			usedSomething = true;
+		}
+		else if ( (m_afButtonReleased & IN_USE) && pUseEntity->GetBaseAnimating() && pUseEntity->GetBaseAnimating()->IsRagdoll() )
+		{
+			pUseEntity->AcceptInput( "Use", this, this, emptyVariant, USE_TOGGLE );
+
+			usedSomething = true;
+		}
+		// Hidden: a support marine hands ammo to a marine who asked for it
+		else if ( (m_afButtonReleased & IN_USE) && pUseEntity->GetBaseAnimating() && pUseEntity->GetBaseAnimating()->IsPlayer() )
+		{
+			if ( GetClass() == 0 )
+				return;
+
+			if ( GetTeamNumber() == TEAM_HIDDEN )
+				return;
+
+			CBasePlayer *pPlayer = ToBasePlayer( pUseEntity );
+			if ( pPlayer->GetTeamNumber() == TEAM_IRIS && pPlayer->RequestedAmmo() )
+			{
+				switch ( pPlayer->GetSecondary() )
+				{
+				case 0:
+					pPlayer->GiveAmmo( 20, "AMMO_PISTOL" );
+					break;
+				case 1:
+					pPlayer->GiveAmmo( 16, "AMMO_9MM" );
+					break;
+				}
+
+				switch ( pPlayer->GetPrimary() )
+				{
+				case 0:
+					pPlayer->GiveAmmo( 30, "AMMO_556" );
+					break;
+				case 1:
+					pPlayer->GiveAmmo( 50, "AMMO_BULLETS" );
+					break;
+				case 2:
+					pPlayer->GiveAmmo( 8, "AMMO_BUCKSHOT" );
+					break;
+				case 3:
+					pPlayer->GiveAmmo( 15, "XBowBolt" );
+					break;
+				}
+
+				pPlayer->SetAmmoRequest( false );
+				pPlayer->SetAmmoRecieved();
+
+				// Helping out makes you more likely to be picked as the Hidden
+				m_iWeighting.GetForModify() += 20;
+			}
+
+			usedSomething = true;
+		}
+	}
+	else if ( m_afButtonPressed & IN_USE )
+	{
+		// Signal that we want to play the deny sound, unless the user is +USEing on a ladder!
+		// The sound is emitted in ItemPostFrame, since that occurs after GameMovement::ProcessMove which
+		// lets the ladder code unset this flag.
+		m_bPlayUseDenySound = true;
+	}
+
+	// Debounce the use key
+	if ( usedSomething && pUseEntity )
+	{
+		m_Local.m_nOldButtons |= IN_USE;
+		m_afButtonPressed &= ~IN_USE;
 	}
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: only the Hidden picks up physics objects
+//-----------------------------------------------------------------------------
+void CSDKPlayer::PickupObject( CBaseEntity *pObject, bool bLimitMassAndSize )
+{
+	// can't pick up what you're standing on
+	if ( GetGroundEntity() == pObject )
+		return;
+
+	if ( GetTeamNumber() != TEAM_HIDDEN )
+		return;
+
+	if ( bLimitMassAndSize == true && pObject->GetBaseAnimating() )
+	{
+		if ( !pObject->GetBaseAnimating()->IsRagdoll() && CBasePlayer::CanPickupObject( pObject, 45, 192 ) == false )
+			 return;
+	}
+
+	if ( IsHoldingEntity( pObject ) )
+	{
+		ClearUseEntity();
+		return;
+	}
+
+	// Can't be picked up if NPCs are on me
+	if ( pObject->HasNPCsOnIt() )
+		return;
+
+	PlayerPickupObject( this, pObject );
+}
+
+bool CSDKPlayer::IsHoldingEntity( CBaseEntity *pEnt )
+{
+	return PlayerPickupControllerIsHoldingEntity( m_hUseEntity, pEnt );
+}
+
+void CSDKPlayer::ForceDropOfCarriedPhysObjects( CBaseEntity *pOnlyIfHoldingThis )
+{
+	// Drop any objects being handheld.
+	ClearUseEntity();
+}

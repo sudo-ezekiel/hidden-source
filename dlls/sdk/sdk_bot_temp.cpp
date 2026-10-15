@@ -130,7 +130,7 @@ CBasePlayer *BotPutInServer( bool bFrozen )
 	if ( pPlayer )
 	{
 		pPlayer->Spawn();
-		pPlayer->StartObserverMode( OBS_MODE_DEATHCAM );
+		pPlayer->StartObserverMode( OBS_MODE_FIXED );
 	}
 
 	return pPlayer;

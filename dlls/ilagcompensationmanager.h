@@ -23,6 +23,10 @@ public:
 	// Called during player movement to set up/restore after lag compensation
 	virtual void	StartLagCompensation( CBasePlayer *player, CUserCmd *cmd ) = 0;
 	virtual void	FinishLagCompensation( CBasePlayer *player ) = 0;
+
+	// Hidden: a round restart pauses lag compensation, then throws the history away
+	virtual void	StartCompensationReset( void ) = 0;
+	virtual void	FinishCompensationReset( void ) = 0;
 };
 
 extern ILagCompensationManager *lagcompensation;
