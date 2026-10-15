@@ -93,12 +93,12 @@ void CWeaponFN2000::WeaponIdle()
 	if ( pPlayer->GetSafe() )
 	{
 		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
 	}
 	// only idle if the slid isn't back
 	else if ( m_iClip1 != 0 )
 	{
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
 		SendWeaponAnim( ACT_VM_IDLE );
 	}
 }
@@ -107,7 +107,7 @@ bool CWeaponFN2000::Deploy()
 {
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	pPlayer->m_iShotsFired = 0;
-	m_flLastShotTime = gpGlobals->curtime - 1.0;
+	m_flLastShotTime = gpGlobals->curtime - 1.0f;
 	if ( pPlayer && pPlayer->GetSafe() )
 	{
 		SendWeaponAnim( ACT_VM_LOWERED );
@@ -193,7 +193,7 @@ void CWeaponFN2000::PrimaryAttack( void )
 		flSpread = 0.01f;
 	else
 		flSpread = 0.03f;
-	if ( m_flLastShotTime + 1.0 < gpGlobals->curtime )
+	if ( m_flLastShotTime + 1.0f < gpGlobals->curtime )
 		flSpread = 0.0f;
 
 	// more spread when jumping
