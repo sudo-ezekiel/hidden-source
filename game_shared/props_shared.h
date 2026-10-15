@@ -174,6 +174,8 @@ struct breakmodel_t
 	char		modelName[512];
 	char		placementName[512];
 	float		fadeTime;
+	float		fadeMinDist;	// Hidden: per-gib fade distances, as in Valve's later SDK
+	float		fadeMaxDist;
 	float		health;
 	float		burstScale;
 	int			collisionGroup;

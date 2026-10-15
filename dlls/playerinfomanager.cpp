@@ -122,7 +122,7 @@ edict_t *CPluginBotManager::CreateBot( const char *botname )
 	pPlayer->ClearFlags();
 	pPlayer->AddFlag( FL_CLIENT | FL_FAKECLIENT );
 
-	pPlayer->ChangeTeam( TEAM_UNASSIGNED );
+	pPlayer->ChangeTeam( TEAM_IRIS );	// Hidden: plugin bots join IRIS
 	pPlayer->RemoveAllItems( true );
 	pPlayer->Spawn();
 
