@@ -260,7 +260,17 @@ void CBaseSDKGrenade::ItemPostFrame()
 
 	void CBaseSDKGrenade::StartGrenadeThrow()
 	{
-		m_fThrowTime = gpGlobals->curtime + 0.1f;
+		m_flNextPrimaryAttack = gpGlobals->curtime + 1.0f;
+		m_fThrowTime = gpGlobals->curtime + 0.5f;	// REBUILD: the client's delay; the server's is 0.1
+	}
+
+	int CBaseSDKGrenade::DrawModel( int flags )
+	{
+		C_BasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+		if ( pPlayer && pPlayer->IsAlive() )
+			return 1;
+
+		return BaseClass::DrawModel( flags );
 	}
 
 #else
