@@ -192,7 +192,7 @@ IMPLEMENT_SERVERCLASS_ST(CBaseAnimating, DT_BaseAnimating)
 
 	SendPropArray3  ( SENDINFO_ARRAY3(m_flPoseParameter), SendPropFloat(SENDINFO_ARRAY(m_flPoseParameter), ANIMATION_POSEPARAMETER_BITS, 0, 0.0f, 1.0f ) ),
 	
-	SendPropInt		( SENDINFO(m_nSequence),	ANIMATION_SEQUENCE_BITS, 0),
+	SendPropInt		( SENDINFO(m_nSequence),	ANIMATION_SEQUENCE_BITS, SPROP_UNSIGNED),
 	SendPropFloat	( SENDINFO(m_flPlaybackRate),	ANIMATION_PLAYBACKRATE_BITS,	SPROP_ROUNDUP,	-4.0,	12.0f), // NOTE: if this isn't a power of 2 than "1.0" can't be encoded correctly
 
 	SendPropArray3 	(SENDINFO_ARRAY3(m_flEncodedController), SendPropFloat(SENDINFO_ARRAY(m_flEncodedController), 11, SPROP_ROUNDDOWN, 0.0f, 1.0f ) ),
