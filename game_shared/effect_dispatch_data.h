@@ -54,6 +54,8 @@ public:
 	// not networked, helper for clientside entity which don't have an entity index (-1):
 	CBaseEntity *m_pEntity;
 
+	int		m_nUnknown;	// REBUILD: Hidden's CEffectData has 4 more bytes here (m_nColor is at 0x60); name and use unknown, the constructor zeroes it and it is not networked
+
 	unsigned char	m_nColor;
 
 // Don't mess with stuff below here. DispatchEffect handles all of this.
@@ -81,6 +83,7 @@ public:
 		m_nColor = 0;
 
 		m_pEntity = NULL;
+		m_nUnknown = 0;
 	}
 
 	int GetEffectNameIndex() { return m_iEffectName; }
