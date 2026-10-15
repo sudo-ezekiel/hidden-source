@@ -70,11 +70,19 @@ public:
 	// returns a pointer
 	virtual WizardSubPanel *GetSiblingSubPanelByName(const char *pageName);
 
+	// gets the size this subpanel would like the wizard to be
+	// returns true if it has a desired size
+	virtual bool GetDesiredSize(int &wide, int &tall);
+
 protected:
+	virtual void ApplySettings(KeyValues *inResourceData);
+	virtual void GetSettings( KeyValues *outResourceData );
 	virtual void ApplySchemeSettings(IScheme *pScheme);
+	virtual const char *GetDescription();
 
 private:
 	WizardPanel *_wizardPanel;
+	int m_iDesiredWide, m_iDesiredTall;
 };
 
 } // namespace vgui

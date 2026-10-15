@@ -55,6 +55,8 @@ public:
 	
 	// Remove all items from the drop down menu
 	virtual void DeleteAllItems();
+	// REBUILD: name invented; Hidden's vgui_controls has an inline virtual here that calls DeleteAllItems()
+	virtual void RemoveAll() { DeleteAllItems(); }
 
 	// Sorts the items in the list - FIXME does nothing
 	virtual void SortItems();

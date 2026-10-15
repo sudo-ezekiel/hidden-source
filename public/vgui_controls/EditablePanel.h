@@ -67,6 +67,7 @@ public:
 	virtual void GetControlString(const char *controlName, char *buf, int bufSize, const char *defaultString = "");
 	// sets the enabled state of a control
 	virtual void SetControlEnabled(const char *controlName, bool enabled);
+	virtual void SetControlVisible(const char *controlName, bool visible);
 
 	// localization variables (used in constructing UI strings)
 	// after the variable is set, causes all the necessary sub-panels to update

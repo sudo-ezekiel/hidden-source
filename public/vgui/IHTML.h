@@ -61,6 +61,7 @@ public:
 	virtual void OnKeyDown(KeyCode code)=0;
 
 	virtual vgui::IImage *GetBitmap()=0;
+	virtual void SetVisible( bool state ) = 0;
 
 };
 

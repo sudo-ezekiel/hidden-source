@@ -8,24 +8,25 @@
 // $NoKeywords: $
 //=============================================================================//
 
-#include <OfflineMode.h>
-#include <vgui/Cursor.h>
-#include <vgui/IScheme.h>
-#include <vgui/ISystem.h>
-#include <vgui/ISurface.h>
-#include <vgui/IVGUI.h>
-#include <filesystem.h>
+#include "OfflineMode.h"
+#include "vgui/Cursor.h"
+#include "vgui/IScheme.h"
+#include "vgui/ISystem.h"
+#include "vgui/ISurface.h"
+#include "vgui/IVGUI.h"
+#include "vgui/IBorder.h"
+#include "filesystem.h"
 
-#include <vgui_controls/HTML.h>
-#include <vgui_controls/Controls.h>
-#include <vgui_controls/Label.h>
-#include <vgui_controls/Image.h>
-#include <vgui_controls/ScrollBar.h>
-#include <KeyValues.h>
+#include "vgui_controls/HTML.h"
+#include "vgui_controls/Controls.h"
+#include "vgui_controls/Label.h"
+#include "vgui_controls/Image.h"
+#include "vgui_controls/ScrollBar.h"
+#include "KeyValues.h"
 
-// memdbgon must be the last include file in a .cpp file!!!
-#include <tier0/memdbgon.h>
 #include <stdio.h>
+
+#include "tier0/memdbgon.h"
 
 using namespace vgui;
 
@@ -34,14 +35,25 @@ enum
 	WINDOW_BORDER_WIDTH=1
 };
 
+vgui::Panel *HTML_NoJavascript_Factory()
+{
+	return new HTML( NULL, NULL, false );
+}
+
+vgui::Panel *HTML_Javascript_Factory()
+{
+	return new HTML( NULL, NULL, true );
+}
+
+//DECLARE_BUILD_FACTORY_CUSTOM_ALIAS( HTML, HTML_NoJavascript, HTML_NoJavascript_Factory );
+//DECLARE_BUILD_FACTORY_CUSTOM_ALIAS( HTML, HTML_Javascript, HTML_Javascript_Factory );
+
 //-----------------------------------------------------------------------------
 // Purpose: Constructor
 //-----------------------------------------------------------------------------
 HTML::HTML(Panel *parent, const char *name, bool allowJavaScript) : Panel(parent, name)
 {	
-	surface()->SetAllowHTMLJavaScript( allowJavaScript );
 	browser = surface()->CreateHTMLWindow(this, GetVPanel());
-	surface()->SetAllowHTMLJavaScript( false );
 	Assert(browser != NULL);
 	m_iNextFrameTime=0;
 	m_iAnimTime=0;
@@ -52,6 +64,11 @@ HTML::HTML(Panel *parent, const char *name, bool allowJavaScript) : Panel(parent
 	m_bScrollBarEnabled = true;
 	m_bContextMenuEnabled = true;
 	m_bNewWindowsOnly = false;
+	m_bSetVisibleOnPerformLayout = false;
+	if ( surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+	{
+		SetCursor( dc_invisible ); // REBUILD: the 2006 Cursor.h calls this value (15) dc_blank
+	}
 
 	_hbar = new ScrollBar(this, "HorizScrollBar", false);
 	_hbar->SetVisible(false);
@@ -80,7 +97,9 @@ HTML::~HTML()
 void HTML::ApplySchemeSettings(IScheme *pScheme)
 {
     BaseClass::ApplySchemeSettings(pScheme);
+	SetBgColor(pScheme->GetColor("HTML.BgColor", GetBgColor()));
 	SetBorder(pScheme->GetBorder( "BrowserBorder"));
+	BrowserResize();
 }
 
 //-----------------------------------------------------------------------------
@@ -113,21 +132,54 @@ void HTML::PaintBackground()
 
 	if (m_bRegenerateHTMLBitmap)
 	{
-		surface()->PaintHTMLWindow(browser);
+		if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+		{	
+			surface()->PaintHTMLWindow(browser);
+		}
 		m_bRegenerateHTMLBitmap = false;
 		int w, h;
 		GetSize(w, h);
 		CalcScrollBars(w, h);
 	}
 
-	// the window is a textured background
-	picture = browser->GetBitmap();	
-	if (picture)
+	if ( surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
 	{
-		surface()->DrawSetColor(GetBgColor());
+	}
+	else
+	{
+		// the window is a textured background
+		picture = browser->GetBitmap();	
+		if (picture)
+		{
+			surface()->DrawSetColor(GetBgColor());
 
-		picture->SetPos(0,0);
-		picture->Paint();
+			picture->SetPos(0,0);
+			picture->Paint();
+		}
+
+		// If we have scrollbars, we need to draw the bg color under them, since the browser
+		// bitmap is a checkerboard under them, and they are transparent in the in-game client
+		if ( m_iScrollBorderX > 0 || m_iScrollBorderY > 0 )
+		{
+			int w, h;
+			GetSize( w, h );
+			IBorder *border = GetBorder();
+			int left = 0, top = 0, right = 0, bottom = 0;
+			if ( border )
+			{
+				border->GetInset( left, top, right, bottom );
+			}
+
+			surface()->DrawSetColor( GetBgColor() );
+			if ( m_iScrollBorderX )
+			{
+				surface()->DrawFilledRect( w-m_iScrollBorderX - right, top, w - right, h - bottom );
+			}
+			if ( m_iScrollBorderY )
+			{
+				surface()->DrawFilledRect( left, h-m_iScrollBorderY - bottom, w-m_iScrollBorderX - right, h - bottom );
+			}
+		}
 	}
 }
 
@@ -138,6 +190,46 @@ void HTML::PerformLayout()
 {
 	BaseClass::PerformLayout();
 	Repaint();
+	if ( m_bSetVisibleOnPerformLayout )
+	{
+		browser->SetVisible( true );
+		m_bSetVisibleOnPerformLayout= false;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: passthru to the HTML surface widget
+//-----------------------------------------------------------------------------
+void HTML::SetVisible( bool state )
+{
+	BaseClass::SetVisible( state );
+	int w, h;
+	GetSize(w, h);
+	CalcScrollBars(w, h);
+	BrowserResize();
+
+	if ( !state ) // allow the visibleonlayout flag to be turned off
+	{
+		m_bSetVisibleOnPerformLayout = false;
+	}
+
+	if ( IsLayoutInvalid() && state ) // only set visible on performlayout IF you are setting it visible
+	{
+		m_bSetVisibleOnPerformLayout = true;
+	}
+	else
+	{
+		browser->SetVisible( state );
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: updates the underlying HTML surface widgets position
+//-----------------------------------------------------------------------------
+void HTML::OnMove()
+{
+	BaseClass::OnMove();
+	BrowserResize();
 }
 
 //-----------------------------------------------------------------------------
@@ -146,10 +238,19 @@ void HTML::PerformLayout()
 void HTML::CalcScrollBars(int w, int h)
 {
 	int img_w, img_h;
-	picture = browser->GetBitmap();
-	if (m_bScrollBarEnabled && picture != NULL)
+	if (m_bScrollBarEnabled )
 	{
 		browser->GetHTMLSize(img_w, img_h);
+
+		if ( img_w < 0 || img_h < 0 )
+		{
+			m_iScrollBorderX = 0;
+			m_iScrollBorderY=0;
+			_vbar->SetVisible(false);
+			_hbar->SetVisible(false);
+			BrowserResize();
+			return;
+		}
 
 		if (img_h > h)
 		{
@@ -180,10 +281,10 @@ void HTML::CalcScrollBars(int w, int h)
 		{
 			m_iScrollBorderX=0;
 			_vbar->SetVisible(false);
-
+			BrowserResize();
 		}
 
-		if(img_w>w)
+		if (img_w > w)
 		{
 			_hbar->SetVisible(true);
 			_hbar->SetEnabled(false);
@@ -208,13 +309,14 @@ void HTML::CalcScrollBars(int w, int h)
 		{
 			m_iScrollBorderY=0;
 			_hbar->SetVisible(false);
-
+			BrowserResize();
 		}
 	}
 	else
 	{
 		_vbar->SetVisible(false);
 		_hbar->SetVisible(false);
+		BrowserResize();
 	}
 }
 
@@ -295,12 +397,12 @@ void HTML::OnSizeChanged(int wide,int tall)
 	BaseClass::OnSizeChanged(wide,tall);
 	CalcScrollBars(wide,tall);
 
-	int x,y;
-	GetPos(x,y);
-
-	if(browser) browser->OnSize(m_iScrollX,m_iScrollY,wide-m_iScrollBorderX,tall-m_iScrollBorderY);
+	BrowserResize();
 	m_bRegenerateHTMLBitmap = true;
-	Repaint();
+	if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+	{
+		Repaint();
+	}
 }
 
 
@@ -314,7 +416,10 @@ void HTML::OnTick()
 	{
 		m_iNextFrameTime = system()->GetTimeMillis() + 	m_iAnimTime;
 		m_bRegenerateHTMLBitmap = true;
-		Repaint();
+		if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+		{
+			Repaint();
+		}
 	}
 }
 
@@ -336,7 +441,10 @@ void HTML::OnMousePressed(MouseCode code)
 		}
 	}
 	m_bRegenerateHTMLBitmap = true;
-	Repaint();
+	if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+	{
+		Repaint();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -349,8 +457,10 @@ void HTML::OnMouseReleased(MouseCode code)
 		browser->OnMouse(code, IHTML::UP, m_iMouseX, m_iMouseY);
 	}
 	m_bRegenerateHTMLBitmap = true;
-	Repaint();
-
+	if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+	{
+		Repaint();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -374,7 +484,10 @@ void HTML::OnMouseDoublePressed(MouseCode code)
 		browser->OnMouse(code, IHTML::DOWN, m_iMouseX, m_iMouseY);
 	}
 	m_bRegenerateHTMLBitmap = true;
-	Repaint();
+	if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+	{
+		Repaint();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -439,7 +552,7 @@ void HTML::AddCustomURLHandler(const char *customProtocolName, vgui::Panel *targ
 //-----------------------------------------------------------------------------
 bool HTML::OnStartURL(const char *url, const char *target, bool first)
 {
-	if ( IsVisible() )
+	if ( IsVisible() && !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
 	{
 		SetCursor( dc_arrow );
 	}
@@ -480,6 +593,32 @@ bool HTML::OnStartURL(const char *url, const char *target, bool first)
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: shared code for sizing the HTML surface window
+//-----------------------------------------------------------------------------
+void HTML::BrowserResize()
+{
+	int w,h;
+	GetSize( w, h );
+	IBorder *border;
+	border = scheme()->GetIScheme(GetScheme())->GetBorder( "BrowserBorder");
+	int left = 0, top = 0, right = 0, bottom = 0;
+	if ( border )
+	{
+		border->GetInset( left, top, right, bottom );
+	}
+	// TODO: does the win32 surface still need this offset when direct rendering?
+	//left += 1;
+	//top += 1;
+	//right += 1;
+	//bottom += 1;
+
+	if(browser) 
+	{
+		browser->OnSize(m_iScrollX + left, m_iScrollY + top, w-m_iScrollBorderX - right, h-m_iScrollBorderY - bottom);
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: gets called when a URL is finished loading
 //-----------------------------------------------------------------------------
 void HTML::OnFinishURL(const char *url)
@@ -488,15 +627,16 @@ void HTML::OnFinishURL(const char *url)
 	_vbar->SetValue(0);
 	_hbar->SetValue(0);
 	m_iScrollX = m_iScrollY = 0;
-	int w,h;
-	GetSize( w, h );
-	if (browser) 
-	{
-		browser->OnSize(m_iScrollX,m_iScrollY,w-m_iScrollBorderX,h-m_iScrollBorderY);
-	}
+	int w, h;
+	GetSize(w, h);
+	CalcScrollBars(w, h);
+	BrowserResize();
 
 	m_bRegenerateHTMLBitmap = true; // repaint the window, as we have a new picture to show
-	Repaint();
+	if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+	{
+		Repaint();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -525,8 +665,16 @@ void HTML::OnUpdate()
 	{
 		m_iNextFrameTime = system()->GetTimeMillis() + m_iAnimTime;
 		m_bRegenerateHTMLBitmap = true;
-		Repaint();
+		if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+		{
+			Repaint();
+		}
 	}
+
+	int w, h;
+	GetSize(w, h);
+	CalcScrollBars(w, h);
+	BrowserResize();
 }
 
 //-----------------------------------------------------------------------------
@@ -534,7 +682,7 @@ void HTML::OnUpdate()
 //-----------------------------------------------------------------------------
 void HTML::OnLink()
 {
-	if( IsVisible() )
+	if( IsVisible() && !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ))
 	{
 		SetCursor(dc_hand);
 	}
@@ -545,7 +693,7 @@ void HTML::OnLink()
 //-----------------------------------------------------------------------------
 void HTML::OffLink()
 {
-	if( IsVisible() )
+	if( IsVisible() && !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ))
 	{
 		SetCursor(dc_arrow);
 	}
@@ -573,16 +721,14 @@ void HTML::OnSliderMoved()
 	{
 		m_iScrollY=0;
 	}
-	int wide,tall;
-	GetSize(wide,tall);
+	BrowserResize();
 
-	if (browser) 
-	{
-		browser->OnSize(m_iScrollX,m_iScrollY,wide-m_iScrollBorderX,tall-m_iScrollBorderY);
-	}
 	
 	m_bRegenerateHTMLBitmap = true;
-	Repaint();
+	if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
+	{
+		Repaint();
+	}
 }
 
 //-----------------------------------------------------------------------------

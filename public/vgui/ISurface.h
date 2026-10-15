@@ -194,6 +194,7 @@ public:
 		OPENING_NEW_HTML_WINDOWS = 4,
 		FRAME_MINIMIZE_MAXIMIZE	 = 5,
 		OUTLINE_FONTS	= 6,
+		DIRECT_HWND_RENDER		= 7,
 	};
 	virtual bool SupportsFeature(SurfaceFeature_e feature) = 0;
 

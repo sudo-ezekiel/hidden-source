@@ -46,6 +46,8 @@ public:
 	virtual bool Refresh();
 	virtual void Clear();
 	virtual void AddText(const char *text);
+	virtual void SetVisible( bool state );
+	virtual void OnMove();
 
 	// configuration
 	virtual void SetScrollbarsEnabled(bool state);
@@ -97,7 +99,7 @@ protected:
 	virtual void ApplySchemeSettings(IScheme *pScheme);
 
 private:
-
+	virtual void BrowserResize();
 	virtual void CalcScrollBars(int w,int h);
 	MESSAGE_FUNC( OnSliderMoved, "ScrollBarSliderMoved" );
 
@@ -116,7 +118,9 @@ private:
 
 	bool m_bScrollBarEnabled;
 	bool m_bContextMenuEnabled;
+	int	m_iScrollbarSize;
 	bool m_bNewWindowsOnly;
+	bool m_bSetVisibleOnPerformLayout;
 
 	struct CustomURLHandler_t
 	{
