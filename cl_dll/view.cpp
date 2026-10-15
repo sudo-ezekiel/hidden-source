@@ -255,6 +255,9 @@ void CViewRender::LevelInit( void )
 	// Clear our overlay materials
 	m_ScreenOverlayMaterial.Init( NULL );
 
+	// Hidden: the stun motion blur's render target
+	m_pMotionBlurTexture = GetMotionBlurTexture();
+
 	// set default bounderies for overview
 }
 

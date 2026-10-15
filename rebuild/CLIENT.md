@@ -75,16 +75,22 @@ on one vftable per polymorphic base subobject. The differences converted:
 - a virtual destructor has two GCC slots and one MSVC slot (the scalar deleting destructor);
 - GCC repeats a function that overrides a secondary base's virtual in the primary vtable, MSVC
   does not (this is why a naive count of C_BaseEntity is one slot too many: IClientEntity's
-  `Release`);
+  `Release`). This includes a destructor that only overrides a secondary base's (CClientLeafSystem,
+  whose primary chain has no virtual destructor). The overrider is recognised by its qualified
+  name in a secondary vtable, so a new overload that only shares the name stays (the
+  GetParticlePosition( Particle *, Vector & ) of C_ParticleSmokeGrenade);
 - MSVC groups the overloads a class introduces at the first one's position, in reverse
   declaration order.
+
+Template classes are matched under the names client.dll's RTTI gives them
+(`CInterpolatedVarArray<float, 24>` is `?$CInterpolatedVarArray@M$0BI@`).
 
 Checks per class: slot counts per vftable, and inheritance: where our slot says the function is
 inherited from base X, the reference slot must hold the same address as X's (an "inherit" error
 means the slots are misaligned from there on). A class is MATCH when every count agrees and there
 are no inherit errors; this is the client's main "done" test for a class. Where our base subobject
-offsets differ from the reference's (a data layout difference, for example C_BaseEntity is 0x46c
-bytes in ours and 0x480 in Hidden's), the report says so in its layout column.
+offsets differ from the reference's (a data layout difference, such as C_BaseEntity's size before
+section 4's fixes), the report says so in its layout column.
 
 `names.tsv` names each slot target from the class it belongs to: high (class matches), medium
 (before the first misalignment), low (after it), folded (one address, several names), slot (a

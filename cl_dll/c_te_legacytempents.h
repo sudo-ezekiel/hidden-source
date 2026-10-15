@@ -20,14 +20,22 @@ struct model_t;
 #include "UtlLinkedList.h"
 
 #if defined( CSTRIKE_DLL ) || defined( SDK_DLL )
+// Hidden: the four shells Hidden's weapons eject, in the order client.dll's CSEjectBrass numbers them
 enum
 {
-	CS_SHELL_9MM = 0,
-	CS_SHELL_57,
-	CS_SHELL_12GAUGE,
+	CS_SHELL_57 = 0,
 	CS_SHELL_556,
-	CS_SHELL_762NATO,
-	CS_SHELL_338MAG
+	CS_SHELL_9MM,
+	CS_SHELL_12GAUGE
+};
+
+// Hidden: the magazines EjectClip drops (REBUILD: names)
+enum
+{
+	HDN_CLIP_PISTOL = 0,	// models/weapons/fnp9/w_fnp9mag.mdl
+	HDN_CLIP_FN2000,		// models/weapons/f2000/w_f2000mag.mdl
+	HDN_CLIP_FNP90,			// models/weapons/p90/w_p90mag.mdl
+	HDN_CLIP_FN303			// models/weapons/fn303/w_fn303mag.mdl
 };
 #endif
 
@@ -49,6 +57,7 @@ public:
 	virtual void				RicochetSprite( const Vector &pos, model_t *pmodel, float duration, float scale ) = 0;
 	virtual void				MuzzleFlash( int type, int entityIndex, int attachmentIndex, bool firstPerson ) = 0;
 	virtual void				MuzzleFlash( const Vector &pos1, const QAngle &angles, int type, int entityIndex, bool firstPerson ) = 0;
+	virtual void				EjectClip( const Vector &pos1, const QAngle &angles, int type ) = 0;	// Hidden (REBUILD: name)
 	virtual void				EjectBrass( const Vector& pos1, const QAngle& angles, const QAngle& gunAngles, int type ) = 0;
 	virtual C_LocalTempEntity   *SpawnTempModel( model_t *pModel, const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecVelocity, float flLifeTime, int iFlags ) = 0;
 	virtual void				BreakModel( const Vector &pos, const QAngle &angles, const Vector &size, const Vector &dir, float random, float life, int count, int modelIndex, char flags) = 0;
@@ -115,6 +124,7 @@ public:
 
 	virtual void			PlaySound ( C_LocalTempEntity *pTemp, float damp );
 	virtual void			EjectBrass( const Vector &pos1, const QAngle &angles, const QAngle &gunAngles, int type );
+	virtual void			EjectClip( const Vector &pos1, const QAngle &angles, int type );
 	virtual C_LocalTempEntity		*SpawnTempModel( model_t *pModel, const Vector &vecOrigin, const QAngle &vecAngles, const Vector &vecVelocity, float flLifeTime, int iFlags );
 	void					RocketFlare( const Vector& pos );
 	void					HL1EjectBrass( const Vector &vecPosition, const QAngle &angAngles, const Vector &vecVelocity, int nType );
@@ -137,7 +147,7 @@ private:
 	// Muzzle flash sprites
 	struct model_t			*m_pSpriteMuzzleFlash[10];
 	struct model_t			*m_pSpriteAR2Flash[4];
-	struct model_t			*m_pShells[3];
+	struct model_t			*m_pShells[4];	// Hidden: the 556, 57, 9mm and 12 gauge shells
 	struct model_t			*m_pSpriteCombineFlash[2];
 
 #if defined( HL1_CLIENT_DLL )
@@ -150,8 +160,13 @@ private:
 	struct model_t			*m_pCS_57Shell;
 	struct model_t			*m_pCS_12GaugeShell;
 	struct model_t			*m_pCS_556Shell;
-	struct model_t			*m_pCS_762NATOShell;
-	struct model_t			*m_pCS_338MAGShell;
+
+	// Hidden: ejected magazines (REBUILD: names)
+	struct model_t			*m_pJimmehClip;		// cl_jimmeh replaces every shell and magazine with it
+	struct model_t			*m_pPistolClip;
+	struct model_t			*m_pFN2000Clip;
+	struct model_t			*m_pFN303Clip;
+	struct model_t			*m_pFNP90Clip;
 #endif
 
 // Internal methods also available to children

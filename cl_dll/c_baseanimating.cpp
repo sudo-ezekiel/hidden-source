@@ -106,6 +106,20 @@ void C_InfoLightingRelative::GetLightingOffset( matrix3x4_t &offset )
 //-----------------------------------------------------------------------------
 // Base Animating
 //-----------------------------------------------------------------------------
+
+// REBUILD: Hidden's client.dll keeps Valve's 2006 list entry (8 bytes, entity and flags) and only
+// animates entries with FCLIENTANIM_SEQUENCE_CYCLE set.
+struct clientanimating_t
+{
+	C_BaseAnimating *pAnimating;
+	unsigned int	flags;
+	clientanimating_t(C_BaseAnimating *_pAnim, unsigned int _flags ) : pAnimating(_pAnim), flags(_flags) {}
+};
+
+const unsigned int FCLIENTANIM_SEQUENCE_CYCLE = 0x00000001;
+
+static CUtlVector< clientanimating_t >	g_ClientSideAnimationList;
+
 BEGIN_RECV_TABLE_NOBASE( C_BaseAnimating, DT_ServerAnimationData )
 	RecvPropFloat(RECVINFO(m_flCycle)),
 END_RECV_TABLE()
@@ -3622,6 +3636,24 @@ int C_BaseAnimating::LookupRandomAttachment( const char *pAttachmentNameSubstrin
 	return Studio_FindRandomAttachment( hdr, pAttachmentNameSubstring ) + 1;
 }
 
+// REBUILD: as in Valve's 2006 SDK, without its sequence transitioner check (client.dll's 2407e640
+// only refreshes the entry's flags)
+void C_BaseAnimating::ClientSideAnimationChanged()
+{
+	if ( !m_bClientSideAnimation )
+		return;
+
+	Assert(m_ClientSideAnimationListHandle != INVALID_CLIENTSIDEANIMATION_LIST_HANDLE);
+	clientanimating_t &anim = g_ClientSideAnimationList.Element(m_ClientSideAnimationListHandle);
+	Assert(anim.pAnimating == this);
+	anim.flags = ComputeClientSideAnimationFlags();
+}
+
+unsigned int C_BaseAnimating::ComputeClientSideAnimationFlags()
+{
+	return FCLIENTANIM_SEQUENCE_CYCLE;
+}
+
 void C_BaseAnimating::UpdateClientSideAnimation()
 {
 	// Update client side animation
@@ -3775,6 +3807,10 @@ void C_BaseAnimating::SetSequence( int nSequence )
 	{
 		m_nSequence = nSequence; 
 		InvalidatePhysicsRecursive( ANIMATION_CHANGED );
+		if ( m_bClientSideAnimation )
+		{
+			ClientSideAnimationChanged();
+		}
 	}
 }
 
@@ -4566,7 +4602,6 @@ void DevMsgRT( char const* pMsg, ... )
 	}
 }
 
-CUtlVector< C_BaseAnimating * >	g_ClientSideAnimationList;
 
 
 void C_BaseAnimating::ForceClientSideAnimationOn()
@@ -4582,7 +4617,9 @@ void C_BaseAnimating::AddToClientSideAnimationList()
 	if ( m_ClientSideAnimationListHandle != INVALID_CLIENTSIDEANIMATION_LIST_HANDLE )
 		return;
 
-	m_ClientSideAnimationListHandle = g_ClientSideAnimationList.AddToTail( this );
+	clientanimating_t list( this, 0 );
+	m_ClientSideAnimationListHandle = g_ClientSideAnimationList.AddToTail( list );
+	ClientSideAnimationChanged();
 }
 
 void C_BaseAnimating::RemoveFromClientSideAnimationList()
@@ -4604,13 +4641,13 @@ void C_BaseAnimating::RemoveFromClientSideAnimationList()
 	}
 	else
 	{
-		C_BaseAnimating *lastEntity = g_ClientSideAnimationList[ last ];
+		clientanimating_t lastEntry = g_ClientSideAnimationList[ last ];
 		// Remove the last entry
 		g_ClientSideAnimationList.FastRemove( last );
 
 		// And update it's handle to point to this slot.
-		lastEntity->m_ClientSideAnimationListHandle = m_ClientSideAnimationListHandle;
-		g_ClientSideAnimationList[ m_ClientSideAnimationListHandle ] = lastEntity;
+		lastEntry.pAnimating->m_ClientSideAnimationListHandle = m_ClientSideAnimationListHandle;
+		g_ClientSideAnimationList[ m_ClientSideAnimationListHandle ] = lastEntry;
 	}
 
 	// Invalidate our handle no matter what.
@@ -4625,9 +4662,11 @@ void C_BaseAnimating::UpdateClientSideAnimations()
 	int c = g_ClientSideAnimationList.Count();
 	for ( int i = 0; i < c ; ++i )
 	{
-		C_BaseAnimating *pEnt = g_ClientSideAnimationList[ i ];
-		Assert( pEnt );
-		pEnt->UpdateClientSideAnimation();
+		clientanimating_t &anim = g_ClientSideAnimationList.Element(i);
+		if ( !(anim.flags & FCLIENTANIM_SEQUENCE_CYCLE) )
+			continue;
+		Assert( anim.pAnimating );
+		anim.pAnimating->UpdateClientSideAnimation();
 	}
 }
 

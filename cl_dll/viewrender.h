@@ -146,6 +146,9 @@ public:
 
 	void			DriftPitch (void);
 
+	// Hidden: the stun motion blur
+	void			PerformMotionBlur( float flAlpha );	// REBUILD: name; client.dll's 241ac8e0
+
 
 private:
 	struct WaterRenderInfo_t
@@ -268,6 +271,9 @@ private:
 		ANGLESHISTORY_SIZE	= 8,
 		ANGLESHISTORY_MASK	= 7,
 	};
+
+	// Hidden: the render target the stun motion blur accumulates into
+	ITexture		*m_pMotionBlurTexture;	// REBUILD: name; client.dll's +4, set in LevelInit and PerformMotionBlur
 
 	// Combination of DF_ flags.
 	int m_DrawFlags;
