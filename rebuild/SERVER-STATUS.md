@@ -15,6 +15,13 @@ addresses become a placeholder). The build uses GCC 3.4 for i386 with Hidden's f
 (`-mtune=i686 -march=pentium -mmmx -O3`). Nothing is missing: every function in Hidden's binary
 exists in the rebuild, and the rebuild has no extra functions.
 
+These counts are from the original (now `--loose`) comparison, which hid every number above 0xFFFF
+and the data behind addresses. The strict comparison, now the default of `compare.sh`, also checks
+large constants, float constants, strings and the symbol behind every address. On main after the
+server-msvc and strict-compare merges it gives 18355 same and 58 changed: 11 functions differ only in a
+constant (a ConVar default, a float, a model name, a prediction table entry); `STRICT-COMPARE.md`
+lists them with Hidden's value, ours and the source line.
+
 None of the 47 "changed" functions is known to behave differently from Hidden's. Each one has the
 same calls, the same constants and the same control flow as far as we could check. What differs is
 how GCC compiled it: which register it picked, the order of independent instructions, or the order
@@ -34,7 +41,9 @@ Needs Docker and the `hsrebuild-gcc34` image (see `rebuild/docker/README.md`). F
 `build.sh` mirrors the tree into the work dir, makes a makefile from `dlls/hl_sdk.vcproj`
 ("Release SDK|Win32") and builds `out/server_i486.so`. A full build takes 1 to 2 minutes; a header
 change rebuilds everything. `compare.sh` writes `cmp.tsv` in the work dir, one row per function:
-source file, status, similarity, sizes, mangled and readable name. Totals:
+source file, status, similarity, sizes, mangled and readable name. It compares strictly (see
+`STRICT-COMPARE.md`); `sh rebuild/compare.sh --loose ...` gives the original comparison, for
+comparing with older tables. Totals:
 
     awk -F'\t' '{n[$2]++} END {for (s in n) print s, n[s]}' ~/.cache/hsrebuild-work/cmp.tsv
 
