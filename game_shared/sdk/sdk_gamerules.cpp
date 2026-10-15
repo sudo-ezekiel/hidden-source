@@ -55,7 +55,7 @@ BEGIN_NETWORK_TABLE_NOBASE( CSDKGameRules, DT_SDKGameRules )
 #ifdef CLIENT_DLL
 	RecvPropFloat( RECVINFO( m_fStart ) ),
 	RecvPropInt( RECVINFO( m_iDuration ) ),
-	RecvPropArray3( RECVINFO_ARRAY( m_bPlayer ), RecvPropBool( RECVINFO( m_bPlayer[0] ) ) ),
+	RecvPropArray( RecvPropBool( RECVINFO( m_bPlayer[0] ) ), m_bPlayer ),
 #else
 	SendPropFloat( SENDINFO( m_fStart ) ),
 	SendPropInt( SENDINFO( m_iDuration ) ),
