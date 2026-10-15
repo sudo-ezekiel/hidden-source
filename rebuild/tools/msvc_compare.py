@@ -2,9 +2,18 @@
 
 Hidden's client.dll has no symbols, so its functions are first mapped to ours, then each mapped
 pair is compared after the normalisation compare_builds.py uses for the server: branch targets
-inside the function become offsets, calls and jumps out of it become names, and addresses inside
-the image become ADDR (import table slots become IMP:<name>). Jump and index tables that MSVC
-places after a function's code are cut off and compared as in-function offsets.
+inside the function become offsets, calls and jumps out of it become names. Jump and index tables
+that MSVC places after a function's code are cut off and compared as in-function offsets.
+Operands, two ways:
+- strict (the default): the PE base relocations say which operands are addresses; each becomes a
+  token for what it points at (Tokens: a mapped function, a vftable, an import slot, writable data
+  paired through the mapping, read-only data by its content, pe_refs.py), and every other number
+  is a constant and stays. After the mapping, refine() pairs again functions the strict tokens
+  show were swapped (STRICT-COMPARE.md section 6).
+- --loose: the original normalisation, addresses inside the image become ADDR (import table
+  slots IMP:<name>), .rdata is not read. Its result is the same as before the strict mode.
+The mapping steps below are the same in both modes and never use the strict tokens; only the
+strict mode's refine() changes pairs after them.
 
 Functions: ours from the /MAP file; the reference's from every vftable slot, direct call target
 and import thunk, plus the Ghidra decompile's starts (decomp.c) and direct jmp targets (tail calls)
@@ -45,6 +54,7 @@ the result's "our name" column then holds the PDB's names.
 Usage:
     python3 -I msvc_compare.py <reference.dll> <our dll> <our map> [<decomp dir>]
         --out <result.tsv> [--ref-procs procs.tsv] [--ref-names names.tsv] [--ours-procs] [--show NAME]
+        [--loose]
 
 Result columns: object (lib:object from the map, ours), status (same / changed / unmapped /
 only-ref / only-ours), similarity, ref size, our size, our name (mangled), demangled name,
@@ -52,7 +62,8 @@ ref address, our address, how it was mapped, the names.tsv name. Unmapped refere
 only-ref when they sit in a vftable of a class our build does not have; our unmapped functions are
 only-ours when they sit in a vftable of a class Hidden's build does not have. Sizes are the code
 up to the next function, without trailing int3 padding. --show prints the normalised diff of the
-functions whose our name contains NAME, or of the reference function at a hex address.
+functions whose our name contains NAME, or of the reference function at a hex address (several,
+comma separated).
 """
 import argparse
 import bisect
@@ -65,6 +76,7 @@ import sys
 from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pe_refs  # noqa: E402
 import pe_rtti  # noqa: E402
 from pe_seeds import relocations, section_of  # noqa: E402
 from vtable_names import msvc_simple_demangle  # noqa: E402
@@ -91,6 +103,18 @@ class Image:
         self.imports = imports(path, self.lo)
         self.starts = []
         self.names = {}
+        self._rtti = self._refs = None
+
+    def rtti(self):
+        if self._rtti is None:
+            self._rtti = pe_rtti.rtti(self.pe)
+        return self._rtti
+
+    def refs(self):
+        """Base relocations and read-only content (pe_refs.py), read on first use."""
+        if self._refs is None:
+            self._refs = pe_refs.Refs(self.pe)
+        return self._refs
 
     def finish(self, starts):
         starts = sorted(a for a in set(starts) if self.text[0] <= a < self.text[1])
@@ -356,23 +380,24 @@ def after_terminator(img, a):
 
 
 def body(img, start):
-    """[(op, args, external target or None, [function pointer immediates], address, branch target)],
-    tables, size. args is None for a branch out of the function."""
+    """[(op, args, external target or None, [function pointer immediates], address, branch target,
+    objdump's args, address of the next instruction)], tables, size. args is None for a branch out
+    of the function."""
     lo, end = img.extent(start)
     i = img.index[lo]
     rows = []
     while i < len(img.addrs) and img.addrs[i] < end:
-        rows.append((img.addrs[i], img.ins[i]))
+        rows.append((img.addrs[i], img.ins[i], img.addrs[i + 1] if i + 1 < len(img.addrs) else img.text[1]))
         i += 1
     # Jump and index tables follow the code: cut at the first in-function table address.
     tables = []
-    for a, ins in rows:
+    for a, ins, _ in rows:
         for m in MEMBASE.finditer(ins):
             t = int(m.group(1), 16)
             if lo <= t < end:
                 tables.append((t, ins.startswith("jmp")))
     cut = min((t for t, _ in tables), default=end)
-    rows = [(a, ins) for a, ins in rows if a < cut]
+    rows = [r for r in rows if r[0] < cut]
     while rows and rows[-1][1] in PAD_OPS:
         rows.pop()
     size = (rows[-1][0] - lo + 1) if rows else 0
@@ -380,17 +405,17 @@ def body(img, start):
         nxt = img.index[rows[-1][0]] + 1
         size = (img.addrs[nxt] if nxt < len(img.addrs) else end) - lo
     out = []
-    for a, ins in rows:
+    for a, ins, nxt in rows:
         op, _, args = ins.partition(" ")
         target = None
         m = BRANCH.match(args)
         if m and (op.startswith("j") or op.startswith("call") or op.startswith("loop")):
             t = int(m.group(1), 16)
             if lo <= t < end:
-                out.append((op, f"<+{t - lo:#x}>", None, [], a, t))
+                out.append((op, f"<+{t - lo:#x}>", None, [], a, t, args, nxt))
                 continue
             target = t
-            out.append((op, None, target, [], a, t))
+            out.append((op, None, target, [], a, t, args, nxt))
             continue
         ptrs = []
 
@@ -403,7 +428,7 @@ def body(img, start):
                     ptrs.append(v)
                 return "ADDR"
             return h.group(0)
-        out.append((op, HEX.sub(sub, args), None, ptrs, a, None))
+        out.append((op, HEX.sub(sub, args), None, ptrs, a, None, args, nxt))
     tabs = []
     for t, is_jump in sorted(set(tables)):
         if t >= end:
@@ -443,6 +468,275 @@ def masked(rows):
 
 def labelled(rows, label):
     return [f"{x[0]} {label(x[2]) if x[1] is None else x[1]}" for x in rows]
+
+
+class Tokens:
+    """Strict tokens for one side's address operands (--loose leaves them out): what a relocated
+    field points at, named so that both builds agree whatever their layout.
+
+    code             a mapped function: the label the branches get (ours: our name; the
+                     reference's: the name of the function it is mapped to); CODE for code that is
+                     not a mapped function start (on the reference's side often a function the
+                     extents without a PDB merged into the one before), so that two such
+                     pointers compare as the loose mode does; in-function tables TABLE#<n>, other
+                     in-function addresses <+offset>
+    import slot      IMP:<name>
+    vftable          vftable:<class>@<subobject offset>, plus +offset into it
+    type descriptor  TD:<decorated class name> (dynamic_cast, typeid)
+    writable data    data:<name> through data_name(), ADDR when it has none
+    read-only data   its content (pe_refs.py)"""
+
+    def __init__(self, img, label, data_name, mapped):
+        self.img, self.label, self.data_name, self.mapped = img, label, data_name, mapped
+        self.refs = img.refs()
+        r = img.rtti()
+        self.vft = {}
+        for v in r["vtables"]:
+            name = f"vftable:{ANON.sub('?A', v['class'])}@{v['offset']:#x}"
+            for k in range(len(v["slots"])):
+                self.vft.setdefault(v["vftable"] + 4 * k, name + (f"+{4 * k:#x}" if k else ""))
+        self.tds = {a: "TD:" + ANON.sub("?A", raw) for a, raw in r["tds"].items()}
+
+    def token(self, t, op="", args="", imm=True, indexed=False, depth=0, func=None):
+        img = self.img
+        if func is not None and func[0] <= t < func[1]:
+            if t in func[2]:
+                return f"TABLE#{func[2].index(t)}"
+            return f"<+{t - func[0]:#x}>"
+        if img.text[0] <= t < img.text[1]:
+            return self.label(t) if t in self.mapped else "CODE"
+        if t in img.imports:
+            return "IMP:" + img.imports[t]
+        if t in self.vft:
+            return self.vft[t]
+        if t in self.tds:
+            return self.tds[t]
+        sec = self.refs.section(t)
+        if sec is None:
+            return f"?{t:#x}"
+        if sec[5] & pe_refs.SCN_WRITE:
+            return self.data_name(t)
+        return self.refs.content_token(t, op, args, imm, indexed, depth,
+                                       lambda x, depth=0: self.token(x, depth=depth, func=func))
+
+    def lines(self, start, rows):
+        """The rows as labelled() gives them, with every relocated operand a token and every
+        other number literal."""
+        lo, end = self.img.extent(start)
+        tables = sorted({int(m.group(1), 16) for x in rows if x[1] is not None and x[5] is None
+                         for m in MEMBASE.finditer(x[6]) if lo <= int(m.group(1), 16) < end})
+        func = (lo, end, tables)
+
+        def token(t, op, args, imm, indexed):
+            return self.token(t, op, args, imm, indexed, 0, func)
+        out = []
+        for x in rows:
+            if x[1] is None:
+                out.append(f"{x[0]} {self.label(x[2])}")
+            elif x[5] is not None:
+                out.append(f"{x[0]} {x[1]}")
+            else:
+                out.append(f"{x[0]} " + self.refs.operands(x[0], x[6], x[4], x[7], token))
+        return out
+
+
+def refine(m, tr, to, name_data, rounds=8):
+    """Strict mode only. Functions the loose normalisation cannot tell apart (GetPanelClassName,
+    GetRecvTable and the factories of many classes, the $E initialisers and destructors of one
+    object) are paired by order or body, and the strict tokens show where two were swapped: the
+    masked bodies are equal, the strict lines differ. Each round names the writable data without
+    the votes of such suspect pairs that are not sure (STRENGTH below 2), maps the
+    functions tables point at (pair_tables), then pairs again, among the suspect pairs and the
+    unmapped functions with the same masked body as a suspect pair or as an unmapped function on
+    the other side, those whose strict lines are equal: unique on both sides, or as many on both
+    sides and all mapped already (in address order; any order scores the same, and an unmapped
+    function is not paired by a guess); one left on each side of a group pairs too. Returns the
+    number of pairs made."""
+
+    def suspects():
+        """Pairs whose masked bodies are equal and whose strict lines differ."""
+        out = {}
+        for r, o in m.r2o.items():
+            a, ta, _ = m.ref.get(r)
+            b, tb, _ = m.ours.get(o)
+            ma = masked(a)
+            if ma == masked(b):
+                sa, sb = "\n".join(tr.lines(r, a) + ta), "\n".join(to.lines(o, b) + tb)
+                if sa != sb:
+                    out[r] = ("\n".join(ma), sa, sb)
+        return out
+
+    def weak(pairs):
+        return {r for r in pairs if strength(m, r) < 2}
+
+    total = 0
+    name_data()
+    for _ in range(rounds):
+        name_data(weak(suspects()))
+        tables = pair_tables(m)
+        total += tables
+        groups = defaultdict(lambda: (defaultdict(list), defaultdict(list), [], []))
+        for r, (key, sa, sb) in suspects().items():
+            g = groups[key]
+            g[0][sa].append(r)
+            g[1][sb].append(m.r2o[r])
+            g[2].append(r)
+            g[3].append(m.r2o[r])
+        unmapped = defaultdict(lambda: ([], []))
+        for side, k in ((m.ref, 0), (m.ours, 1)):
+            for x in m.unmapped(side):
+                unmapped["\n".join(masked(side.get(x)[0]))][k].append(x)
+        for key, (rs, os_) in unmapped.items():
+            if (rs and os_) or key in groups:
+                g = groups[key]
+                for r in rs:
+                    a, ta, _ = m.ref.get(r)
+                    g[0]["\n".join(tr.lines(r, a) + ta)].append(r)
+                for o in os_:
+                    b, tb, _ = m.ours.get(o)
+                    g[1]["\n".join(to.lines(o, b) + tb)].append(o)
+        new = []
+        for by_r, by_o, old_r, old_o in groups.values():
+            made = [p for t, rs in by_r.items() if len(rs) == len(by_o.get(t, ()))
+                    and (len(rs) == 1 or all(r in m.r2o for r in rs) and all(o in m.o2r for o in by_o[t]))
+                    for p in zip(sorted(rs), sorted(by_o[t]))]
+            made = [(r, o) for r, o in made if m.r2o.get(r) != o]
+            if not made:
+                continue
+            done_r, done_o = {r for r, _ in made}, {o for _, o in made}
+            # the partners the new pairs take away: one left on each side pairs with the other
+            left_r = [r for r in old_r if r not in done_r and m.r2o[r] in done_o]
+            left_o = [o for o in old_o if o not in done_o and m.o2r[o] in done_r]
+            if len(left_r) == 1 and len(left_o) == 1:
+                made.append((left_r[0], left_o[0]))
+            new += made
+        if not new and not tables:
+            break
+        for r, o in new:
+            for x in (r, m.o2r.get(o)):
+                if x in m.r2o:
+                    del m.o2r[m.r2o.pop(x)]
+                    del m.how[x]
+        for r, o in new:
+            total += m.add(r, o, "strict")
+        m.propagate()
+    else:
+        name_data(weak(suspects()))
+    return total
+
+
+# How sure a pair is, by how it was mapped: by a name, a vftable slot or a unique set of strings
+# (2), through the call graph, a table or the strict lines (1), or by position or a body several
+# functions share (0, which can pair two alike functions the wrong way round). The $E
+# initialisers and destructors count 0 however they were paired: every object numbers its own,
+# so their names recur (and the names carried over from the May DLL pair them by body).
+STRENGTH = {"vftable": 2, "pdbname": 2, "names": 2, "string": 2, "strict": 1, "callgraph": 1, "table": 1}
+STATIC_FN = re.compile(r"^_?\$E\d+$")
+
+
+def strength(m, r):
+    if STATIC_FN.match(m.ours.img.names.get(m.r2o[r], "")):
+        return 0
+    return STRENGTH.get(m.how[r], 0)
+
+
+def pair_tables(m):
+    """Unmapped functions that tables in read-only data point at (the vftables of classes built
+    without RTTI, callback tables): where the aligned operands of a mapped pair with equal masked
+    bodies point at relocated words on both sides, the entries at the same index, up to the next
+    referenced address, vote as in the call graph. Returns the number of pairs made."""
+    ref, ours = m.ref.img, m.ours.img
+    rr, ro = ref.refs(), ours.refs()
+    votes = defaultdict(Counter)
+    for r, o in m.r2o.items():
+        a, _, _ = m.ref.get(r)
+        b, _, _ = m.ours.get(o)
+        if masked(a) != masked(b):
+            continue
+        for xa, xb in zip(a, b):
+            if xa[1] is None or xa[5] is not None:
+                continue
+            ts, us = rr.operand_targets(xa[4], xa[7], xa[6]), ro.operand_targets(xb[4], xb[7], xb[6])
+            if len(ts) != len(us):
+                continue
+            for x, y in zip(ts, us):
+                if x not in rr.site_set or y not in ro.site_set or rr.writable(x) or ro.writable(y):
+                    continue
+                ex, ey = rr.next_bound(x), ro.next_bound(y)
+                k = 0
+                while x + k in rr.site_set and y + k in ro.site_set and k < 4 * pe_refs.TABLE_CAP \
+                        and (k == 0 or (x + k < ex and y + k < ey)):
+                    tx, ty = rr.target(x + k), ro.target(y + k)
+                    if tx in ref.start_set and ty in ours.start_set:
+                        votes[tx][ty] += 1
+                    k += 4
+    n = 0
+    for tx, c in votes.items():
+        if tx in m.r2o:
+            continue
+        (ty, k), *rest = c.most_common(2)
+        if ty not in m.o2r and (not rest or k > 2 * rest[0][1]):
+            n += m.add(tx, ty, "table")
+    return n
+
+
+def pair_data(m, skip=()):
+    """Writable data the reference uses -> ours: in mapped pairs whose bodies line up, the
+    relocated operands at the same positions that both point into .data or .bss vote, as the
+    call graph does for functions; the pairs of reference functions in skip do not vote. Votes
+    rank by whether the pair's masked bodies are equal, then by its STRENGTH: an address takes
+    the candidate with the most votes of the best rank that has any, when no other candidate has
+    as many there. Type descriptors are named by class and left out."""
+    ref, ours = m.ref.img, m.ours.img
+    rr, ro = ref.refs(), ours.refs()
+    tdr, tdo = ref.rtti()["tds"], ours.rtti()["tds"]
+    votes = defaultdict(Counter)
+    for r, o in m.r2o.items():
+        if r in skip:
+            continue
+        a, _, _ = m.ref.get(r)
+        b, _, _ = m.ours.get(o)
+        ma, mb = masked(a), masked(b)
+        if ma == mb:
+            blocks = [(0, 0, len(ma))]
+        elif len(ma) + len(mb) < 6000:
+            blocks = difflib.SequenceMatcher(None, ma, mb, autojunk=False).get_matching_blocks()
+        else:
+            blocks = []
+        rank = (ma == mb, strength(m, r))
+        for i, j, n in blocks:
+            for k in range(n):
+                xa, xb = a[i + k], b[j + k]
+                if xa[1] is None or xa[5] is not None:
+                    continue
+                ts, us = rr.operand_targets(xa[4], xa[7], xa[6]), ro.operand_targets(xb[4], xb[7], xb[6])
+                if len(ts) != len(us):
+                    continue
+                for x, y in zip(ts, us):
+                    if rr.writable(x) and ro.writable(y) and x not in tdr and y not in tdo:
+                        votes[x][rank, y] += 1
+    out = {}
+    for x, c in votes.items():
+        best = max(k for k, _ in c)
+        (y, n), *rest = Counter({y: n for (k, y), n in c.items() if k == best}).most_common(2)
+        if not rest or n > rest[0][1]:
+            out[x] = y
+    return out
+
+
+def read_map_data(path):
+    """Our data symbols from the /MAP file (sections 2 and up): sorted [(address, name)]."""
+    out = []
+    with open(path, errors="replace") as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) < 4 or not re.match(r"000[2-9]:", parts[0]) or parts[1].startswith("."):
+                continue
+            try:
+                out.append((int(parts[2], 16), parts[1]))
+            except ValueError:
+                continue
+    return sorted(set(out))
 
 
 def string_refs(img, start):
@@ -592,7 +886,7 @@ ANON = re.compile(r"\?A0x[0-9a-f]{8}")
 def vtable_classes(img):
     """(class, subobject offset) -> slot targets. Anonymous namespaces carry a per-build hash
     (?A0x1aa454be::GripPanel), so it is dropped from the name."""
-    r = pe_rtti.rtti(img.pe)
+    r = img.rtti()
     out = {}
     for v in r["vtables"]:
         out[(ANON.sub("?A", v["class"]), v["offset"])] = v["slots"]
@@ -626,6 +920,8 @@ def main():
     ap.add_argument("--ref-names", help="names for reference functions, procs.tsv's columns, extents not used")
     ap.add_argument("--ours-procs", action="store_true", help="<our map> is a procs.tsv: map two references")
     ap.add_argument("--show")
+    ap.add_argument("--loose", action="store_true",
+                    help="the original scoring: every image address is ADDR, .rdata is not read")
     args = ap.parse_args()
 
     ref, ours = Image(args.ref), Image(args.ours)
@@ -709,20 +1005,65 @@ def main():
         o = ours.owner(t)
         return f"<{ours.names.get(o, '?')}+{t - o:#x}>" if o is not None else f"<?{t:08x}>"
 
+    if args.loose:
+        def lines_ref(r, rows):
+            return labelled(rows, label)
+
+        def lines_ours(o, rows):
+            return labelled(rows, label_ours)
+    else:
+        syms = [] if args.ours_procs else read_map_data(args.map)
+        starts = [a for a, _ in syms]
+
+        def our_data(y):
+            i = bisect.bisect_right(starts, y) - 1
+            if i < 0:
+                return f"data:{y:08x}"
+            a, name = syms[i]
+            return f"data:{name}" + (f"+{y - a:#x}" if y != a else "")
+        tr, to = Tokens(ref, label, None, m.r2o), Tokens(ours, label_ours, None, m.o2r)
+
+        paired = [0]
+
+        def name_data(skip=()):
+            data = pair_data(m, skip)
+            named = {y: our_data(y) for y in set(data.values())}
+            tr.data_name = lambda x: named[data[x]] if x in data else "ADDR"
+            to.data_name = lambda y: named.get(y, "ADDR")
+            paired[0] = len(data)
+        moved = refine(m, tr, to, name_data)
+        print(f"strict: {moved} pairs made where the loose bodies are equal; {paired[0]} writable data "
+              f"addresses paired", file=sys.stderr)
+        if not args.ours_procs:
+            n, bad = pe_refs.check_map(ours.refs(), args.map)
+            print(f"strict: content reader checked on {n} __real@ and ??_C@ entries of our map, "
+                  f"{len(bad)} disagree", file=sys.stderr)
+            for b in bad[:10]:
+                print("  " + b, file=sys.stderr)
+
+        def lines_ref(r, rows):
+            return tr.lines(r, rows)
+
+        def lines_ours(o, rows):
+            return to.lines(o, rows)
+
     if args.show:
         sel = []
-        try:
-            a = int(args.show, 16)
-            if a in m.r2o:
-                sel.append(a)
-        except ValueError:
-            pass
-        sel += [r for r, o in m.r2o.items() if args.show in ours.names.get(o, "")]
-        for r in sel[:20]:
+        for want in args.show.split(","):
+            found = []
+            try:
+                a = int(want, 16)
+                if a in m.r2o:
+                    found.append(a)
+            except ValueError:
+                pass
+            found += [r for r, o in m.r2o.items() if want in ours.names.get(o, "")]
+            sel += found[:20]
+        for r in sel:
             a, ta, _ = m.ref.get(r)
             b, tb, _ = m.ours.get(m.r2o[r])
             print(f"=== {r:08x} <-> {m.r2o[r]:08x} {ours.names[m.r2o[r]]} ({m.how[r]})")
-            for line in difflib.unified_diff(labelled(a, label) + ta, labelled(b, label_ours) + tb,
+            for line in difflib.unified_diff(lines_ref(r, a) + ta, lines_ours(m.r2o[r], b) + tb,
                                              "reference", "ours", lineterm="", n=3):
                 print(line)
         return
@@ -741,7 +1082,7 @@ def main():
             rows.append(("", "only-ref" if r in only_ref else "unmapped", 0.0, sa, 0, "", f"{r:08x}", "", "", rn))
             continue
         b, tb, sb = m.ours.get(o)
-        la, lb = labelled(a, label) + ta, labelled(b, label_ours) + tb
+        la, lb = lines_ref(r, a) + ta, lines_ours(o, b) + tb
         if la == lb:
             status, ratio = "same", 1.0
         else:
