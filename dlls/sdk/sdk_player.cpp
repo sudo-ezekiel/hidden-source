@@ -774,7 +774,7 @@ void CSDKPlayer::PlayerUse( void )
 				pPlayer->SetAmmoRecieved();
 
 				// Helping out makes you more likely to be picked as the Hidden
-				m_iWeighting.GetForModify() += 20;
+				AddWeighting( 20 );
 			}
 
 			usedSomething = true;

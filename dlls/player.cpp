@@ -1421,7 +1421,7 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 			else
 				flWeighting = info.GetDamage();
 
-			player->m_iWeighting.GetForModify() += (int)flWeighting;
+			player->AddWeighting( (int)flWeighting );
 			DevMsg( 1, "weighting : %i\n", player->m_iWeighting.Get() );
 		}
 		else

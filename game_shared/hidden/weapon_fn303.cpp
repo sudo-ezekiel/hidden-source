@@ -369,12 +369,12 @@ void CFN303Ball::BoltTouch( CBaseEntity *pOther )
 				CBasePlayer *pOwner = ToBasePlayer( GetOwnerEntity() );	// REBUILD: name
 				if ( pPlayer->GetTeamNumber() == pOwner->GetTeamNumber() )
 				{
-					pOwner->m_iWeighting.GetForModify() -= 25;
+					pOwner->AddWeighting( -25 );
 					DevMsg( 1, "303 FF hit, remove 25 from weighting\n" );
 				}
 				else
 				{
-					pOwner->m_iWeighting.GetForModify() += 25;
+					pOwner->AddWeighting( 25 );
 					DevMsg( 1, "303 hit, add 25 to weighting\n" );
 				}
 			}

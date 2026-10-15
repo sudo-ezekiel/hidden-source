@@ -704,7 +704,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 	void CSDKGameRules::GameOverThink( void )
 	{
-		if ( gpGlobals->curtime >= m_flIntermissionEndTime )
+		if ( m_flIntermissionEndTime <= gpGlobals->curtime )
 		{
 			DevMsg( 1, "Intermission over, changing levels\n" );
 			m_HiddenSelector.ClearHidden();
@@ -794,7 +794,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		}
 
 		m_iMarineCount = iMarines;
-		return m_iMarineCount > 0;
+		if ( m_iMarineCount > 0 )
+			return true;
+
+		return false;
 	}
 
 	bool CSDKGameRules::TotalPlayers( void )
@@ -811,7 +814,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		}
 
 		m_iTotalPlayers = iPlayers;
-		return m_iTotalPlayers > 0;
+		if ( m_iTotalPlayers > 0 )
+			return true;
+
+		return false;
 	}
 
 	bool CSDKGameRules::CountHiddens( void )
@@ -825,7 +831,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		}
 
 		m_iHiddenCount = iHiddens;
-		return m_iHiddenCount > 0;
+		if ( m_iHiddenCount > 0 )
+			return true;
+
+		return false;
 	}
 
 	// Spawns the Hidden and up to eight marines; everyone else watches.
@@ -1099,7 +1108,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		CountHiddens();
 		m_iHiddenCount--;
 
-		if ( m_iHiddenCount <= 0 )
+		if ( m_iHiddenCount < 1 )
 		{
 			DevMsg( 1, "Hidden Disconnected!\n" );
 			m_HiddenSelector.ForfeitHidden( pPlayer );
@@ -1166,7 +1175,7 @@ bool CSDKGameRules::IsCharacterTaken( int iCharacter )
 	{
 		bool bRoundOver = false;
 
-		if ( m_fStart < 0 || m_iDuration - (int)( gpGlobals->curtime - m_fStart ) <= 0 )
+		if ( GetRoundTimerRemain() <= 0 )
 		{
 			DevMsg( 1, "round timer ended\n" );
 			bRoundOver = true;
@@ -1192,10 +1201,10 @@ bool CSDKGameRules::IsCharacterTaken( int iCharacter )
 	{
 		bool bWins = false;
 
-		if ( m_iHiddenCount <= 0 || IsRoundOver() )
+		if ( m_iHiddenCount < 1 || IsRoundOver() )
 		{
-			UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Wins" );
 			bWins = true;
+			UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Wins" );
 		}
 
 		return bWins;
@@ -1369,10 +1378,10 @@ CSDKGameRules::CSDKGameRules()
 
 	CreateEntityByName( "sdk_gamerules" );
 
-	m_bLastRound = false;
 	m_iMarineCount = -1;
 	m_iHiddenCount = -1;
 	m_iTotalPlayers = 0;
+	m_bLastRound = false;
 	m_flIntermissionEndTime = -1;
 	m_bTimeout = false;
 	m_iHiddenRounds = 1;
@@ -1506,7 +1515,7 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 			// Killing the Hidden is worth two frags and a better chance to be the next one
 			DevMsg( 1, "Hidden killed\n" );
 			pScorer->IncrementFragCount( 2 );
-			pScorer->m_iWeighting.GetForModify() += 50;
+			pScorer->AddWeighting( 50 );
 			m_HiddenSelector.NewHidden( pScorer );
 		}
 		else
@@ -1542,7 +1551,7 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 
 void CSDKGameRules::IntermissionThink( void )
 {
-	if ( gpGlobals->curtime >= m_flIntermissionEndTime )
+	if ( m_flIntermissionEndTime <= gpGlobals->curtime )
 	{
 		DevMsg( 1, "Intermission over, restarting round\n" );
 		RestartRound();
