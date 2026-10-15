@@ -1,12 +1,22 @@
 """Compare two GCC 3.4 server_i486.so builds function by function.
 
 For every function symbol, the disassembly is normalised so that differences caused only by
-layout disappear: call and jump targets become symbol names (or offsets inside the function),
-and absolute addresses become ADDR. Two functions with the same normalised body are treated
-as compiled from the same source.
+layout disappear, and two functions with the same normalised body are treated as compiled from
+the same source. There are two normalisations:
+
+- strict (the default): the dynamic relocations say which operands are addresses (both builds
+  are non-PIC with text relocations). Each one becomes a token for what it points at: a symbol
+  name plus offset, or for read-only data without a symbol its content (float and double
+  constants, strings, jump tables as offsets into the function); see elf_refs.py. Every operand
+  no relocation covers is a constant and is kept as it is, however large. Calls to exported
+  functions (R_386_PC32) are named after the callee.
+- --loose: the original normalisation. Call and jump targets become symbol names (or offsets
+  inside the function) and every hex number above 0xFFFF becomes ADDR, so large constants and the
+  data behind addresses are not compared, and a call through an R_386_PC32 relocation reads as
+  a call to the calling function itself. Kept so older result tables stay comparable.
 
 Usage:
-    python3 -I compare_builds.py <reference.so> <candidate.so> --map <map.tsv> --out <result.tsv>
+    python3 -I compare_builds.py <reference.so> <candidate.so> --map <map.tsv> --out <result.tsv> [--loose]
 
 <reference.so> is the original (Hidden's) build, <candidate.so> the one we compiled; <map.tsv>
 is map_functions.py output for the reference, used to attribute functions to source files.
@@ -23,8 +33,14 @@ import subprocess
 import sys
 from collections import defaultdict
 
+# python3 -I drops the script directory from sys.path; elf_refs.py sits next to this file.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from elf_refs import Refs  # noqa: E402
+
 HEX = re.compile(r"\b0x[0-9a-f]+\b")
 TARGET = re.compile(r"^([0-9a-f]+) <([^>]+)>$")
+NUMBER = re.compile(r"(\$?)(-?0x[0-9a-f]+)\b")
+PC_THUNK = "call <__i686.get_pc_thunk.bx>"
 
 # GCC names anonymous namespaces and file-keyed static initialisers after the source path plus two
 # hashes, the second one random per compile: "_GLOBAL__N_.._dlls_x.cpp_FDF1F060_3F9FE640" in
@@ -85,15 +101,104 @@ def disassemble(path):
     return blocks
 
 
-def disassemble_cached(path):
+def strict_args(refs, op, args, addr, end, func):
+    """Operands of one instruction at [addr, end) with every relocated field replaced by a token."""
+    rels = [off for off in refs.relocs_in(addr, end) if off + 4 <= end]
+    m = TARGET.match(args)
+    if m:
+        is_call = op.startswith("call")
+        if rels and refs.rel[rels[0]][0] == "PC32":
+            target, undefined = refs.reloc_target(rels[0], end)
+            if undefined is not None:
+                return f"<{undefined}>"
+        else:
+            target = int(m.group(1), 16)
+        sec = refs.section(target)
+        tok = refs.symbol_token(target, None if is_call else func) if sec and sec[5] else None
+        return f"<{tok if tok is not None else canon(m.group(2).split('+')[0])}>"
+    if not rels:
+        return args
+    numbers = [[n, False] for n in NUMBER.finditer(args)]
+    subs = []
+    for off in rels:
+        field = refs.word(off)
+        hits = [h for h in numbers if not h[1] and int(h[0].group(2), 16) & 0xFFFFFFFF == field]
+        if not hits:
+            subs.append((len(args), len(args), " {" + refs.reloc_token(off, op, args, func=func) + "}"))
+            continue
+        # The immediate is the last field of an instruction, after any displacement.
+        imm = [h for h in hits if h[0].group(1)]
+        mem = [h for h in hits if not h[0].group(1)]
+        hit = imm[0] if imm and (off == end - 4 or not mem) else (mem or imm)[0]
+        hit[1] = True
+        n = hit[0]
+        is_imm = bool(n.group(1))
+        indexed = not is_imm and args[n.end():n.end() + 1] == "("
+        tok = refs.reloc_token(off, op, args, imm=is_imm, indexed=indexed, func=func)
+        subs.append((n.start(), n.end(), n.group(1) + tok))
+    for start, stop, text in sorted(subs, reverse=True):
+        args = args[:start] + text + args[stop:]
+    return args
+
+
+def disassemble_strict(path, refs, start_address=None, stop_address=None):
+    """Like disassemble(), with relocated operands named by strict_args() and other numbers kept."""
+    cmd = ["objdump", "-d", "--no-show-raw-insn", "-j", ".text"]
+    if start_address is not None:
+        cmd += [f"--start-address={start_address}", f"--stop-address={stop_address}"]
+    proc = subprocess.Popen(cmd + [path], stdout=subprocess.PIPE, text=True, bufsize=1 << 20)
+    blocks = {}
+    cur = None
+    func = None
+    pending = None  # (block, address, op, args, func) waiting for the next address as its end
+
+    def flush(end):
+        block, addr, op, args, fn = pending
+        block.append(f"{op} {strict_args(refs, op, args, addr, end, fn)}")
+
+    for line in proc.stdout:
+        if line.endswith(">:\n"):
+            start = int(line.split()[0], 16)
+            cur = blocks.setdefault(start, [])
+            sym = refs.symbol_at(start)
+            func = (start, sym[2] if sym and sym[1] == start and sym[2] else 0)
+            continue
+        if cur is None or ":\t" not in line:
+            continue
+        addr_s, _, ins = line.partition(":\t")
+        ins = ins.strip()
+        if not ins:
+            continue
+        addr = int(addr_s, 16)
+        if pending is not None:
+            flush(addr)
+        op, _, args = ins.partition(" ")
+        pending = (cur, addr, op, args.strip(), func)
+    if pending is not None:
+        text = next(s for s in refs.secs if s[3] == ".text")
+        flush(min(text[1], pending[1] + 16) if stop_address is None else stop_address)
+    proc.wait()
+    # The C runtime's PIC helpers address the GOT through %ebx; those offsets depend on layout.
+    for start, ins in blocks.items():
+        if PC_THUNK in ins:
+            blocks[start] = [HEX.sub(lambda h: "ADDR" if int(h.group(0), 16) > 0xFFFF else h.group(0), i) for i in ins]
+    return blocks
+
+
+def disassemble_cached(path, strict=True):
     """The reference build never changes, so keep its normalised disassembly next to the work dir."""
     st = os.stat(path)
-    key = hashlib.sha1(f"v2:{os.path.abspath(path)}:{st.st_size}:{st.st_mtime_ns}".encode()).hexdigest()[:16]
+    version = "v2"
+    if strict:  # the strict tokens still change as the tool learns; key them by its source too
+        here = os.path.dirname(os.path.abspath(__file__))
+        tools = b"".join(open(os.path.join(here, n), "rb").read() for n in ("compare_builds.py", "elf_refs.py"))
+        version = "v3-strict-" + hashlib.sha1(tools).hexdigest()[:12]
+    key = hashlib.sha1(f"{version}:{os.path.abspath(path)}:{st.st_size}:{st.st_mtime_ns}".encode()).hexdigest()[:16]
     cache = os.path.join(os.path.expanduser("~/.cache/hsrebuild-disasm"), key + ".pickle")
     if os.path.exists(cache):
         with open(cache, "rb") as f:
             return pickle.load(f)
-    blocks = disassemble(path)
+    blocks = disassemble_strict(path, Refs(path, canon)) if strict else disassemble(path)
     os.makedirs(os.path.dirname(cache), exist_ok=True)
     with open(cache + ".tmp", "wb") as f:
         pickle.dump(blocks, f)
@@ -112,6 +217,7 @@ def main():
     ap.add_argument("cand")
     ap.add_argument("--map", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--loose", action="store_true", help="the original normalisation (hex above 0xFFFF is ADDR)")
     args = ap.parse_args()
 
     owner = {}
@@ -124,8 +230,8 @@ def main():
 
     ref_syms = function_symbols(args.ref)
     cand_syms = function_symbols(args.cand)
-    ref_blocks = disassemble_cached(args.ref)
-    cand_blocks = disassemble(args.cand)
+    ref_blocks = disassemble_cached(args.ref, strict=not args.loose)
+    cand_blocks = disassemble(args.cand) if args.loose else disassemble_strict(args.cand, Refs(args.cand, canon))
 
     # Pair functions by canonical name; rows keep the reference's own name.
     cand_by_canon = {canon(n): n for n in cand_syms}

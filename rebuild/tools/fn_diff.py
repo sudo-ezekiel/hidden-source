@@ -1,18 +1,36 @@
 """Show how one function differs between two builds, after the same normalisation compare_builds uses.
 
 Usage:
-    python3 -I fn_diff.py <reference.so> <candidate.so> <name> [--raw]
+    python3 -I fn_diff.py <reference.so> <candidate.so> <name> [--raw] [--loose]
 
 <name> is a mangled symbol or a substring of the demangled name (the first unique match is used;
 all matches are listed when there are several). --raw prints both disassemblies without diffing.
+The strict normalisation is the default, so a changed constant shows as its value (f32:62,
+"string", $0x46004003, a symbol name); --loose shows the original one, with ADDR for every hex
+number above 0xFFFF.
 """
 import argparse
 import difflib
+import re
 import subprocess
 import sys
 
 sys.path.insert(0, __import__("os").path.dirname(__file__))
-from compare_builds import function_symbols, HEX, TARGET  # noqa: E402
+from compare_builds import canon, disassemble_strict, function_symbols, HEX, TARGET  # noqa: E402
+from elf_refs import Refs  # noqa: E402
+
+MANGLED = re.compile(r"\b_Z[\w.]+")
+
+
+def strict(path, addr, size):
+    """compare_builds' strict lines for one function, demangled for reading."""
+    lines = disassemble_strict(path, Refs(path, canon), addr, addr + size).get(addr, [])
+    lines = [f"{op:8} {args}" for op, _, args in (line.partition(" ") for line in lines)]
+    # Demangle the names only: c++filt run over whole lines also eats the "$" of an immediate.
+    names = sorted({m for line in lines for m in MANGLED.findall(line)})
+    out = subprocess.run(["c++filt"], input="\n".join(names), capture_output=True, text=True).stdout.split("\n")
+    plain = dict(zip(names, out))
+    return [MANGLED.sub(lambda m: plain.get(m.group(0), m.group(0)), line) for line in lines]
 
 
 def normalised(path, addr, size):
@@ -56,14 +74,16 @@ def main():
     ap.add_argument("cand")
     ap.add_argument("name")
     ap.add_argument("--raw", action="store_true")
+    ap.add_argument("--loose", action="store_true", help="the original normalisation (hex above 0xFFFF is ADDR)")
     args = ap.parse_args()
+    norm = normalised if args.loose else strict
     rs, cs = function_symbols(args.ref), function_symbols(args.cand)
     name = resolve(rs, args.name)
-    a = normalised(args.ref, *rs[name])
+    a = norm(args.ref, *rs[name])
     if name not in cs:
         print("\n".join(a))
         sys.exit(f"{name} is not in the candidate build")
-    b = normalised(args.cand, *cs[name])
+    b = norm(args.cand, *cs[name])
     if args.raw:
         print("== reference\n" + "\n".join(a) + "\n== candidate\n" + "\n".join(b))
         return
