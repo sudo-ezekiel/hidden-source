@@ -67,6 +67,11 @@ public:
 
 	virtual void	DrawEffects( void ) {}
 
+#ifdef CLIENT_DLL
+	// No laser beam to draw, so melee weapons are opaque
+	virtual RenderGroup_t	GetRenderGroup( void ) { return RENDER_GROUP_OPAQUE_ENTITY; }
+#endif
+
 	virtual float	GetTime2Idle( void );
 	virtual float	GetRange( void );
 	virtual	float	GetDamageForActivity( Activity hitActivity );

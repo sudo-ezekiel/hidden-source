@@ -14,6 +14,7 @@
 
 	#define CWeaponFN2000 C_WeaponFN2000
 	#include "c_sdk_player.h"
+	#include "c_te_effect_dispatch.h"
 
 #else
 
@@ -107,7 +108,6 @@ bool CWeaponFN2000::Deploy()
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	pPlayer->m_iShotsFired = 0;
 	m_flLastShotTime = gpGlobals->curtime - 1.0;
-
 	if ( pPlayer && pPlayer->GetSafe() )
 	{
 		SendWeaponAnim( ACT_VM_LOWERED );
@@ -124,9 +124,9 @@ void CWeaponFN2000::ToggleZoom( void )
 {
 	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
 
-	if ( !m_bDeployed || pPlayer == NULL )
+	if ( !IsDeployed() || pPlayer == NULL )
 		return;
-
+#ifndef CLIENT_DLL	// the server zooms; the client has no SetFOV or SetZoom
 	if ( m_bInZoom )
 	{
 		if ( pPlayer->SetFOV( this, 0, 0.2f ) )
@@ -143,12 +143,12 @@ void CWeaponFN2000::ToggleZoom( void )
 			pPlayer->SetZoom( true );
 		}
 	}
+#endif
 }
 
 void CWeaponFN2000::CheckZoomToggle( void )
 {
 	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
-	
 	if ( pPlayer->m_afButtonPressed & IN_ATTACK2 )
 	{
 		ToggleZoom();
@@ -176,7 +176,7 @@ void CWeaponFN2000::PrimaryAttack( void )
 	const CSDKWeaponInfo &pWeaponInfo = GetSDKWpnData();
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 
-	if ( !m_bDeployed )
+	if ( !IsDeployed() )
 		return;
 
 	// No firing while safe
@@ -271,13 +271,13 @@ bool CWeaponFN2000::Reload()
 	{
 		pPlayer->SetFOV( pPlayer, pPlayer->GetDefaultFOV() );
 	}
+#endif
 
 	// Drop the empty magazine
 	CEffectData data;
 	data.m_vOrigin = pPlayer->GetLocalOrigin();
 	data.m_vAngles = pPlayer->GetLocalAngles();
 	DispatchEffect( "EjectFN2000Clip", data );
-#endif
 
 	pPlayer->m_iShotsFired = 0;
 
@@ -289,6 +289,7 @@ bool CWeaponFN2000::Reload()
 //-----------------------------------------------------------------------------
 bool CWeaponFN2000::Holster( CBaseCombatWeapon *pSwitchingTo )
 {
+#ifndef CLIENT_DLL
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	if ( !pPlayer )
 		return false;
@@ -296,6 +297,7 @@ bool CWeaponFN2000::Holster( CBaseCombatWeapon *pSwitchingTo )
 	// Show the rifle on the player model
 	if ( pPlayer->m_lifeState == LIFE_ALIVE )
 		pPlayer->SetBodygroup( 2, 0 );
+#endif
 
 	if ( m_bInZoom )
 		ToggleZoom();

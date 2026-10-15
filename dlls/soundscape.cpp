@@ -447,10 +447,13 @@ public:
 	virtual void Spawn();
 	virtual void Activate();
 
+	void PlayerUpdateThink();
 
 private:
 	CHandle<CEnvSoundscapeTriggerable> m_hSoundscape;
 	string_t m_SoundscapeName;
+
+	CUtlVector<CBasePlayerHandle> m_spectators; // spectators in our volume
 };
 
 
@@ -458,7 +461,8 @@ LINK_ENTITY_TO_CLASS( trigger_soundscape, CTriggerSoundscape );
 
 BEGIN_DATADESC( CTriggerSoundscape )
 	DEFINE_KEYFIELD( m_SoundscapeName, FIELD_STRING, "soundscape" ),
-	DEFINE_FIELD( m_hSoundscape, FIELD_EHANDLE )
+	DEFINE_FIELD( m_hSoundscape, FIELD_EHANDLE ),
+	DEFINE_THINKFUNC( PlayerUpdateThink ),
 END_DATADESC()
 
 
@@ -489,6 +493,9 @@ void CTriggerSoundscape::Spawn()
 {
 	BaseClass::Spawn();
 	InitTrigger();
+
+	SetThink( &CTriggerSoundscape::PlayerUpdateThink );
+	SetNextThink( gpGlobals->curtime + 0.2 );
 }
 
 
@@ -498,3 +505,50 @@ void CTriggerSoundscape::Activate()
 	BaseClass::Activate();
 }
 
+
+// look for dead/spectating players in our volume, to call touch on
+void CTriggerSoundscape::PlayerUpdateThink()
+{
+	int i;
+	SetNextThink( gpGlobals->curtime + 0.2 );
+
+	CUtlVector<CBasePlayerHandle> oldSpectators;
+	oldSpectators = m_spectators;
+	m_spectators.RemoveAll();
+
+	// REBUILD: Hidden's loop stops at maxClients - 1 (the 2006 SDK uses <=).
+	for ( i=1; i < gpGlobals->maxClients; ++i )
+	{
+		CBasePlayer *player = UTIL_PlayerByIndex( i );
+
+		if ( !player )
+			continue;
+
+		if ( player->IsAlive() )
+			continue;
+
+		// if the spectator is intersecting the trigger, track it, and start a touch if it is just starting to touch
+		if ( Intersects( player ) )
+		{
+			if ( !oldSpectators.HasElement( player ) )
+			{
+				StartTouch( player );
+			}
+			m_spectators.AddToTail( player );
+		}
+	}
+
+	// check for spectators who are no longer intersecting
+	for ( i=0; i<oldSpectators.Count(); ++i )
+	{
+		CBasePlayer *player = oldSpectators[i];
+
+		if ( !player )
+			continue;
+
+		if ( !m_spectators.HasElement( player ) )
+		{
+			EndTouch( player );
+		}
+	}
+}

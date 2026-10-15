@@ -12,6 +12,7 @@
 
 	#define CWeaponP90 C_WeaponP90
 	#include "c_sdk_player.h"
+	#include "c_te_effect_dispatch.h"
 
 #else
 
@@ -39,7 +40,6 @@ public:
 	virtual SDKWeaponID GetWeaponID( void ) const		{ return WEAPON_P90; }
 
 private:
-
 	CWeaponP90( const CWeaponP90 & );
 };
 
@@ -53,7 +53,6 @@ END_PREDICTION_DATA()
 
 LINK_ENTITY_TO_CLASS( weapon_p90, CWeaponP90 );
 PRECACHE_WEAPON_REGISTER( weapon_p90 );
-
 CWeaponP90::CWeaponP90()
 {
 }
@@ -66,6 +65,7 @@ void CWeaponP90::SetSafe()
 
 bool CWeaponP90::Holster( CBaseCombatWeapon *pSwitchingTo )
 {
+#ifndef CLIENT_DLL
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	if ( !pPlayer )
 		return false;
@@ -73,6 +73,7 @@ bool CWeaponP90::Holster( CBaseCombatWeapon *pSwitchingTo )
 	// Show the P90 on the player model
 	if ( pPlayer->m_lifeState == LIFE_ALIVE )
 		pPlayer->SetBodygroup( 2, 0 );
+#endif
 
 	return BaseClass::Holster( pSwitchingTo );
 }
@@ -119,13 +120,13 @@ bool CWeaponP90::Reload()
 	{
 		pPlayer->SetFOV( pPlayer, pPlayer->GetDefaultFOV() );
 	}
+#endif
 
 	// Drop the empty magazine
 	CEffectData data;
 	data.m_vOrigin = pPlayer->GetLocalOrigin();
 	data.m_vAngles = pPlayer->GetLocalAngles();
 	DispatchEffect( "EjectFNP90Clip", data );
-#endif
 
 	pPlayer->m_iShotsFired = 0;
 
@@ -158,7 +159,7 @@ void CWeaponP90::PrimaryAttack( void )
 		return;
 	}
 
-	if ( !m_bDeployed )
+	if ( !IsDeployed() )
 		return;
 	float flCycleTime = pWeaponInfo.m_flCycleTime;
 	float flSpread = 0.03f;
@@ -166,7 +167,6 @@ void CWeaponP90::PrimaryAttack( void )
 	// more spread when jumping
 	if ( !FBitSet( pPlayer->GetFlags(), FL_ONGROUND ) )
 		flSpread = 0.08f;
-	
 	pPlayer->m_iShotsFired++;
 
 	// Out of ammo?

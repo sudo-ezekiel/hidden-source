@@ -27,8 +27,10 @@ void ImpactCallback( const CEffectData &data )
 	// If we hit, perform our custom effects and play the sound
 	if ( Impact( vecOrigin, vecStart, iMaterial, iDamageType, iHitbox, pEntity, tr ) )
 	{
-		// Check for custom effects based on the Decal index
-		PerformCustomEffects( vecOrigin, tr, vecShotDir, iMaterial, 1.0 );
+		// Check for custom effects based on the Decal index. REBUILD: Hidden skips them for the
+		// FN303's paralyzing balls
+		if ( iDamageType != DMG_PARALYZE )
+			PerformCustomEffects( vecOrigin, tr, vecShotDir, iMaterial, 1.0 );
 
 		//Play a ricochet sound some of the time
 		if( random->RandomInt(1,10) <= 3 && (iDamageType == DMG_BULLET) )

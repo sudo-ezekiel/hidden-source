@@ -75,6 +75,11 @@ void C_BaseCombatWeapon::OnRestore()
 	}
 }
 
+int C_BaseCombatWeapon::GetWorldModelIndex( void )
+{
+	return m_iWorldModelIndex;
+}
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Input  : bnewentity - 
@@ -95,7 +100,7 @@ void C_BaseCombatWeapon::OnDataChanged( DataUpdateType_t updateType )
 		// FIXME: Remove when Yahn's client-side prediction is done
 		// It's a hacky workaround for the model indices fighting
 		// (GetRenderBounds uses the model index, which is for the view model)
-		SetModelIndex( m_iWorldModelIndex );
+		SetModelIndex( GetWorldModelIndex() );
 		UpdateVisibility();
 		m_iOldState = m_iState;
 		return;

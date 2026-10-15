@@ -52,7 +52,10 @@ public:
 
 	bool IsPinPulled() const;
 
-#ifndef CLIENT_DLL
+#ifdef CLIENT_DLL
+	// The world model is hidden while a live player carries the grenade
+	virtual int		DrawModel( int flags );
+#else
 	DECLARE_DATADESC();
 
 	virtual bool AllowsAutoSwitchFrom( void ) const;
