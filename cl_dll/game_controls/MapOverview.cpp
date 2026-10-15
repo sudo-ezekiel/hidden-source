@@ -129,7 +129,15 @@ CMapOverview::CMapOverview( IViewPort *pViewPort ) : BaseClass( NULL, PANEL_OVER
 	m_TeamIcons[3] = surface()->CreateNewTextureID();
 	surface()->DrawSetTextureFile( m_TeamIcons[3], ( const char * )"sprites/player_blue", true, false);
 
-	gameeventmanager->AddListener( this, false );	// register for events as client listener
+	// register for events as client listener
+	gameeventmanager->AddListener( this, "game_newmap", false );
+	gameeventmanager->AddListener( this, "round_start", false );
+	gameeventmanager->AddListener( this, "player_connect", false );
+	gameeventmanager->AddListener( this, "player_info", false );
+	gameeventmanager->AddListener( this, "player_team", false );
+	gameeventmanager->AddListener( this, "player_hurt", false );
+	gameeventmanager->AddListener( this, "player_death", false );
+	gameeventmanager->AddListener( this, "player_disconnect", false );
 	
 	s_pMapOverview = this;  // for cvars access etc
 }
@@ -589,7 +597,7 @@ void CMapOverview::OnMousePressed( MouseCode code )
 	
 }
 
-void CMapOverview::FireGameEvent( KeyValues * event)
+void CMapOverview::FireGameEvent( IGameEvent *event )
 {
 	const char * type = event->GetName();
 

@@ -24,7 +24,7 @@
 //-----------------------------------------------------------------------------
 // Purpose: Game ScoreBoard
 //-----------------------------------------------------------------------------
-class CClientScoreBoardDialog : public vgui::Frame, public IViewPortPanel, public IGameEventListener
+class CClientScoreBoardDialog : public vgui::Frame, public IViewPortPanel, public IGameEventListener2
 {
 private:
 	DECLARE_CLASS_SIMPLE( CClientScoreBoardDialog, vgui::Frame );
@@ -52,7 +52,7 @@ public:
   	virtual void SetParent( vgui::VPANEL parent ) { BaseClass::SetParent( parent ); }
  	
 	// IGameEventListener interface:
-	virtual void FireGameEvent( KeyValues * event);
+	virtual void FireGameEvent( IGameEvent *event );
 			bool IsServerSide() { return false; };
 
 protected:

@@ -22,7 +22,7 @@
 #define MAX_TRAIL_LENGTH	30
 #define OVERVIEW_MAP_SIZE	1024	// an overview map is 1024x1024 pixels
 
-class CMapOverview : public vgui::Panel, public IViewPortPanel, public IGameEventListener
+class CMapOverview : public vgui::Panel, public IViewPortPanel, public IGameEventListener2
 {
 
 	DECLARE_CLASS_SIMPLE( CMapOverview, vgui::Panel );
@@ -73,7 +73,7 @@ public: // IViewPortPanel interface:
 
 public: // IGameEventListener
 
-	virtual void FireGameEvent( KeyValues * event);
+	virtual void FireGameEvent( IGameEvent *event );
 	virtual bool IsServerSide() { return false; };
 
 public:	// VGUI overrides

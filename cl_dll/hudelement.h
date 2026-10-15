@@ -20,7 +20,7 @@
 //-----------------------------------------------------------------------------
 // Purpose: Base class for all hud elements
 //-----------------------------------------------------------------------------
-class CHudElement : public IGameEventListener
+class CHudElement : public IGameEventListener2
 {
 public:
 	DECLARE_CLASS_NOBASE( CHudElement );
@@ -101,7 +101,7 @@ public:
 
 public: // IGameEventListener Interface
 	
-	virtual void FireGameEvent( KeyValues * event ) {}
+	virtual void FireGameEvent( IGameEvent * event ) {}
 
 public:
 

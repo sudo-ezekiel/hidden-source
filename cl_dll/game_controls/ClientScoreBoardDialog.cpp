@@ -73,7 +73,11 @@ CClientScoreBoardDialog::CClientScoreBoardDialog(IViewPort *pViewPort) : Frame( 
 	m_HLTVSpectators = 0;
 	
 	// update scoreboard instantly if on of these events occure
-	gameeventmanager->AddListener(this, false );
+	gameeventmanager->AddListener( this, "hltv_status", false );
+	gameeventmanager->AddListener( this, "server_spawn", false );
+	gameeventmanager->AddListener( this, "game_round_restart", false );
+	gameeventmanager->AddListener( this, "player_connect", false );
+	gameeventmanager->AddListener( this, "player_death", false );
 }
 
 //-----------------------------------------------------------------------------
@@ -162,7 +166,7 @@ void CClientScoreBoardDialog::ShowPanel(bool bShow)
 
 
 
-void CClientScoreBoardDialog::FireGameEvent( KeyValues * event)
+void CClientScoreBoardDialog::FireGameEvent( IGameEvent *event )
 {
 	const char * type = event->GetName();
 
