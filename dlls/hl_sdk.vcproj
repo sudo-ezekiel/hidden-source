@@ -6309,6 +6309,9 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 					</FileConfiguration>
 				</File>
 				<File
+					RelativePath="sdk\sdk_bot_temp.cpp">
+				</File>
+				<File
 					RelativePath=".\sdk\sdk_brushentity.cpp">
 				</File>
 				<File
@@ -6548,45 +6551,6 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 				Name="Hidden"
 				Filter="">
 				<File
-					RelativePath="..\game_shared\hidden\weapon_fn2000.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\weapon_p90.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\weapon_fn303.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\weapon_pistol.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\weapon_pistol2.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\weapon_sonic.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\hdn_weapon_crowbar.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\hdn_bludgeonweapon_sdkbase.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\hdn_lasersight.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\hdn_evacuationrules.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\hdn_overrunrules.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\hdn_tutorialrules.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\hidden\hdn_spectator.cpp">
-				</File>
-				<File
 					RelativePath="hidden\Func_Monitor.cpp">
 				</File>
 				<File
@@ -6596,7 +6560,13 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 					RelativePath="hidden\hdn_ammocrate.cpp">
 				</File>
 				<File
+					RelativePath="..\game_shared\hidden\hdn_bludgeonweapon_sdkbase.cpp">
+				</File>
+				<File
 					RelativePath="hidden\hdn_bot.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_evacuationrules.cpp">
 				</File>
 				<File
 					RelativePath="hidden\hdn_extraction_button.cpp">
@@ -6608,6 +6578,9 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 					RelativePath="hidden\hdn_hiddenselection.cpp">
 				</File>
 				<File
+					RelativePath="..\game_shared\hidden\hdn_lasersight.cpp">
+				</File>
+				<File
 					RelativePath="hidden\hdn_location_trigger.cpp">
 				</File>
 				<File
@@ -6617,10 +6590,37 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 					RelativePath="hidden\hdn_marine_clip.cpp">
 				</File>
 				<File
+					RelativePath="..\game_shared\hidden\hdn_overrunrules.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_spectator.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_tutorialrules.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_weapon_crowbar.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_fn2000.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_fn303.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_p90.cpp">
+				</File>
+				<File
 					RelativePath="hidden\weapon_physcannon.cpp">
 				</File>
 				<File
-					RelativePath="sdk\sdk_bot_temp.cpp">
+					RelativePath="..\game_shared\hidden\weapon_pistol.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_pistol2.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_sonic.cpp">
 				</File>
 			</Filter>
 		</Filter>
