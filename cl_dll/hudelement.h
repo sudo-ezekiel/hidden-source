@@ -115,6 +115,8 @@ private:
 	const char					*m_pElementName;
 	bool						m_bNeedsRemove;
 	bool						m_bIsParentedToClientDLLRootPanel;
+
+	REBUILD_MSVC_TAIL_PAD_BYTES( m_MSVCTailPad, 2 )	// 0x12; client.dll's CHudElement is 0x14 bytes and a second base's members start after it (CHudAmmo at 0x164)
 };
 
 #include "tier0/memdbgoff.h"
