@@ -34,6 +34,8 @@ protected:
 	float m_fadeMinDist;
 	float m_fadeMaxDist;
 	float m_flFadeScale;
+
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x79c; client.dll's C_BreakableProp is 0x7a0 bytes
 };
 
 #endif // C_BREAKABLEPROP_H

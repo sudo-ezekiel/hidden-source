@@ -177,6 +177,10 @@ private:
 	// Control panel
 	typedef CHandle<CVGuiScreen>	ScreenHandle_t;
 	CUtlVector<ScreenHandle_t>	m_hScreens;
+
+#if defined( CLIENT_DLL )
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x7d4; client.dll's C_BaseViewModel is 0x7d8 bytes
+#endif
 };
 
 #endif // BASEVIEWMODEL_SHARED_H

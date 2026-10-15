@@ -374,9 +374,11 @@ public:
 
 	// Texture group to use
 	int								m_nSkin;
+	int								m_iUnknown4a4;	// REBUILD: 4 bytes at 0x4a4 in client.dll (mid-2005 base), no use found
 
 	// Object bodygroup
 	int								m_nBody;
+	int								m_iUnknown4ac;	// REBUILD: 4 bytes at 0x4ac in client.dll, no use found
 
 	// Hitbox set to use (default 0)
 	int								m_nHitboxSet;
@@ -476,6 +478,8 @@ private:
 	// These are compared against each other to determine if the entity should muzzle flash.
 	CNetworkVar( unsigned char, m_nMuzzleFlashParity );
 	unsigned char m_nOldMuzzleFlashParity;
+
+	REBUILD_MSVC_TAIL_PAD_BYTES( m_MSVCTailPad, 2 )	// 0x78e; client.dll's C_BaseAnimating is 0x790 bytes
 };
 
 enum 

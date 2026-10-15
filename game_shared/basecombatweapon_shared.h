@@ -459,13 +459,13 @@ private:
 	COutputEvent			m_OnNPCPickup;		// Fired when an NPC picks up the weapon.
 
 #else // Client .dll only
+	// REBUILD: m_bJustRestored before m_iOldState, as in client.dll (and the 2006 SDK)
 	bool					m_bJustRestored;
+	int						m_iOldState;
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x81c; client.dll's C_BaseCombatWeapon is 0x820 bytes
 
 	// Allow weapons resource to access m_hWeaponFileInfo directly
 	friend class			WeaponsResource;
-
-	// Valve's mid-2005 SDK order: m_iOldState follows m_bJustRestored.
-	int						m_iOldState;
 
 #endif // End Client .dll only
 };
