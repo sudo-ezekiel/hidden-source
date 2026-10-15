@@ -319,6 +319,16 @@ void CBaseDoor::MovingSoundThink( void )
 void CBaseDoor::StartMovingSound( void )
 {
 	MovingSoundThink();
+
+	// REBUILD: Valve's mid-2005 door_moving event (CS:S bots only in the 2006 SDK); Hidden fires it
+	CBasePlayer *player = ToBasePlayer(m_hActivator);
+	IGameEvent * event = gameeventmanager->CreateEvent( "door_moving" );
+	if( event )
+	{
+		event->SetInt( "entindex", entindex() );
+		event->SetInt( "userid", (player)?player->GetUserID():0 );
+		gameeventmanager->FireEvent( event );
+	}
 }
 
 void CBaseDoor::StopMovingSound(void)
