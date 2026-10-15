@@ -13,11 +13,11 @@
 
 #define SDK_PLAYER_VIEW_OFFSET	Vector( 0, 0, 53.5 )
 
-// Hidden's collision groups. REBUILD: the names are ours.
+// Hidden: collision groups past Valve's shared ones (CSDKGameRules::ShouldCollide)
 enum
 {
-	COLLISION_GROUP_HDN_PLAYER = LAST_SHARED_COLLISION_GROUP,	// players (CSDKPlayer::Spawn), don't collide with weapons
-	COLLISION_GROUP_MARINE_CLIP,								// hdn_marine_clip brushes
+	COLLISION_GROUP_HIDDEN = LAST_SHARED_COLLISION_GROUP,	// REBUILD: name; the Hidden player
+	COLLISION_GROUP_MARINE_CLIP,							// REBUILD: name; hdn_marine_clip brushes
 };
 
 

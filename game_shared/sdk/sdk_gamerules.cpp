@@ -506,7 +506,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					else
 					{
 						// All characters are taken
-						pPlayer->StartObserverMode( OBS_MODE_DEATHCAM );
+						pPlayer->StartObserverMode( OBS_MODE_FIXED );
 					}
 				}
 			}
@@ -841,7 +841,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 			if ( iTeam == TEAM_HIDDEN || ( iTeam == TEAM_IRIS && iMarines++ < 8 ) )
 				pPlayer->Spawn();
 			else
-				pPlayer->StartObserverMode( OBS_MODE_DEATHCAM );
+				pPlayer->StartObserverMode( OBS_MODE_FIXED );
 		}
 	}
 
@@ -1207,9 +1207,9 @@ bool CSDKGameRules::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 		return false;
 	}
 
-	// Players don't bump into weapons
+	// The Hidden doesn't bump into weapons
 	if ( collisionGroup0 == COLLISION_GROUP_WEAPON &&
-		collisionGroup1 == COLLISION_GROUP_HDN_PLAYER )
+		collisionGroup1 == COLLISION_GROUP_HIDDEN )
 	{
 		return false;
 	}

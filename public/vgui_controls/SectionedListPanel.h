@@ -171,7 +171,7 @@ private:
 	// Returns the index of a new item button, reusing an existing item button if possible
 	int GetNewItemButton();
 
-	friend CItemButton;
+	friend class CItemButton; // REBUILD: "class" added for GCC
 	void SetSelectedItem(CItemButton *item);
 	DHANDLE<CItemButton> m_hSelectedItem;
 

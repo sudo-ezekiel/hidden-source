@@ -21,12 +21,13 @@
 		y.MsgFunc_##x( msg );	\
 	}
 // Message declaration for CHudElement classes that use the hud element factory for creation
+// REBUILD: "##" next to punctuation removed from the macros below (MSVC ignores it, GCC rejects it).
 #define DECLARE_HUD_MESSAGE(y, x) void __MsgFunc_##y##_##x(bf_read &msg) \
 	{																\
 		CHudElement *pElement = gHUD.FindElement( #y );				\
 		if ( pElement )												\
 		{															\
-			((##y##*)pElement)->MsgFunc_##x( msg );	\
+			((y*)pElement)->MsgFunc_##x( msg );	\
 		}															\
 	}
 
@@ -35,7 +36,7 @@
 		CHudElement *pElement = gHUD.FindElement( #name );				\
 		if ( pElement )												\
 		{															\
-			((##basename##*)pElement)->MsgFunc_##msgname(pszName, iSize, pbuf );	\
+			((basename*)pElement)->MsgFunc_##msgname(pszName, iSize, pbuf );	\
 		}															\
 	}
 
@@ -51,7 +52,7 @@
 	{																\
 		CHudElement *pElement = gHUD.FindElement( #y );				\
 		{															\
-			((##y##*)pElement)->UserCmd_##x( );						\
+			((y*)pElement)->UserCmd_##x( );						\
 		}															\
 	}
 
@@ -59,7 +60,7 @@
 	{																\
 		CHudElement *pElement = gHUD.FindElement( name );			\
 		{															\
-			((##y##*)pElement)->UserCmd_##x( );						\
+			((y*)pElement)->UserCmd_##x( );						\
 		}															\
 	}
 

@@ -28,6 +28,11 @@
 // Allow 4 units of error ( about 1 / 8 bbox width )
 #define LAG_COMPENSATION_ERROR_EPS_SQR ( 4.0f * 4.0f )
 
+// Hidden: round reset state (REBUILD: names; the binary only has the values)
+#define LAG_RESET_NONE		0
+#define LAG_RESET_STARTED	1	// intermission: stop recording and compensating
+#define LAG_RESET_FINISHED	2	// round restarted: drop all history on the next frame
+
 ConVar sv_unlag( "sv_unlag", "1", 0, "Enables player lag compensation" );
 ConVar sv_maxunlag( "sv_maxunlag", "1.0", 0, "Maximum lag compensation in seconds", true, 0.0f, true, 1.0f );
 
@@ -74,6 +79,8 @@ public:
 };
 
 
+ConVar sv_unlag_debug( "sv_unlag_debug", "0", FCVAR_GAMEDLL );
+
 //
 // Try to take the player from his current origin to vWantedPos.
 // If it can't get there, leave the player where he is.
@@ -86,10 +93,19 @@ static void RestorePlayerTo( CBasePlayer *pPlayer, const Vector &vWantedPos )
 	UTIL_TraceEntity( pPlayer, vWantedPos, vWantedPos, MASK_PLAYERSOLID, &tr );
 	if ( tr.startsolid || tr.allsolid )
 	{
+		if ( sv_unlag_debug.GetBool() )
+		{
+			DevMsg( "RestorePlayerTo() could not restore player position for client \"%s\" ( %.1f %.1f %.1f )\n",
+					pPlayer->GetPlayerName(), vWantedPos.x, vWantedPos.y, vWantedPos.z );
+		}
+
 		UTIL_TraceEntity( pPlayer, pPlayer->GetLocalOrigin(), vWantedPos, MASK_PLAYERSOLID, &tr );
 		if ( tr.startsolid || tr.allsolid )
 		{
 			// In this case, the guy got stuck back wherever we lag compensated him to. Nasty.
+
+			if ( sv_unlag_debug.GetBool() )
+				DevMsg( "restore failed entirely" );
 		}
 		else
 		{
@@ -97,6 +113,9 @@ static void RestorePlayerTo( CBasePlayer *pPlayer, const Vector &vWantedPos )
 			Vector vPos;
 			VectorLerp( pPlayer->GetLocalOrigin(), vWantedPos, tr.fraction * g_flFractionScale, vPos );
 			UTIL_SetOrigin( pPlayer, vPos, true );
+
+			if ( sv_unlag_debug.GetBool() )
+				DevMsg( "restore got most of the way" );
 		}
 	}
 	else
@@ -133,6 +152,10 @@ public:
 	void			StartLagCompensation( CBasePlayer *player, CUserCmd *cmd );
 	void			FinishLagCompensation( CBasePlayer *player );
 
+	// Hidden: pause lag compensation over a round restart
+	void			StartCompensationReset( void );
+	void			FinishCompensationReset( void );
+
 private:
 	void			BacktrackPlayer( CBasePlayer *player, float flTargetTime );
 
@@ -151,10 +174,32 @@ private:
 	
 	LagRecord				m_RestoreData[ MAX_PLAYERS ];	// player data before we moved him back
 	LagRecord				m_ChangeData[ MAX_PLAYERS ];	// player data where we moved him back
+
+	int						m_iResetState;	// REBUILD: name; LAG_RESET_*
 };
 
 static CLagCompensationManager g_LagCompensationManager;
 ILagCompensationManager *lagcompensation = &g_LagCompensationManager;
+
+// Hidden: refuse to move a player back further than this (off when <= 0)
+ConVar sv_unlag_maxdistance( "sv_unlag_maxdistance", "-1", FCVAR_GAMEDLL );
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the round is ending, stop recording and compensating
+//-----------------------------------------------------------------------------
+void CLagCompensationManager::StartCompensationReset( void )
+{
+	m_iResetState = LAG_RESET_STARTED;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the new round has started, clear the history next frame
+//-----------------------------------------------------------------------------
+void CLagCompensationManager::FinishCompensationReset( void )
+{
+	m_iResetState = LAG_RESET_FINISHED;
+}
 
 
 //-----------------------------------------------------------------------------
@@ -165,6 +210,15 @@ void CLagCompensationManager::FrameUpdatePostEntityThink()
 	if ( (gpGlobals->maxClients <= 1) || !sv_unlag.GetBool() )
 	{
 		ClearHistory();
+		return;
+	}
+
+	// Hidden: the round restarted, throw the old positions away
+	if ( m_iResetState == LAG_RESET_FINISHED )
+	{
+		m_iResetState = LAG_RESET_NONE;
+		for ( int i=0; i<MAX_PLAYERS; i++ )
+			m_PlayerTrack[i].RemoveAll();
 		return;
 	}
 	
@@ -203,6 +257,10 @@ void CLagCompensationManager::FrameUpdatePostEntityThink()
 			tailIndex = track->Tail();
 		}
 
+		// Hidden: nothing new is recorded while the round restarts
+		if ( m_iResetState == LAG_RESET_STARTED )
+			continue;
+
 		// check if head has same simulation time
 		if ( track->Count() > 0 )
 		{
@@ -237,7 +295,8 @@ void CLagCompensationManager::StartLagCompensation( CBasePlayer *player, CUserCm
 	m_RestorePlayer.ClearAll();
 	m_bNeedToRestore = false;
 	
-	if ( !player->m_bLagCompensation		// Player not wanting lag compensation
+	if ( m_iResetState != LAG_RESET_NONE	// Hidden: round restarting
+		 || !player->m_bLagCompensation		// Player not wanting lag compensation
 		 || (gpGlobals->maxClients <= 1)	// no lag compensation in sngle player
 		 || !sv_unlag.GetBool()				// disabled by server admin
 		 || player->IsBot() 				// not for bots
@@ -316,6 +375,11 @@ void CLagCompensationManager::BacktrackPlayer( CBasePlayer *pPlayer, float flTar
 	Vector org, mins, maxs;
 	QAngle ang;
 
+	if ( sv_unlag_debug.GetBool() )
+	{
+		DevMsg( "Backtracking Player %s\n", pPlayer->GetPlayerName() );
+	}
+
 	int pl_index = pPlayer->entindex() - 1;
 
 	// get track history of this player
@@ -370,7 +434,7 @@ void CLagCompensationManager::BacktrackPlayer( CBasePlayer *pPlayer, float flTar
 	if ( !record )
 		return; // that should never happen
 
-	if ( record->m_flSimulationTime > flTargetTime && prevRecord && prevRecord != record
+	if ( record->m_flSimulationTime < flTargetTime && prevRecord && prevRecord != record
 		 && prevRecord->m_flSimulationTime != record->m_flSimulationTime )
 	{
 		// we didn't found the extact time but have a valid previous record
@@ -407,6 +471,17 @@ void CLagCompensationManager::BacktrackPlayer( CBasePlayer *pPlayer, float flTar
 	LagRecord *change  = &m_ChangeData[ pl_index ];
 
 	QAngle angdiff = pPlayer->GetLocalAngles() - ang;
+	Vector orgdiff = pPlayer->GetLocalOrigin() - org;
+
+	// Hidden: don't backtrack a player who would have to move too far
+	if ( sv_unlag_maxdistance.GetFloat() > 0 && orgdiff.Length() > sv_unlag_maxdistance.GetFloat() )
+	{
+		if ( sv_unlag_debug.GetBool() )
+		{
+			DevMsg( "Lag compensation tried to move player too far ( %s ) - %f units\n", pPlayer->GetPlayerName(), orgdiff.Length() );
+		}
+		return;
+	}
 
 	// Always remember the pristine simulation time in case we need to restore it.
 	restore->m_flSimulationTime = pPlayer->GetSimulationTime();
@@ -430,8 +505,6 @@ void CLagCompensationManager::BacktrackPlayer( CBasePlayer *pPlayer, float flTar
 		change->m_vecMins = mins;
 		change->m_vecMaxs = maxs;
 	}
-
-	Vector orgdiff = pPlayer->GetLocalOrigin() - org;
 
 	// Note, do origin at end since it causes a relink into the k/d tree
 	if ( orgdiff.LengthSqr() > LAG_COMPENSATION_EPS_SQR )
@@ -458,7 +531,7 @@ void CLagCompensationManager::BacktrackPlayer( CBasePlayer *pPlayer, float flTar
 void CLagCompensationManager::FinishLagCompensation( CBasePlayer *player )
 {
 	VPROF_BUDGET_FLAGS( "FinishLagCompensation", "CLagCompensationManager", BUDGETFLAG_CLIENT|BUDGETFLAG_SERVER );
-	if ( !m_bNeedToRestore )
+	if ( m_iResetState != LAG_RESET_NONE || !m_bNeedToRestore )
 		return; // no player was changed at all
 
 	// Iterate all active players

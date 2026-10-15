@@ -134,6 +134,7 @@ enum MoveType_t
 	MOVETYPE_LADDER,			// Used by players only when going onto a ladder
 	MOVETYPE_OBSERVER,			// Observer movement, depends on player's observer mode
 	MOVETYPE_CUSTOM,			// Allows the entity to describe its own physics
+	MOVETYPE_CLING,				// Hidden: the Hidden hanging on a wall (+pounce in the air). REBUILD: name; the binary only has the value 12
 
 	// should always be defined as the last item in the list
 	MOVETYPE_LAST		= MOVETYPE_CUSTOM,

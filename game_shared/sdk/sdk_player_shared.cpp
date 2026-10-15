@@ -20,6 +20,7 @@
 #include "takedamageinfo.h"
 #include "effect_dispatch_data.h"
 #include "engine/ivdebugoverlay.h"
+#include "ammodef.h"
 
 ConVar sv_showimpacts("sv_showimpacts", "0", FCVAR_REPLICATED, "Shows client (red) and server (blue) bullet impact point" );
 
@@ -75,6 +76,12 @@ void CSDKPlayer::FireBullet(
 	trace_t tr; // main enter bullet trace
 
 	UTIL_TraceLine( vecSrc, vecEnd, MASK_SOLID|CONTENTS_DEBRIS|CONTENTS_HITBOX, this, COLLISION_GROUP_NONE, &tr );
+
+	// Hidden: one in five rifle bullets (ammo types 2 and 3, AMMO_BULLETS and AMMO_556) draws a tracer
+	if ( ( iBulletType == 2 || iBulletType == 3 ) && random->RandomInt( 1, 5 ) == 2 )
+	{
+		MakeTracer( vecSrc, tr, TRACER_LINE );
+	}
 
 		if ( tr.fraction == 1.0f )
 			return; // we didn't hit anything, stop tracing shoot
@@ -141,7 +148,8 @@ void CSDKPlayer::FireBullet(
 				if ( !( tr.surface.flags & (SURF_SKY|SURF_NODRAW|SURF_HINT|SURF_SKIP) ) )
 				{
 					CBaseEntity *pEntity = tr.m_pEnt;
-					if ( !( !friendlyfire.GetBool() && pEntity && pEntity->IsPlayer() && pEntity->GetTeamNumber() == GetTeamNumber() ) )
+					// Hidden: never an impact effect on a teammate
+					if ( !( pEntity && pEntity->IsPlayer() && pEntity->GetTeamNumber() == GetTeamNumber() ) )
 					{
 						UTIL_ImpactTrace( &tr, iDamageType );
 					}
@@ -161,5 +169,28 @@ void CSDKPlayer::FireBullet(
 		TraceAttackToTriggers( info, tr.startpos, tr.endpos, vecDir );
 
 		ApplyMultiDamage();
+
+		// Hidden: with friendlyfire 2, shooting a teammate hurts the shooter instead
+		if ( friendlyfire.GetInt() == 2 && tr.m_pEnt->IsPlayer() )
+		{
+			CBasePlayer *pVictim = ToBasePlayer( tr.m_pEnt );
+
+			if ( pevAttacker->IsPlayer() )
+			{
+				CBasePlayer *pShooter = ToBasePlayer( pevAttacker );
+
+				if ( pVictim->GetTeamNumber() == pShooter->GetTeamNumber() )
+				{
+					ClearMultiDamage();
+
+					// REBUILD: Hidden's damage bits, 0x99a
+					CTakeDamageInfo reflectInfo( pevAttacker, pevAttacker, fCurrentDamage, DMG_BULLET | DMG_BURN | DMG_VEHICLE | DMG_CLUB | DMG_SHOCK | DMG_PREVENT_PHYSICS_FORCE );
+					CalculateBulletDamageForce( &reflectInfo, iBulletType, vecDir, tr.endpos );
+					pevAttacker->DispatchTraceAttack( reflectInfo, -vecDir, &tr );
+
+					ApplyMultiDamage();
+				}
+			}
+		}
 #endif
 }

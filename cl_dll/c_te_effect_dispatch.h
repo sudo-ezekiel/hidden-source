@@ -37,8 +37,9 @@ public:
 // If you do DECLARE_CLIENT_EFFECT( "MyEffectName", MyCallback ), then MyCallback will be 
 // called when the server does DispatchEffect( "MyEffect", data )
 //
+// REBUILD: "##" next to punctuation removed from the macros below (MSVC ignores it, GCC rejects it).
 #define DECLARE_CLIENT_EFFECT( effectName, callbackFunction ) \
-	static CClientEffectRegistration ClientEffectReg_##callbackFunction##( effectName, callbackFunction );
+	static CClientEffectRegistration ClientEffectReg_##callbackFunction( effectName, callbackFunction );
 
 void DispatchEffectToCallback( const char *pEffectName, const CEffectData &m_EffectData );
 void DispatchEffect( const char *pName, const CEffectData &data );

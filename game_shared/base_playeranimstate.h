@@ -143,6 +143,10 @@ public:
 	// Calculate the playback rate for movement layer
 	virtual float CalcMovementPlaybackRate( bool *bIsMoving );
 
+	// Allow inheriting classes to translate their desired activity, while keeping all
+	// internal ACT comparisons using the base activity
+	virtual Activity TranslateActivity( Activity actDesired ) { return actDesired; }
+
 
 public:
 	
@@ -174,6 +178,40 @@ protected:
 	CModAnimConfig		m_AnimConfig;
 	CBaseAnimatingOverlay	*m_pOuter;
 
+	// Hidden: the mid-2005 layout, with the pose parameter functions virtual and the
+	// yaw state protected (as in Valve's 2006 SDK, but without the CStudioHdr parameters)
+protected:
+	int					ConvergeAngles( float goal,float maxrate, float maxgap, float dt, float& current );
+	virtual void		ComputePoseParam_MoveYaw();
+	virtual void		ComputePoseParam_BodyPitch();
+	virtual void		ComputePoseParam_BodyYaw();
+
+protected:
+	// The player's eye yaw and pitch angles.
+	float m_flEyeYaw;
+	float m_flEyePitch;
+
+	// The following variables are used for tweaking the yaw of the upper body when standing still and
+	//  making sure that it smoothly blends in and out once the player starts moving
+	// Direction feet were facing when we stopped moving
+	float				m_flGoalFeetYaw;
+
+	float				m_flCurrentFeetYaw;
+	bool				m_bCurrentFeetYawInitialized;
+
+	float				m_flCurrentTorsoYaw;
+
+	// To check if they are rotating in place
+	float				m_flLastYaw;
+
+	// Time when we stopped moving
+	float				m_flLastTurnTime;
+
+	// One of the above enums
+	int					m_nTurningInPlace;
+
+	QAngle				m_angRender;
+
 
 private:
 
@@ -187,12 +225,7 @@ private:
 
 	void				SetOuterPoseParameter( int iParam, float flValue );
 
-	int					ConvergeAngles( float goal,float maxrate, float maxgap, float dt, float& current );
-
 	void				EstimateYaw();
-	void				ComputePoseParam_MoveYaw();
-	void				ComputePoseParam_BodyPitch();
-	void				ComputePoseParam_BodyYaw();
 
 	void				ComputeMainSequence();
 	void				ComputeAimSequence();
@@ -214,10 +247,6 @@ private:
 
 	float m_flLastAnimationStateClearTime;
 
-	// The player's eye yaw and pitch angles.
-	float m_flEyeYaw;
-	float m_flEyePitch;
-
 	// If he's using 8-way blending, then we blend to this idle 
 	int m_iCurrent8WayIdleSequence;
 	int m_iCurrent8WayCrouchIdleSequence;
@@ -229,26 +258,6 @@ private:
 	float				m_flStoredCycle;
 
 	Vector2D			m_vLastMovePose;
-
-	// The following variables are used for tweaking the yaw of the upper body when standing still and
-	//  making sure that it smoothly blends in and out once the player starts moving
-	// Direction feet were facing when we stopped moving
-	float				m_flGoalFeetYaw;
-	
-	float				m_flCurrentFeetYaw;
-	bool				m_bCurrentFeetYawInitialized;
-
-	float				m_flCurrentTorsoYaw;
-
-	// To check if they are rotating in place
-	float				m_flLastYaw;
-	// Time when we stopped moving
-	float				m_flLastTurnTime;
-
-	// One of the above enums
-	int					m_nTurningInPlace;
-
-	QAngle				m_angRender;
 
 #ifdef CLIENT_DLL
 	void UpdateAimSequenceLayers(
@@ -266,6 +275,9 @@ private:
 	CSequenceTransitioner	m_SequenceTransitioner;
 #endif
 };
+
+
+extern float g_flLastBodyPitch, g_flLastBodyYaw, m_flLastMoveYaw;
 
 
 inline Activity CBasePlayerAnimState::GetCurrentMainSequenceActivity() const
