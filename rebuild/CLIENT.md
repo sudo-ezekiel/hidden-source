@@ -149,10 +149,15 @@ GCC follow client.dll in each (all GCC-only, so an MSVC build is unchanged):
   array sit on 8-byte boundaries. `REBUILD_MSVC_ALIGN8` on C_BaseEntity gives GCC the same
   alignment. GCC (Itanium ABI) also reuses a base class's tail padding for the derived class's
   first members, which MSVC never does, so a base class whose members end 4 bytes short of a
-  multiple of 8 ends with `REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )`. A leaf class needs no pad.
+  multiple of 8 ends with `REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )` (`REBUILD_MSVC_TAIL_PAD_BYTES`
+  when they end on an odd boundary). A leaf class needs no pad.
   Which C_BaseEntity member gives MSVC the 8-byte alignment is not known yet.
 
-With these, all 58 factory sizes match.
+With these, 51 of the 58 factory sizes match. The other 7 are C_WeaponSDKBase and the weapons
+derived from it, all 8 bytes short: client.dll's C_WeaponSDKBase has two CMaterialReference members
+at 0x820 and 0x824 (constructor 241ef660) that ours lacks. To look for tail
+padding reuse, build with CLASSDUMP=1 and compare `size=` with `base size=` in the .class dumps for
+every class that has derived classes: where they differ, GCC places the derived members early.
 
 ## Original build settings ("Release SDK|Win32", cl_dll/client_sdk.vcproj)
 

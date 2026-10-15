@@ -478,6 +478,8 @@ private:
 	// These are compared against each other to determine if the entity should muzzle flash.
 	CNetworkVar( unsigned char, m_nMuzzleFlashParity );
 	unsigned char m_nOldMuzzleFlashParity;
+
+	REBUILD_MSVC_TAIL_PAD_BYTES( m_MSVCTailPad, 2 )	// 0x78e; client.dll's C_BaseAnimating is 0x790 bytes
 };
 
 enum 

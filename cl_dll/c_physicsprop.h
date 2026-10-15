@@ -30,6 +30,8 @@ protected:
 	bool m_bAwake;
 
 	bool m_bAwakeLastTime;
+
+	REBUILD_MSVC_TAIL_PAD_BYTES( m_MSVCTailPad, 6 )	// 0x7a2; client.dll's C_PhysicsProp is 0x7a8 bytes
 };
 
 #endif // C_PHYSICSPROP_H 

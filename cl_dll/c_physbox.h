@@ -30,6 +30,8 @@ public:
 	
 public:
 	float			m_mass;	// TEST..
+
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x484; client.dll's C_PhysBox is 0x488 bytes
 };
 
 

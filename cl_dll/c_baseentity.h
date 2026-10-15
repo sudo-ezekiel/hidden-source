@@ -35,15 +35,18 @@
 // C_FireSprite array, C_Plasma's) sit on 8-byte boundaries, so MSVC aligns C_BaseEntity to 8.
 // The GCC compile check gives C_BaseEntity the same alignment. GCC also reuses a base class's tail
 // padding for the derived class's members and MSVC does not, so a base class whose members end 4
-// bytes short of a multiple of 8 gets the 4 bytes as an explicit REBUILD_MSVC_TAIL_PAD member.
+// bytes short of a multiple of 8 gets the 4 bytes as an explicit REBUILD_MSVC_TAIL_PAD member
+// (REBUILD_MSVC_TAIL_PAD_BYTES when the members end on an odd boundary).
 // In an MSVC build both macros are empty. Which member gives MSVC the 8-byte alignment is not
 // known yet; confirm it when the original compiler is available.
 #ifdef __GNUC__
 #define REBUILD_MSVC_ALIGN8				__attribute__(( aligned( 8 ) ))
 #define REBUILD_MSVC_TAIL_PAD( name )	int name;
+#define REBUILD_MSVC_TAIL_PAD_BYTES( name, count )	char name[count];
 #else
 #define REBUILD_MSVC_ALIGN8
 #define REBUILD_MSVC_TAIL_PAD( name )
+#define REBUILD_MSVC_TAIL_PAD_BYTES( name, count )
 #endif
 
 class C_Team;
