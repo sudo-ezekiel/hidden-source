@@ -16,6 +16,7 @@
 
 	#define CWeaponFN303 C_WeaponFN303
 	#include "c_sdk_player.h"
+	#include "c_te_effect_dispatch.h"
 
 #else
 
@@ -146,6 +147,68 @@ void CFN303Ball::BubbleThink( void )
 	UTIL_BubbleTrail( GetAbsOrigin() - GetAbsVelocity() * 0.1f, GetAbsOrigin(), 5 );
 }
 
+#else
+
+//-----------------------------------------------------------------------------
+// FN303 ball: HL2MP's C_CrossbowBolt without the motion blur trail
+//-----------------------------------------------------------------------------
+class C_CFN303Ball : public C_BaseCombatCharacter
+{
+	DECLARE_CLASS( C_CFN303Ball, C_BaseCombatCharacter );
+	DECLARE_CLIENTCLASS();
+public:
+
+	C_CFN303Ball( void );
+
+	virtual RenderGroup_t GetRenderGroup( void )
+	{
+		// We want to draw translucent bits as well as our main model
+		return RENDER_GROUP_TWOPASS;
+	}
+
+	virtual void	ClientThink( void );
+
+	virtual void	OnDataChanged( DataUpdateType_t updateType );
+	virtual int		DrawModel( int flags );
+
+private:
+
+	C_CFN303Ball( const C_CFN303Ball & ); // not defined, not accessible
+
+	Vector	m_vecLastOrigin;
+	bool	m_bUpdated;
+};
+
+IMPLEMENT_CLIENTCLASS_DT( C_CFN303Ball, DT_CFN303Ball, CFN303Ball )
+END_RECV_TABLE()
+
+C_CFN303Ball::C_CFN303Ball( void )
+{
+}
+
+void C_CFN303Ball::OnDataChanged( DataUpdateType_t updateType )
+{
+	BaseClass::OnDataChanged( updateType );
+
+	if ( updateType == DATA_UPDATE_CREATED )
+	{
+		m_bUpdated = false;
+		m_vecLastOrigin = GetAbsOrigin();
+		SetNextClientThink( CLIENT_THINK_ALWAYS );
+	}
+}
+
+// REBUILD: Hidden removed the crossbow's motion blur trail; only the normal model draws
+int C_CFN303Ball::DrawModel( int flags )
+{
+	return BaseClass::DrawModel( flags );
+}
+
+void C_CFN303Ball::ClientThink( void )
+{
+	m_bUpdated = false;
+}
+
 #endif
 
 //-----------------------------------------------------------------------------
@@ -209,13 +272,11 @@ bool CWeaponFN303::Reload( void )
 
 	if ( DefaultReload( GetMaxClip1(), GetMaxClip2(), ACT_VM_RELOAD ) )
 	{
-#ifndef CLIENT_DLL
 		// Drop the empty magazine
 		CEffectData data;
 		data.m_vOrigin = pPlayer->GetLocalOrigin();
 		data.m_vAngles = pPlayer->GetLocalAngles();
 		DispatchEffect( "EjectFN303Clip", data );
-#endif
 
 		return CBaseCombatWeapon::Reload();
 	}
@@ -448,6 +509,8 @@ void CWeaponFN303::FireBolt( void )
 
 void CWeaponFN303::PrimaryAttack( void )
 {
+#ifndef CLIENT_DLL
+	// REBUILD: client.dll (two months older than the server) has neither of these checks here
 	if ( !m_bDeployed )
 		return;
 
@@ -457,6 +520,7 @@ void CWeaponFN303::PrimaryAttack( void )
 		m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
 		return;
 	}
+#endif
 
 	FireBolt();
 
