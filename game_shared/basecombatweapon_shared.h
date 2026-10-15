@@ -370,6 +370,9 @@ public:
 
 	virtual void			NotifyShouldTransmit( ShouldTransmitState_t state );
 
+	// Valve's mid-2005 SDK: OnDataChanged sets the world model through this.
+	virtual int				GetWorldModelIndex( void );
+
 #endif // End client-only methods
 
 private:

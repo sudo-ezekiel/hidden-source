@@ -15,6 +15,7 @@
 
 	#define CWeaponPistol C_WeaponPistol
 	#include "c_sdk_player.h"
+	#include "c_te_effect_dispatch.h"
 
 #else
 
@@ -116,6 +117,7 @@ void CWeaponPistol::SetSafe()
 //-----------------------------------------------------------------------------
 bool CWeaponPistol::Holster( CBaseCombatWeapon *pSwitchingTo )
 {
+#ifndef CLIENT_DLL
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	if ( !pPlayer )
 		return false;
@@ -123,6 +125,7 @@ bool CWeaponPistol::Holster( CBaseCombatWeapon *pSwitchingTo )
 	// Show the pistol in its holster on the player model
 	if ( pPlayer->m_lifeState == LIFE_ALIVE )
 		pPlayer->SetBodygroup( 2, 2 );
+#endif
 
 	return BaseClass::Holster( pSwitchingTo );
 }
@@ -189,13 +192,13 @@ bool CWeaponPistol::Reload()
 	{
 		pPlayer->SetFOV( pPlayer, pPlayer->GetDefaultFOV() );
 	}
+#endif
 
 	// Drop the empty magazine
 	CEffectData data;
 	data.m_vOrigin = pPlayer->GetLocalOrigin();
 	data.m_vAngles = pPlayer->GetLocalAngles();
 	DispatchEffect( "EjectPistolClip", data );
-#endif
 
 	pPlayer->m_iShotsFired = 0;
 
@@ -272,7 +275,7 @@ void CWeaponPistol::PrimaryAttack( void )
 {
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 
-	if ( !m_bDeployed )
+	if ( !IsDeployed() )
 		return;
 
 	// No firing while safe
