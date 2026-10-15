@@ -10,6 +10,7 @@
 
 #if defined( CLIENT_DLL )
 	#include "c_sdk_player.h"
+	#include "c_te_effect_dispatch.h"
 #else
 	#include "sdk_player.h"
 	#include "te_effect_dispatch.h"
@@ -224,7 +225,6 @@ void CBludgeonWeaponSDKBase::ImpactWater( const Vector &start, const Vector &end
 
 	if ( waterTrace.fraction < 1.0f )
 	{
-#ifndef CLIENT_DLL
 		CEffectData	data;
 
 		data.m_fFlags  = 0;
@@ -239,7 +239,6 @@ void CBludgeonWeaponSDKBase::ImpactWater( const Vector &start, const Vector &end
 		}
 
 		DispatchEffect( "watersplash", data );
-#endif
 	}
 }
 
@@ -273,7 +272,6 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
 		pPlayer->EyeVectors( &hitDirection, NULL, NULL );
 		VectorNormalize( hitDirection );
 
-#ifndef CLIENT_DLL
 		if ( nHitActivity == ACT_VM_HITCENTER2 )
 			flDamage = 925.0f;
 
@@ -284,9 +282,11 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
 		traceHit.m_pEnt->DispatchTraceAttack( info, hitDirection, &traceHit );
 		ApplyMultiDamage();
 
-		CRagdollProp *pRagdoll = static_cast<CRagdollProp *>( traceHit.m_pEnt );
-		if ( !Q_stricmp( pRagdoll->GetClassname(), "corpse_ragdoll" ) )
+		if ( !Q_stricmp( traceHit.m_pEnt->GetClassname(), "corpse_ragdoll" ) )
 		{
+#ifndef CLIENT_DLL
+			CRagdollProp *pRagdoll = static_cast<CRagdollProp *>( traceHit.m_pEnt );
+
 			if ( nHitActivity != ACT_VM_HITCENTER2 )
 			{
 				// Feed on the corpse while it has health left
@@ -337,8 +337,10 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
 				UTIL_BloodImpact( traceHit.m_pEnt->GetAbsOrigin(), hitDirection, BLOOD_COLOR_RED, 5 );
 				UTIL_BloodSpray( traceHit.m_pEnt->GetAbsOrigin(), -hitDirection, BLOOD_COLOR_RED, 10, FX_BLOODSPRAY_ALL );
 			}
+#endif
 		}
 
+#ifndef CLIENT_DLL
 		// Now hit all triggers along the ray that...
 		TraceAttackToTriggers( info, traceHit.startpos, traceHit.endpos, hitDirection );
 #endif
