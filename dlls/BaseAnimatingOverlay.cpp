@@ -70,7 +70,7 @@ END_PREDICTION_DATA()
 #define WEIGHT_BITS			8
 
 BEGIN_SEND_TABLE_NOBASE(CAnimationLayer, DT_Animationlayer)
-	SendPropInt		(SENDINFO_NAME(m_nSequence,sequence),	ANIMATION_SEQUENCE_BITS,SPROP_UNSIGNED|SPROP_CHANGES_OFTEN),
+	SendPropInt		(SENDINFO_NAME(m_nSequence,sequence),	ANIMATION_SEQUENCE_BITS,SPROP_UNSIGNED),
 	SendPropFloat	(SENDINFO_NAME(m_flCycle,cycle),		ANIMATION_CYCLE_BITS,	SPROP_ROUNDDOWN,	0.0f,   1.0f),
 	SendPropFloat	(SENDINFO_NAME(m_flPrevCycle,prevcycle),ANIMATION_CYCLE_BITS,	SPROP_ROUNDDOWN,	0.0f,   1.0f),
 	SendPropFloat	(SENDINFO_NAME(m_flWeight,weight),		WEIGHT_BITS,			0,	0.0f,	1.0f),

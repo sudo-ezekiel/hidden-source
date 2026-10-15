@@ -526,8 +526,17 @@ void CServerGameDLL::DLLShutdown( void )
 //-----------------------------------------------------------------------------
 float CServerGameDLL::GetTickInterval( void ) const
 {
-	COMPILE_TIME_ASSERT( TICK_INTERVAL >= MINIMUM_TICK_INTERVAL && TICK_INTERVAL <= MAXIMUM_TICK_INTERVAL );
-	return TICK_INTERVAL;
+	float tickinterval = DEFAULT_TICK_INTERVAL;
+
+	// override if tick rate specified in command line
+	if ( CommandLine()->CheckParm( "-tickrate" ) )
+	{
+		float tickrate = CommandLine()->ParmValue( "-tickrate", 0 );
+		if ( tickrate > 10 )
+			tickinterval = 1.0f / tickrate;
+	}
+
+	return tickinterval;
 }
 
 // This is called when a new game is started. (restart, map)
@@ -645,7 +654,7 @@ bool CServerGameDLL::LevelInit( const char *pMapName, char const *pMapEntities, 
 
 		if ( g_OneWayTransition )
 		{
-			engine->ClearSaveDir();
+			engine->ClearSaveDirAfterClientLoad();
 		}
 
 		if ( pOldLevel && sv_autosave.GetBool() == true )
@@ -1242,19 +1251,20 @@ void CServerGameDLL::BuildAdjacentMapList( void )
 		pSaveData->levelInfo.connectionCount = BuildChangeList( pSaveData->levelInfo.levelList, MAX_LEVEL_CONNECTIONS );
 }
 
+static ConVar motdfile( "motdfile", "motd.txt", 0, "The MOTD file to load." );
 void CServerGameDLL::LoadMessageOfTheDay()
 {
 	char data[2048];
 
-	int length = filesystem->Size( "motd.txt", "GAME" );
+	int length = filesystem->Size( motdfile.GetString(), "GAME" );
 
 	if ( length <= 0 || length >= (sizeof(data)-1) )
 	{
-		DevMsg("Invalid file size for motd.txt\n" );
+		DevMsg("Invalid file size for %s\n", motdfile.GetString() );
 		return;
 	}
 
-	FileHandle_t hFile = filesystem->Open( "motd.txt", "rb", "GAME" );
+	FileHandle_t hFile = filesystem->Open( motdfile.GetString(), "rb", "GAME" );
 
 	if ( hFile == FILESYSTEM_INVALID_HANDLE )
 		return;
@@ -1275,63 +1285,13 @@ ConVar sv_unlockedchapters( "sv_unlockedchapters", "1", FCVAR_ARCHIVE );
 //-----------------------------------------------------------------------------
 void UpdateChapterRestrictions( const char *mapname )
 {
-	// look at the chapter for this map
+	// REBUILD: Hidden replaced Valve's chapter unlocking with a random chapter, 1 to 10, set on
+	// every map load (the main menu picks its background from sv_unlockedchapters). Valve's
+	// buffers stayed declared, unused: they still size LevelInit's stack frame in the binary.
 	char chapterTitle[64];
-	chapterTitle[0] = 0;
-	for ( int i = 0; i < ARRAYSIZE(gTitleComments); i++ )
-	{
-		if ( !Q_strnicmp( mapname, gTitleComments[i].pBSPName, strlen(gTitleComments[i].pBSPName) ) )
-		{
-			// found
-			Q_strncpy( chapterTitle, gTitleComments[i].pTitleName, sizeof( chapterTitle ) );
-			int j = 0;
-			while ( j < 64 && chapterTitle[j] )
-			{
-				if ( chapterTitle[j] == '\n' || chapterTitle[j] == '\r' )
-					chapterTitle[j] = 0;
-				else
-					j++;
-			}
-
-			break;
-		}
-	}
-
-	if ( !chapterTitle[0] )
-		return;
-
-	// make sure the specified chapter title is unlocked
-	strlwr( chapterTitle );
-
-	const char *pGameDir = CommandLine()->ParmValue( "-game", "hl2" );
-
 	char chapterNumberPrefix[64];
-	Q_snprintf(chapterNumberPrefix, sizeof(chapterNumberPrefix), "#%s_chapter", pGameDir);
-
-	const char *newChapterNumber = strstr( chapterTitle, chapterNumberPrefix );
-	if ( newChapterNumber )
-	{
-		// cut off the front
-		newChapterNumber += strlen( chapterNumberPrefix );
-		char newChapter[32];
-		Q_strncpy( newChapter, newChapterNumber, sizeof(newChapter) );
-
-		// cut off the end
-		char *end = strstr( newChapter, "_title" );
-		if ( end )
-		{
-			*end = 0;
-		}
-
-		// ok we have the string, see if it's newer
-		const char *unlockedChapter = sv_unlockedchapters.GetString();
-		if ( atoi(unlockedChapter) < atoi(newChapter)
-			|| (atoi(unlockedChapter) == atoi(newChapter) && stricmp(unlockedChapter, newChapter) < 0) )
-		{
-			// ok we're at a higher chapter, unlock
-			sv_unlockedchapters.SetValue( newChapter );
-		}
-	}
+	char newChapter[32];
+	sv_unlockedchapters.SetValue( random->RandomInt( 1, 10 ) );
 }
 
 //-----------------------------------------------------------------------------
