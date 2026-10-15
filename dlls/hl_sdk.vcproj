@@ -51,13 +51,13 @@
 				CompileAs="0"/>
 			<Tool
 				Name="VCCustomBuildTool"
-				Description="Copying to sampleapp\bin"
-				CommandLine="if exist ..\..\sampleapp\bin\server.dll attrib -r ..\..\sampleapp\bin\server.dll
-if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.dll ..\..\sampleapp\bin\server.dll
-if exist ..\..\sampleapp\bin\server.pdb attrib -r ..\..\sampleapp\bin\server.pdb
-if exist &quot;$(TargetDir)&quot;server.pdb copy &quot;$(TargetDir)&quot;server.pdb ..\..\sampleapp\bin
+				Description="Copying to the HIDDEN_DIR bin folder"
+				CommandLine="if defined HIDDEN_DIR if exist &quot;%HIDDEN_DIR%\bin\server.dll&quot; attrib -r &quot;%HIDDEN_DIR%\bin\server.dll&quot;
+if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.dll &quot;%HIDDEN_DIR%\bin\server.dll&quot;
+if defined HIDDEN_DIR if exist &quot;%HIDDEN_DIR%\bin\server.pdb&quot; attrib -r &quot;%HIDDEN_DIR%\bin\server.pdb&quot;
+if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.pdb copy &quot;$(TargetDir)&quot;server.pdb &quot;%HIDDEN_DIR%\bin\server.pdb&quot;
 "
-				Outputs="..\..\sampleapp\bin\server.dll"/>
+				Outputs="$(HIDDEN_DIR)\bin\server.dll"/>
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="TRUE"
@@ -134,11 +134,11 @@ if exist &quot;$(TargetDir)&quot;server.pdb copy &quot;$(TargetDir)&quot;server.
 				CompileAs="0"/>
 			<Tool
 				Name="VCCustomBuildTool"
-				Description="Copying to sampleapp\bin"
-				CommandLine="if exist ..\..\sampleapp\bin\server.dll attrib -r ..\..\sampleapp\bin\server.dll
-if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.dll ..\..\sampleapp\bin\server.dll
+				Description="Copying to the HIDDEN_DIR bin folder"
+				CommandLine="if defined HIDDEN_DIR if exist &quot;%HIDDEN_DIR%\bin\server.dll&quot; attrib -r &quot;%HIDDEN_DIR%\bin\server.dll&quot;
+if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.dll &quot;%HIDDEN_DIR%\bin\server.dll&quot;
 "
-				Outputs="..\..\sampleapp\bin\server.dll"/>
+				Outputs="$(HIDDEN_DIR)\bin\server.dll"/>
 			<Tool
 				Name="VCLinkerTool"
 				IgnoreImportLibrary="TRUE"
