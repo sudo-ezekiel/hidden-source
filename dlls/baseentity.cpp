@@ -348,6 +348,8 @@ CBaseEntity::CBaseEntity( bool bServerOnly )
 	SetCheckUntouch( false );
 	SetModelIndex( 0 );
 	SetModelName( NULL_STRING );
+	m_bSpawnAnglesSet = false;
+	m_bSpawnOriginSet = false;
 
 	SetCollisionBounds( vec3_origin, vec3_origin );
 	ClearFlags();
@@ -4912,6 +4914,13 @@ void CBaseEntity::SetAbsOrigin( const Vector& absOrigin )
 	if ( m_vecAbsOrigin == absOrigin )
 		return;
 
+	// Hidden: remember the first origin for Reset()
+	if ( !m_bSpawnOriginSet )
+	{
+		m_bSpawnOriginSet = true;
+		m_vecSpawnOrigin = absOrigin;
+	}
+
 	// All children are invalid, but we are not
 	InvalidatePhysicsRecursive( POSITION_CHANGED );
 	RemoveEFlags( EFL_DIRTY_ABSTRANSFORM );
@@ -4953,6 +4962,13 @@ void CBaseEntity::SetAbsAngles( const QAngle& absAngles )
 
 	if ( m_angAbsRotation == absAngles )
 		return;
+
+	// Hidden: remember the first angles for Reset()
+	if ( !m_bSpawnAnglesSet )
+	{
+		m_bSpawnAnglesSet = true;
+		m_angSpawnAngles = absAngles;
+	}
 
 	// All children are invalid, but we are not
 	InvalidatePhysicsRecursive( ANGLES_CHANGED );

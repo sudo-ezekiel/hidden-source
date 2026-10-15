@@ -691,10 +691,12 @@ public:
 	virtual int RequiredEdictIndex( void ) { return -1; } 
 
 	// Hidden: where the entity spawned, so Reset() can put it back between rounds.
-	// REBUILD: the names of these four members are not in the binary (offsets 0x4 to 0x23).
+	// The first SetAbsOrigin/SetAbsAngles after construction records them.
+	// REBUILD: the names of these members are not in the binary (offsets 0x4 to 0x1d).
 	Vector				m_vecSpawnOrigin;
 	QAngle				m_angSpawnAngles;
-	int					m_iSpawnUnknown;	// REBUILD: 4 bytes at 0x1c, use not found yet
+	bool				m_bSpawnAnglesSet;
+	bool				m_bSpawnOriginSet;
 	// Hidden: saved with DEFINE_PHYSPTR( m_pConstraint ), last in the datadesc
 	IPhysicsConstraint	*m_pConstraint;
 
