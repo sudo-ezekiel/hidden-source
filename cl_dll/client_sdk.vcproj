@@ -3419,6 +3419,45 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 					RelativePath="game_controls\vguitextwindow.cpp">
 				</File>
 			</Filter>
+			<Filter
+				Name="Hidden Player"
+				Filter="">
+			</Filter>
+			<Filter
+				Name="Hidden HUD"
+				Filter="">
+			</Filter>
+			<Filter
+				Name="Hidden Weapons"
+				Filter="">
+				<File
+					RelativePath="..\game_shared\hidden\weapon_fn2000.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_p90.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_fn303.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_pistol.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_pistol2.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\weapon_sonic.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_weapon_crowbar.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_bludgeonweapon_sdkbase.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_lasersight.cpp">
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"

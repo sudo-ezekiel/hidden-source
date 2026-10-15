@@ -122,6 +122,7 @@ public:
 	{
 		m_nRestoreFrame = gpGlobals->framecount;
 	}
+	virtual void SafeRemoveIfDesired() {}
 
 	// Called before rendering
 	virtual void PreRender() {}

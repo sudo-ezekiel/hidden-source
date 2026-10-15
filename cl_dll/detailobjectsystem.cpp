@@ -114,6 +114,7 @@ public:
 
 	virtual void OnSave() {}
 	virtual void OnRestore() {}
+	virtual void SafeRemoveIfDesired() {}
 
 	// Gets called each frame
 	virtual void PreRender( ) {}
