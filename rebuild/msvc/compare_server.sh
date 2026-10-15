@@ -31,14 +31,16 @@ OUT="$WORK/out/msvc/server"
 NAMES=
 if [ -z "$PROCS" ] && [ -z "${NONAMES}" ]; then
     # Names for the reference's functions, carried over from the May DLL's PDB: map the reference
-    # to the May DLL (both without a map file), keep the pairs that are the same or at least half
-    # alike, and give them the PDB's names.
+    # to the May DLL (both without a map file), keep the pairs that are the same, or at least half
+    # alike and 64 bytes or more (small accessors that differ only in a member offset pair up with
+    # their neighbours when a class layout changed between May and August), and give them the
+    # PDB's names.
     STEM="$(basename "$REF" .dll)"
     NAMES="$WORK/names_$STEM.tsv"
     if [ ! -s "$NAMES" ] || [ "$REF" -nt "$NAMES" ] || [ "$REPO/rebuild/tools/msvc_compare.py" -nt "$NAMES" ]; then
         python3 -I "$REPO/rebuild/tools/msvc_compare.py" "$REF" "$MAY" "$PDBDIR/procs.tsv" --ours-procs \
             --out "$WORK/may_to_$STEM.tsv" 2>/dev/null
-        awk -F'\t' '$8 && $9 && ($2 == "same" || $3 >= 0.5) {print $8 "\t1\tG\t" $1 "\t" $6}' \
+        awk -F'\t' '$8 && $9 && ($2 == "same" || ($3 >= 0.5 && $4 >= 64)) {print $8 "\t1\tG\t" $1 "\t" $6}' \
             "$WORK/may_to_$STEM.tsv" > "$NAMES"
     fi
     echo "$(wc -l < "$NAMES") reference names carried over from the May DLL"

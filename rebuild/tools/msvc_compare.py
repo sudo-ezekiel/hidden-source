@@ -686,13 +686,13 @@ def main():
             name = n if args.ours_procs else undecorated_parts(n, dem.get(n, n))[0]
             our_names[a] = (name, objs.get(a, "").split(":")[-1])
 
-    m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names)
+    m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names, bool(procs))
     hints = {a for a in start_hints(m) if outside(a)}
     if hints:
         # A second pass with the reference starts the first one implied.
         print(f"{len(hints)} reference starts found through the mapping, mapping again", file=sys.stderr)
         ref.finish(set(ref.starts) | hints)
-        m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names)
+        m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names, bool(procs))
 
     def label(t):
         r = m.r2o.get(t)
@@ -782,9 +782,12 @@ def main():
         print(f"  {g}: " + ", ".join(f"{k} {v}" for k, v in sorted(c.items())), file=sys.stderr)
 
 
-def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames, ref_names, our_names):
+def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames, ref_names, our_names, exact):
+    """exact: ref_names are the reference's own PDB names, paired before anything else; names
+    carried over from another DLL are paired after the vftables, which they can contradict (a small
+    accessor whose body moved to a neighbour's when a class layout changed)."""
     m = Mapper(ref, ours)
-    if ref_names:
+    if ref_names and exact:
         print(f"pdbname: {pair_by_name(m, ref_names, our_names)} pairs", file=sys.stderr)
     # vftables of the same class, subobject and slot count
     votes = defaultdict(Counter)
@@ -801,6 +804,8 @@ def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames, ref_names, our_nam
     for name, a in xr.items():
         if name in xo:
             m.add(a, xo[name], "vftable")
+    if ref_names and not exact:
+        print(f"pdbname: {pair_by_name(m, ref_names, our_names)} pairs", file=sys.stderr)
     # names.tsv names unique among ours
     simple = defaultdict(list)
     for a, n in ours.names.items():
