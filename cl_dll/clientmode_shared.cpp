@@ -707,7 +707,8 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		// Keep the damage the local player dealt or took for the damage list
 		if ( pVictim == pLocalPlayer || pAttacker == pLocalPlayer )
 		{
-			PlayerDamageRecord_t damage = { event->GetInt("attacker"), event->GetInt("userid"), event->GetFloat("damage"), 0 };
+			float flDamage = event->GetFloat("damage");
+			PlayerDamageRecord_t damage = { event->GetInt("attacker"), event->GetInt("userid"), flDamage, 0 };
 			pLocalPlayer->AddDamage( damage );
 		}
 	}
@@ -718,7 +719,7 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		if ( !pLocalPlayer )
 			return;
 
-		if ( USERID2PLAYER( event->GetInt("userid") ) == pLocalPlayer )
+		if ( pLocalPlayer == USERID2PLAYER( event->GetInt("userid") ) )
 			pLocalPlayer->PrintDamageList();
 	}
 
