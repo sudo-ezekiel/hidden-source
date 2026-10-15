@@ -89,8 +89,7 @@ bool CBaseCombatCharacter::Weapon_CanSwitchTo( CBaseCombatWeapon *pWeapon )
 			return false;
 	}
 
-	if ( !pWeapon->HasAnyAmmo() && !GetAmmoCount( pWeapon->m_iPrimaryAmmoType ) )
-		return false;
+	// REBUILD: Hidden dropped Valve's "no ammo at all" check here, so empty weapons can be selected
 
 	if ( !pWeapon->CanDeploy() )
 		return false;

@@ -143,7 +143,7 @@ public:
 #ifdef CSTRIKE_DLL
 	#define MAX_PLAYERS				64  // Absolute max players supported
 #else
-	#define MAX_PLAYERS				32  // Absolute max players supported
+	#define MAX_PLAYERS				10  // Hidden: was 32 (array sizes in the binary, e.g. CPlayerResource's m_iPing[11])
 #endif
 
 #define MAX_PLACE_NAME_LENGTH		16
@@ -365,11 +365,17 @@ enum PLAYER_ANIM
 #define	DAMAGE_AIM				3
 
 // Spectator Movement modes
+// Hidden: spectators watch from the map's info_spectator cameras (fixed) or through a player's
+// eyes, so FIXED and IN_EYE come first and the death cam moves behind them.
+// REBUILD: the values are from the binary: FIXED is 1 (PreThink's "> OBS_MODE_FIXED" test,
+// spectate/InitialSpawn), IN_EYE is 2 (SetPunchAngle, CBaseViewModel::ShouldTransmit) and
+// CBasePlayer::SetObserverMode rejects anything above 3. Which name Hidden gave 3 is a guess;
+// CHASE and ROAMING are kept after it only so Valve's client code still compiles.
 enum {
 	OBS_MODE_NONE = 0,	// not in spectator mode
-	OBS_MODE_DEATHCAM,	// special mode for detah cam animation
 	OBS_MODE_FIXED,		// view from a fixed camera position
 	OBS_MODE_IN_EYE,	// follow a player in first perosn view
+	OBS_MODE_DEATHCAM,	// special mode for detah cam animation
 	OBS_MODE_CHASE,		// follow a player in third person view
 	OBS_MODE_ROAMING,	// free roaming
 };

@@ -1331,6 +1331,26 @@ void CBaseCombatCharacter::Weapon_Drop( CBaseCombatWeapon *pWeapon, const Vector
 	if ( !pWeapon )
 		return;
 
+	// REBUILD: Hidden's additions. A dropped knife goes back to its first body group,
+	// dropping the P90 or the shotgun sets the dropper's body group 2 to 2, and a dropped
+	// pipe bomb shows the thrown pipe bomb model. Knife and pipe bomb get their shadow back.
+	if ( !Q_strcmp( pWeapon->GetClassname(), "weapon_knife" ) )
+	{
+		pWeapon->m_nBody = 0;
+		pWeapon->RemoveEffects( EF_NOSHADOW );
+	}
+
+	if ( !Q_strcmp( pWeapon->GetClassname(), "weapon_p90" ) || !Q_strcmp( pWeapon->GetClassname(), "weapon_shotgun" ) )
+	{
+		SetBodygroup( 2, 2 );
+	}
+
+	if ( !Q_strcmp( pWeapon->GetClassname(), "grenade_projectile" ) )
+	{
+		pWeapon->SetModel( "models/weapons/pipe/w_pipebomb_thrown.mdl" );
+		pWeapon->RemoveEffects( EF_NOSHADOW );
+	}
+
 	// If I'm an NPC, fill the weapon with ammo before I drop it.
 	if ( GetFlags() & FL_NPC )
 	{

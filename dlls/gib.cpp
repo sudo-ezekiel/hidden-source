@@ -305,19 +305,19 @@ void CGib::SpawnRandomGibs( CBaseEntity *pVictim, int cGibs, GibType_e eGibType 
 		{
 			switch (eGibType)
 			{
+			// REBUILD: Hidden no longer picks a random body group for human and alien gibs
 			case GIB_HUMAN:
 				// human pieces
 				pGib->Spawn( "models/gibs/hgibs.mdl" );
-				pGib->m_nBody = random->RandomInt(1,HUMAN_GIB_COUNT-1);// start at one to avoid throwing random amounts of skulls (0th gib)
 				break;
 			case GIB_ALIEN:
 				// alien pieces
 				pGib->Spawn( "models/gibs/agibs.mdl" );
-				pGib->m_nBody = random->RandomInt(0,ALIEN_GIB_COUNT-1);
 				break;
 			}
 		}
-		pGib->InitGib( pVictim, 300, 400);
+		// REBUILD: Hidden throws gibs much harder (Valve: 300, 400)
+		pGib->InitGib( pVictim, 900, 1500);
 	}
 }
 
@@ -369,6 +369,9 @@ void CGib::WaitTillLand ( void )
 	}
 	else
 	{
+		// REBUILD: Hidden's gibs trail blood while they are still moving
+		UTIL_BloodSpray( GetAbsOrigin(), -GetAbsVelocity(), m_bloodColor, 10, FX_BLOODSPRAY_ALL );
+
 		// wait and check again in another half second.
 		SetNextThink( gpGlobals->curtime + 0.5f );
 	}
@@ -444,10 +447,9 @@ void CGib::BounceGibTouch ( CBaseEntity *pOther )
 	Vector	vecSpot;
 	trace_t	tr;
 	
-	IPhysicsObject *pPhysics = VPhysicsGetObject();
-
-	if ( pPhysics )
-		 return;
+	// REBUILD: Hidden sprays blood on every bounce, and dropped Valve's early out for
+	// vphysics gibs
+	UTIL_BloodSpray( GetAbsOrigin(), -GetAbsVelocity(), m_bloodColor, 8, FX_BLOODSPRAY_ALL );
 	
 	//if ( random->RandomInt(0,1) )
 	//	return;// don't bleed everytime
@@ -524,7 +526,7 @@ void CGib::StickyGibTouch ( CBaseEntity *pOther )
 void CGib::Spawn( const char *szGibModel )
 {
 	SetMoveType( MOVETYPE_FLYGRAVITY, MOVECOLLIDE_FLY_BOUNCE );
-	SetFriction(0.55); // deading the bounce a bit
+	SetFriction(0.3); // deading the bounce a bit (REBUILD: Hidden 0.3, Valve 0.55)
 	
 	// sometimes an entity inherits the edict from a former piece of glass,
 	// and will spawn using the same render FX or m_nRenderMode! bad!
@@ -545,7 +547,8 @@ void CGib::Spawn( const char *szGibModel )
 	UTIL_SetSize( this, vec3_origin, vec3_origin );
 #endif//HL1_DLL
 
-	SetNextThink( gpGlobals->curtime + 4 );
+	// REBUILD: Hidden checks for landing (and sprays blood) right away; Valve waited 4 seconds
+	SetNextThink( gpGlobals->curtime + 0.1 );
 	m_lifeTime = 25;
 	SetThink ( &CGib::WaitTillLand );
 	SetTouch ( &CGib::BounceGibTouch );

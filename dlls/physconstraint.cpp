@@ -601,7 +601,7 @@ public:
 			massLoad /= (float)numMasses;
 		}
 		float loadscale = m_systemLoadScale != 0 ? m_systemLoadScale : 1;
-		m_pConstraint->SetAngularMotor( speed, speed * loadscale * massLoad * loadscale * (1.0/DEFAULT_TICK_INTERVAL) );
+		m_pConstraint->SetAngularMotor( speed, speed * loadscale * massLoad * loadscale * (1.0/TICK_INTERVAL) );
 	}
 
 	virtual void Deactivate()
@@ -766,7 +766,7 @@ public:
 			massLoad /= (float)numMasses;
 		}
 		float loadscale = m_systemLoadScale != 0 ? m_systemLoadScale : 1;
-		m_pConstraint->SetLinearMotor( speed, speed * loadscale * massLoad * (1.0/DEFAULT_TICK_INTERVAL) );
+		m_pConstraint->SetLinearMotor( speed, speed * loadscale * massLoad * (1.0/TICK_INTERVAL) );
 	}
 
 

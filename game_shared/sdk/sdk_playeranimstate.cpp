@@ -441,7 +441,7 @@ const char* CSDKPlayerAnimState::GetWeaponSuffix()
 	// Figure out the weapon suffix.
 	CWeaponSDKBase *pWeapon = m_pHelpers->SDKAnim_GetActiveWeapon();
 	if ( !pWeapon )
-		return 0;
+		return "Pistol";	// Hidden: was 0
 
 	const char *pSuffix = pWeapon->GetSDKWpnData().m_szAnimExtension;
 

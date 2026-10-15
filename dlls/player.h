@@ -837,6 +837,9 @@ protected:
 	// NOTE: bits damage type appears to only be used for time-based damage
 	BYTE					m_rgbTimeBasedDamage[CDMG_TIMEBASED];
 
+	// Player Physics Shadow
+	int						m_vphysicsCollisionState;	// Hidden: here as in the 2006 SDK, ahead of m_CommandContext
+
 private:
 	void HandleFuncTrain();
 
@@ -847,7 +850,6 @@ private:
 	IPhysicsPlayerController	*m_pPhysicsController;
 	IPhysicsObject				*m_pShadowStand;
 	IPhysicsObject				*m_pShadowCrouch;
-	int							m_vphysicsCollisionState;
 	Vector						m_oldOrigin;
 	Vector						m_vecSmoothedVelocity;
 	bool						m_touchedPhysObject;

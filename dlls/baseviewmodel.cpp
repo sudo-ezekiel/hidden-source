@@ -14,6 +14,7 @@
 #include "studio.h"
 #include "vguiscreen.h"
 #include "saverestore_utlvector.h"
+#include "hltvdirector.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -80,6 +81,15 @@ int CBaseViewModel::ShouldTransmit( const CCheckTransmitInfo *pInfo )
 	if ( pRecipientEntity->IsPlayer() )
 	{
 		CBasePlayer *pPlayer = static_cast<CBasePlayer*>( pRecipientEntity );
+
+		if ( pPlayer->IsHLTV() )
+		{
+			// if this is the HLTV client, transmit the viewmodels of the player the director shows
+			pPlayer = UTIL_PlayerByIndex( HLTVDirector()->GetPVSEntity() );
+
+			if ( !pPlayer )
+				return FL_EDICT_DONTSEND;
+		}
 
 		if ( (pPlayer->GetObserverMode() == OBS_MODE_IN_EYE)  && (pPlayer->GetObserverTarget() == pOwner) )
 		{

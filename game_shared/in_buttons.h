@@ -33,6 +33,7 @@
 #define IN_ZOOM			(1 << 19)	// Zoom key for HUD zoom
 #define IN_WEAPON1		(1 << 20)	// weapon defines these bits
 #define IN_WEAPON2		(1 << 21)	// weapon defines these bits
-#define IN_BULLRUSH		(1 << 22)
+#define IN_BULLRUSH		(1 << 22)	// Hidden: +pounce
+#define IN_AURA			(1 << 23)	// Hidden: +aura, the Hidden's aura vision
 
 #endif // IN_BUTTONS_H

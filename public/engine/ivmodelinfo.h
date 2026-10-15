@@ -81,22 +81,26 @@ public:
 	virtual studiohdr_t				*GetStudiomodel( const model_t *mod ) = 0;
 	virtual int						GetModelSpriteWidth( const model_t *model ) const = 0;
 	virtual int						GetModelSpriteHeight( const model_t *model ) const = 0;
+
+	// Sets/gets a map-specified fade range (client only)
+	virtual void					SetLevelScreenFadeRange( float flMinSize, float flMaxSize ) = 0;
+	virtual void					GetLevelScreenFadeRange( float *pMinArea, float *pMaxArea ) const = 0;
+
+	// Sets/gets a map-specified per-view fade range (client only)
+	virtual void					SetViewScreenFadeRange( float flMinSize, float flMaxSize ) = 0;
+
+	// Computes fade alpha based on distance fade + screen fade (client only)
+	virtual unsigned char			ComputeLevelScreenFade( const Vector &vecAbsOrigin, float flRadius, float flFadeScale ) const = 0;
+	virtual unsigned char			ComputeViewScreenFade( const Vector &vecAbsOrigin, float flRadius, float flFadeScale ) const = 0;
+
+	// both client and server
+	virtual int						GetAutoplayList( const studiohdr_t *pStudioHdr, unsigned short **pAutoplayList ) const = 0;
 };
 
 
 class IVModelInfoClient : public IVModelInfo
 {
 public:
-	// Sets/gets a map-specified fade range
-	virtual void					SetLevelScreenFadeRange( float flMinSize, float flMaxSize ) = 0;
-	virtual void					GetLevelScreenFadeRange( float *pMinArea, float *pMaxArea ) const = 0;
-
-	// Sets/gets a map-specified per-view fade range
-	virtual void					SetViewScreenFadeRange( float flMinSize, float flMaxSize ) = 0;
-
-	// Computes fade alpha based on distance fade + screen fade
-	virtual unsigned char			ComputeLevelScreenFade( const Vector &vecAbsOrigin, float flRadius, float flFadeScale ) const = 0;
-	virtual unsigned char			ComputeViewScreenFade( const Vector &vecAbsOrigin, float flRadius, float flFadeScale ) const = 0;
 };
 
 
