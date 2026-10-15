@@ -299,6 +299,14 @@ public:
 	bool			LAMIsOn( void ) { return m_bLAM; }
 	bool			RequestedAmmo( void ) { return m_bRequestAmmo; }
 	bool			IsViewing( void );	// the Hidden's aura vision, only while standing still
+
+	// Hidden: the damage list and the aura loop sound
+	void			AddDamage( PlayerDamageRecord_t damage );
+	void			PrintDamageList( void );
+	void			ClearDamageList( void );				// REBUILD: name
+	void			ResetDamageListPrinted( void );			// REBUILD: name
+	void			SetAuraSoundTime( float flDelay );		// REBUILD: name
+
 	const char		*GetCurrentLocation( void ) { return m_CurrentLocation; }	// REBUILD: no client copy found; named as the server's
 	const char		*GetLastKnownPlaceName( void ) const { return m_szLastPlaceName; }	// REBUILD: no client copy found; named as the server's
 

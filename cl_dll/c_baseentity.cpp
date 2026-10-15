@@ -1452,6 +1452,11 @@ void C_BaseEntity::SetMoveCollide( MoveCollide_t val )
 bool C_BaseEntity::IsTransparent( void )
 {
 	bool modelIsTransparent = modelinfo->IsTranslucent(model);
+
+	// Hidden: the Hidden's team always draws as translucent (the cloak)
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+		return true;
+
 	return modelIsTransparent || (m_nRenderMode != kRenderNormal);
 }
 

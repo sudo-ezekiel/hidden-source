@@ -287,7 +287,23 @@ public:
 	void					LoadSceneFromFile( const char *filename );
 	void					UnloadScene( void );
 
-	void					PrefetchSpeakEventSounds( CChoreoScene *scene );
+	// Hidden: the speak sound prefetch as in Valve's later SDK
+	struct SpeakEventSound_t
+	{
+		CUtlSymbol	m_Symbol;
+		float		m_flStartTime;
+	};
+
+	static bool SpeakEventSoundLessFunc( const SpeakEventSound_t& lhs, const SpeakEventSound_t& rhs );
+
+	bool					GetSoundNameForPlayer( CChoreoEvent *event, CBasePlayer *player, char *buf, size_t buflen );
+
+	void					BuildSortedSpeakEventSoundsPrefetchList( 
+								CChoreoScene *scene, 
+								CUtlSymbolTable& table, 
+								CUtlRBTree< SpeakEventSound_t >& soundnames, 
+								float timeOffset );
+	void					PrefetchSpeakEventSounds( CUtlSymbolTable& table, CUtlRBTree< SpeakEventSound_t >& soundnames );
 
 	// Event handlers
 	virtual void			DispatchStartExpression( CChoreoScene *scene, CBaseFlex *actor, CChoreoEvent *event );
@@ -1337,6 +1353,72 @@ bool AttenuateCaption( const char *token, const Vector& listener, CUtlVector< Ve
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: 
+// Input  : *event - which event 
+//			player - which recipient 
+//			buf, buflen:  where to put the data 
+// Output : Returns true if the sound should be played/prefetched
+//-----------------------------------------------------------------------------
+bool CSceneEntity::GetSoundNameForPlayer( CChoreoEvent *event, CBasePlayer *player, char *buf, size_t buflen )
+{
+	Assert( event );
+	Assert( player );
+	Assert( buf );
+	Assert( buflen > 0 );
+
+	bool ismasterevent = true;
+	char tok[ CChoreoEvent::MAX_CCTOKEN_STRING ];
+	bool validtoken = false;
+
+	tok[ 0 ] = 0;
+
+	if ( event->GetCloseCaptionType() == CChoreoEvent::CC_SLAVE ||
+		event->GetCloseCaptionType() == CChoreoEvent::CC_DISABLED )
+	{
+		ismasterevent = false;
+	}
+	else
+	{
+		validtoken = event->GetPlaybackCloseCaptionToken( tok, sizeof( tok ) );
+	}
+
+	// For english users, assume we emit the sound normally
+	Q_strncpy( buf, event->GetParameters(), buflen );
+
+	bool usingEnglish = true;
+	char const *cvarvalue = engine->GetClientConVarValue( player->entindex(), "english" );
+	if ( cvarvalue && Q_atoi( cvarvalue ) != 1 )
+	{
+		usingEnglish = false;
+	}
+
+	// This makes it like they are running in another language
+	if ( scene_forcecombined.GetBool() )
+	{
+		usingEnglish = false;
+	}
+
+	if ( usingEnglish )
+	{
+		// English sounds always play
+		return true;
+	}
+	
+	if ( ismasterevent )
+	{
+		// Master event sounds always play too (master will be the combined .wav)
+		if ( validtoken )
+		{
+			Q_strncpy( buf, tok, buflen );
+		}
+		return true;
+	}
+
+	// Slave events don't play any sound...
+	return false;
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Playback sound file that contains phonemes
 // Input  : *actor - 
 //			*parameters - 
@@ -1374,23 +1456,6 @@ void CSceneEntity::DispatchStartSpeak( CChoreoScene *scene, CBaseFlex *actor, CC
 			GetSpeechSemaphore( actor->MyNPCPointer() )->Acquire( flDuration + GetPostSpeakDelay(), actor );
 		}
 
-
-		bool ismasterevent = true;
-		char tok[ CChoreoEvent::MAX_CCTOKEN_STRING ];
-		bool validtoken = false;
-
-		tok[ 0 ] = 0;
-
-		if ( event->GetCloseCaptionType() == CChoreoEvent::CC_SLAVE ||
-			event->GetCloseCaptionType() == CChoreoEvent::CC_DISABLED )
-		{
-			ismasterevent = false;
-		}
-		else
-		{
-			validtoken = event->GetPlaybackCloseCaptionToken( tok, sizeof( tok ) );
-		}
-
 		EmitSound_t es;
 		es.m_nChannel = CHAN_VOICE;
 		es.m_flVolume = 1;
@@ -1411,41 +1476,23 @@ void CSceneEntity::DispatchStartSpeak( CChoreoScene *scene, CBaseFlex *actor, CC
 
 			CSingleUserRecipientFilter filter2( player );
 
-			es.m_pSoundName = event->GetParameters();
-
-			bool usingEnglish = true;
-			char const *cvarvalue = engine->GetClientConVarValue( playerindex, "english" );
-			if ( cvarvalue && Q_atoi( cvarvalue ) != 1 )
+			char soundname[ 512 ];
+			if ( !GetSoundNameForPlayer( event, player, soundname, sizeof( soundname ) ) )
 			{
-				usingEnglish = false;
+				continue;
 			}
 
-			// This makes it like they are running in another language
-			if ( scene_forcecombined.GetBool() )
-			{
-				usingEnglish = false;
-			}
+			es.m_pSoundName = soundname;
 
-			// For english users, emit the sound normally
-			if ( usingEnglish )
-			{
-				EmitSound( filter2, actor->entindex(), es );
-				actor->AddSceneEvent( scene, event );
-			}
-			else if ( ismasterevent )
-			{
-				if ( validtoken )
-				{
-					es.m_pSoundName = tok;
-				}
-				EmitSound( filter2, actor->entindex(), es );
-				actor->AddSceneEvent( scene, event );
-			}
+			EmitSound( filter2, actor->entindex(), es );
+			actor->AddSceneEvent( scene, event );
 		}
 
 		// Close captioning only on master token no matter what...
 		if ( event->GetCloseCaptionType() == CChoreoEvent::CC_MASTER )
 		{
+			char tok[ CChoreoEvent::MAX_CCTOKEN_STRING ];
+			bool validtoken = event->GetPlaybackCloseCaptionToken( tok, sizeof( tok ) );
 			if ( validtoken )
 			{
 				CRC32_t tokenCRC;
@@ -1882,16 +1929,49 @@ void CSceneEntity::StartPlayback( void )
 	m_OnStart.FireOutput( this, this, 0 );
 
 	// Aysnchronously load speak sounds
-	PrefetchSpeakEventSounds( m_pScene );
+	CUtlSymbolTable prefetchSoundSymbolTable;
+	CUtlRBTree< SpeakEventSound_t > soundnames( 0, 0, SpeakEventSoundLessFunc );
+
+	BuildSortedSpeakEventSoundsPrefetchList( m_pScene, prefetchSoundSymbolTable, soundnames, 0.0f );
+	PrefetchSpeakEventSounds( prefetchSoundSymbolTable, soundnames );
 
 	return;
 }
 
 
 //-----------------------------------------------------------------------------
-// Purpose: 
+// Purpose: Static method used to sort by event start time
 //-----------------------------------------------------------------------------
-void CSceneEntity::PrefetchSpeakEventSounds( CChoreoScene *scene )
+bool CSceneEntity::SpeakEventSoundLessFunc( const SpeakEventSound_t& lhs, const SpeakEventSound_t& rhs )
+{
+	return lhs.m_flStartTime < rhs.m_flStartTime;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Prefetches the list of sounds build by BuildSortedSpeakEventSoundsPrefetchList
+//-----------------------------------------------------------------------------
+void CSceneEntity::PrefetchSpeakEventSounds( CUtlSymbolTable& table, CUtlRBTree< SpeakEventSound_t >& soundnames )
+{
+	for ( int i = soundnames.FirstInorder(); i != soundnames.InvalidIndex() ; i = soundnames.NextInorder( i ) )
+	{
+		SpeakEventSound_t& sound = soundnames[ i ];
+		// Look it up in the string table
+		char const *soundname = table.String( sound.m_Symbol );
+
+		// Warning( "Prefetch %s\n", soundname );
+
+		PrefetchScriptSound( soundname );  
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:  Builds list of sounds sorted by start time for prefetching 
+//-----------------------------------------------------------------------------
+void CSceneEntity::BuildSortedSpeakEventSoundsPrefetchList( 
+	CChoreoScene *scene, 
+	CUtlSymbolTable& table, 
+	CUtlRBTree< SpeakEventSound_t >& soundnames,
+	float timeOffset )
 {
 	Assert( scene );
 
@@ -1909,17 +1989,33 @@ void CSceneEntity::PrefetchSpeakEventSounds( CChoreoScene *scene )
 			break;
 		case CChoreoEvent::SPEAK:
 			{
-				// Defined in SoundEmitterSystem.cpp
+				
 				// NOTE:  The script entries associated with .vcds are forced to preload to avoid
 				//  loading hitches during triggering
+				char soundname[ CChoreoEvent::MAX_CCTOKEN_STRING ];
+				Q_strncpy( soundname, event->GetParameters(), sizeof( soundname ) );
+				
 				if ( event->GetCloseCaptionType() == CChoreoEvent::CC_MASTER )
 				{
-					char tok[ CChoreoEvent::MAX_CCTOKEN_STRING ];
-					if ( event->GetPlaybackCloseCaptionToken( tok, sizeof( tok ) ) )
+					event->GetPlaybackCloseCaptionToken( soundname, sizeof( soundname ) );
+				}
+				
+				// In single player, try to use the combined or regular .wav files as needed
+				if ( gpGlobals->maxClients == 1 )
+				{
+					CBasePlayer *player = UTIL_GetLocalPlayer();
+					if ( player && !GetSoundNameForPlayer( event, player, soundname, sizeof( soundname ) ) )
 					{
-						PrefetchScriptSound( tok );  // This will either be event->m_szParameters or the cc token name
+						// Skip to next event
+						continue;
 					}
 				}
+
+				SpeakEventSound_t ses;
+				ses.m_Symbol = table.AddString( soundname );
+				ses.m_flStartTime = timeOffset + event->GetStartTime();
+
+				soundnames.Insert( ses );
 			}
 			break;
 		case CChoreoEvent::SUBSCENE:
@@ -1935,7 +2031,7 @@ void CSceneEntity::PrefetchSpeakEventSounds( CChoreoScene *scene )
 						event->SetSubScene( subscene );
 
 						// Now precache it's resources, if any
-						PrefetchSpeakEventSounds( subscene );
+						BuildSortedSpeakEventSoundsPrefetchList( subscene, table, soundnames, event->GetStartTime() );
 					}
 				}
 			}
@@ -3616,40 +3712,36 @@ struct SceneData_t
 	{
 		SceneData_t *data = new SceneData_t;
 
-		int filesize = filesystem->Size( params.filename );
-		if ( filesize > 0 )
+		// Hidden: open the file once and size it through the handle
+		FileHandle_t fh = filesystem->Open( params.filename, "rb" );
+		if ( FILESYSTEM_INVALID_HANDLE != fh )
 		{
-			char *pvData = (char *)malloc( filesize + 1 );
-			if ( !pvData )
+			int filesize = filesystem->Size( fh );
+			if ( filesize > 0 )
 			{
-				Error( "Unable to allocate %i bytes for SceneData_t for '%s'", filesize + 1, params.filename );
-			}
+				char *pvData = (char *)malloc( filesize + 1 );
+				if ( !pvData )
+				{
+					Error( "Unable to allocate %i bytes for SceneData_t for '%s'", filesize + 1, params.filename );
+				}
 
-			FileHandle_t fh = filesystem->Open( params.filename, "rb" );
-			if ( FILESYSTEM_INVALID_HANDLE != fh )
-			{
 				filesystem->Read( pvData, filesize, fh );
-				filesystem->Close( fh );
-
 				pvData[ filesize ] = 0;
+
+				data->m_nFileSize = filesize;
+				data->m_pvData = (void *)pvData;
 			}
 
-			data->m_nFileSize = filesize;
-			data->m_pvData = (void *)pvData;
+			filesystem->Close( fh );
 		}
 
 		return data;
 	}
 
-	// The resource will be an exact copy of the disk file
+	// Hidden: a fixed estimate, so sizing the cache does not touch the disk
 	static unsigned int EstimatedSize( const scenedataparams_t &params )
 	{
-		int size = filesystem->Size( params.filename );
-		if ( size == -1 )
-		{
-			return sizeof( SceneData_t );
-		}
-		return ( sizeof( SceneData_t ) + size );
+		return ( sizeof( SceneData_t ) + 5000 );	// REBUILD: the binary only has the sum, 5008
 	}
 
 	int			m_nFileSize;

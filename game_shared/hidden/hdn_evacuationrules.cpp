@@ -188,10 +188,14 @@ void CEvacuationGameRules::SetSurvivingMarine( void )
 	}
 }
 
+#endif
+
 bool CEvacuationGameRules::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 {
 	return BaseClass::ShouldCollide( collisionGroup0, collisionGroup1 );
 }
+
+#ifndef CLIENT_DLL
 
 const char *CEvacuationGameRules::GetDeadChatPrefix( bool bTeamOnly, CBasePlayer *pPlayer )
 {
@@ -208,10 +212,14 @@ const char *CEvacuationGameRules::GetChatPrefix( bool bTeamOnly, CBasePlayer *pP
 	return BaseClass::GetChatPrefix( bTeamOnly, pPlayer );
 }
 
+#endif
+
 int CEvacuationGameRules::PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget )
 {
 	return BaseClass::PlayerRelationship( pPlayer, pTarget );
 }
+
+#ifndef CLIENT_DLL
 
 void CEvacuationGameRules::RespawnHiddens( void )
 {

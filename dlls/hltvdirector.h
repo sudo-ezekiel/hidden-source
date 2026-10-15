@@ -1,4 +1,4 @@
-//========= Copyright Â© 1996-2005, Valve Corporation, All rights reserved. ============//
+//========= Copyright © 1996-2005, Valve Corporation, All rights reserved. ============//
 //
 // Purpose: 
 //
@@ -17,9 +17,9 @@
 #include <ihltv.h>
 #include <utlrbtree.h>
 
-#define	HLTV_MIN_DELAY				1	// minimum delay
+#define	HLTV_MIN_DELAY				0	// minimum delay
 #define	HLTV_MIN_DIRECTOR_DELAY		10	// minimum delay if director is enabled
-#define	HLTV_MAX_DELAY				120	// maximum delay
+#define	HLTV_MAX_DELAY				90	// maximum delay
 
 
 #define MAX_NUM_CAMERAS				64	// support up to 64 fixed cameras per level
@@ -101,6 +101,7 @@ protected:
 		
 	int				m_nNumFixedCameras;	//number of cameras in current map
 	CBaseEntity		*m_pFixedCameras[MAX_NUM_CAMERAS]; // fixed cameras (point_viewcontrol)
+	CBaseEntity		*m_pCameraTargets[MAX_NUM_CAMERAS]; // targets for fixed cameras
 	
 	int				m_nNumActivePlayers;	//number of cameras in current map
 	CBasePlayer		*m_pActivePlayers[MAX_PLAYERS]; // fixed cameras (point_viewcontrol)
@@ -109,6 +110,6 @@ protected:
 };
 
 extern IGameSystem* HLTVDirectorSystem();
-extern CHLTVDirector* HLTVDirector();
+extern IHLTVDirector* HLTVDirector();
 
 #endif // HLTVDIRECTOR_H

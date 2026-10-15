@@ -87,7 +87,7 @@ public:
 	void				AddAmmoType(char const* name, int damageType, int tracerType, char const* plr_cvar, char const* npc_var, char const* carry_cvar, float physicsForceImpulse, int nFlags, int minSplashSize = 4, int maxSplashSize = 8 );
 
 	CAmmoDef(void);
-	~CAmmoDef( void );
+	virtual ~CAmmoDef( void );
 
 private:
 	bool				AddAmmoType(char const* name, int damageType, int tracerType, int nFlags, int minSplashSize, int maxSplashSize );

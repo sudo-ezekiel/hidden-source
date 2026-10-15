@@ -135,14 +135,18 @@ void PhysicsSplash( IPhysicsFluidController *pFluid, IPhysicsObject *pObject, CB
 
 	Vector vel;
 	pObject->GetVelocity( &vel, NULL );
-	float speed = -DotProduct( normal, vel );
+	float rawSpeed = -DotProduct( normal, vel );
 
 	// proportional to cross-sectional area times velocity squared (fluid pressure)
-	speed = speed * speed * extents[0] * extents[1] * (1.0f / 2500000.0f) * pObject->GetMass() * (0.01f);
+	float speed = rawSpeed * rawSpeed * extents[0] * extents[1] * (1.0f / 2500000.0f) * pObject->GetMass() * (0.01f);
 
 	speed = clamp( speed, 0, 50 );
 
 	bool bRippleOnly = false;
+
+	// allow the entity to perform a custom splash effect
+	if ( pEntity->PhysicsSplash( centerPoint, normal, rawSpeed, speed ) )
+		return;
 
 	//Deny really weak hits
 	//FIXME: We still need to ripple the surface in this case

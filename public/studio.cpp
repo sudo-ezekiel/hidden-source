@@ -361,6 +361,14 @@ void virtualmodel_t::AppendModels( int group, const studiohdr_t *pStudioHdr )
 			AppendModels( group, pTmpHdr );
 		}
 	}
+	UpdateAutoplaySequences( pStudioHdr );
+}
+
+void virtualmodel_t::UpdateAutoplaySequences( const studiohdr_t *pStudioHdr )
+{
+	int autoplayCount = pStudioHdr->CountAutoplaySequences();
+	m_autoplaySequences.SetCount( autoplayCount );
+	pStudioHdr->CopyAutoplaySequences( m_autoplaySequences.Base(), autoplayCount );
 }
 
 
@@ -808,6 +816,35 @@ const mstudioiklock_t &studiohdr_t::pIKAutoplayLock( int i ) const
 	Assert( pStudioHdr );
 
 	return *pStudioHdr->pLocalIKAutoplayLock( pVModel->m_iklock[i].index );
+}
+
+int	studiohdr_t::CountAutoplaySequences() const
+{
+	int count = 0;
+	for (int i = 0; i < GetNumSeq(); i++)
+	{
+		mstudioseqdesc_t &seqdesc = pSeqdesc( i );
+		if (seqdesc.flags & STUDIO_AUTOPLAY)
+		{
+			count++;
+		}
+	}
+	return count;
+}
+
+int	studiohdr_t::CopyAutoplaySequences( unsigned short *pOut, int outCount ) const
+{
+	int outIndex = 0;
+	for (int i = 0; i < GetNumSeq() && outIndex < outCount; i++)
+	{
+		mstudioseqdesc_t &seqdesc = pSeqdesc( i );
+		if (seqdesc.flags & STUDIO_AUTOPLAY)
+		{
+			pOut[outIndex] = i;
+			outIndex++;
+		}
+	}
+	return outIndex;
 }
 
 
