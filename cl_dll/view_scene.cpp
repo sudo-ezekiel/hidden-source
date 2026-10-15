@@ -1985,6 +1985,13 @@ void CViewRender::SetupVis( const CViewSetup& view )
 void CViewRender::RenderPlayerSprites()
 {
 	GetClientVoiceMgr()->DrawHeadLabels();
+
+	// Hidden: IRIS see their team's ammo requests
+	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+	if ( pPlayer && pPlayer->GetTeamNumber() != TEAM_SPECTATOR && pPlayer->GetTeamNumber() == TEAM_IRIS )
+	{
+		GetClientVoiceMgr()->DrawAmmoRequestLabels();
+	}
 }
 
 //-----------------------------------------------------------------------------
