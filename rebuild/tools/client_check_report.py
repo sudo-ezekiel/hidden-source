@@ -48,7 +48,7 @@ def main():
     with open(os.path.join(out, "client.mk.files")) as f:
         for line in f:
             src, obj = line.rstrip("\n").split("\t")
-            o = os.path.join(out, "obj", obj)
+            o = os.path.join(out, "client_obj", obj)
             if os.path.exists(o):
                 rows.append((src, "PASS", ""))
                 continue

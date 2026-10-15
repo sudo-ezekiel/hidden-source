@@ -65,6 +65,9 @@ def stack_args(body, start, explicit):
         nn = int(m.group(1), 16) - 4 * int(m.group(2) or 0)
         slots[nn] = m.group(3).strip()
     vals = [v for nn, v in sorted(slots.items(), reverse=True)]
+    # a return address Ghidra took for a string pointer ("j"): the out pointer follows it
+    if not explicit and len(vals) > 1 and not vals[0].startswith("&") and re.match(r"^(?:\(\w+ \*\))?&DAT_", vals[1]):
+        vals = vals[1:]
     if vals and re.match(r"^(?:\(\w+ \*\))?0x240[0-9a-f]{5}$|^(?:\(\w+ \*\))?0x241[0-9a-f]{5}$|^(?:\(\w+ \*\))?0x242[0-3][0-9a-f]{4}$", vals[0]):
         vals = vals[1:]
     # explicit arguments, if any, are the first ones; the slots hold the rest
@@ -392,6 +395,12 @@ def client_only(text):
     return "\n".join(out)
 
 
+def recvinfo_member(arg):
+    """The member expression a RECVINFO-style macro takes the offset of, or None."""
+    m = re.match(r"RECVINFO(?:_NAME|_DT|_ARRAY|_ARRAY3|_UTLVECTOR|_INTERNALARRAY|_DTNAME)?\s*\(\s*([^,()]+?)\s*[,)]", arg)
+    return m.group(1).replace(" ", "") if m else None
+
+
 def recvinfo_name(arg):
     m = re.match(r"RECVINFO_NAME\s*\(\s*[^,]+?\s*,\s*([\w\[\]]+)\s*\)", arg)
     if m:
@@ -439,13 +448,13 @@ def source_tables(repo, build_files=None):
                                 nm = args[1]
                             else:
                                 continue
-                        props.append({"index": len(props), "name": nm,
+                        props.append({"index": len(props), "name": nm, "member": recvinfo_member(args[0]),
                                       "type": {"": "?", "EHandle": "Int", "Bool": "Int", "Time": "Float",
                                                "QAngles": "Vector", "IntWithMinusOneFlag": "Int",
                                                "PredictableId": "DataTable", "Array3": "Array"}.get(kind, kind)})
                     t = m.group(2)
                     if t not in tables:
-                        tables[t] = {"props": props, "file": os.path.relpath(path, repo)}
+                        tables[t] = {"props": props, "file": os.path.relpath(path, repo), "class": m.group(1)}
     # arrays: keep the array prop, drop its "[0]" element prop (the binaries fold it the same way)
     for t in tables.values():
         arrays = {p["name"] for p in t["props"] if p["type"] in ("Array", "Array3", "InternalArray")}
@@ -471,7 +480,10 @@ def significant(props):
     for i, p in enumerate(props):
         if p["type"] == "Exclude" or p["name"] == "should_never_see_this":
             continue
-        if i + 1 < len(props) and props[i + 1]["type"] == "Array":
+        # the element prop of a RecvPropArray/SendPropArray comes right before the array and has
+        # its name ("m_hViewModel[0]" or "m_hViewModel"); our source parser gives the array alone
+        if (i + 1 < len(props) and props[i + 1]["type"] == "Array"
+                and p["name"].split("[")[0] == props[i + 1]["name"]):
             continue
         out.append(p)
     return out

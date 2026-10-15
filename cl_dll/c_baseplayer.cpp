@@ -180,7 +180,6 @@ END_RECV_TABLE()
 		RecvPropVector		( RECVINFO( m_vecBaseVelocity ) ),
 
 		RecvPropArray		( RecvPropEHandle( RECVINFO( m_hViewModel[0] ) ), m_hViewModel ),
-		RecvPropArray		( RecvPropEHandle( RECVINFO( m_hObserverViewModel[0] ) ), m_hObserverViewModel ),
 
 		RecvPropEHandle		( RECVINFO( m_hConstraintEntity)),
 		RecvPropVector		( RECVINFO( m_vecConstraintCenter) ),
@@ -188,8 +187,6 @@ END_RECV_TABLE()
 		RecvPropFloat		( RECVINFO( m_flConstraintWidth )),
 		RecvPropFloat		( RECVINFO( m_flConstraintSpeedFactor )),
 
-		RecvPropInt			( RECVINFO( m_iObserverMode) ),
-		RecvPropEHandle		( RECVINFO( m_hObserverTarget) ),
 		RecvPropFloat		( RECVINFO( m_flDeathTime )),
 
 		RecvPropInt			( RECVINFO( m_nWaterLevel ) ),
@@ -216,6 +213,30 @@ END_RECV_TABLE()
 
 		RecvPropFloat	(RECVINFO(m_flMaxspeed)),
 		RecvPropInt		(RECVINFO(m_fFlags)),
+
+		RecvPropInt		(RECVINFO(m_iObserverMode) ),
+		RecvPropEHandle	(RECVINFO(m_hObserverTarget) ),
+		RecvPropArray	( RecvPropEHandle( RECVINFO( m_hObserverViewModel[0] ) ), m_hObserverViewModel ),
+
+		RecvPropString( RECVINFO(m_szLastPlaceName) ),
+
+		// Hidden: player state
+		RecvPropBool	( RECVINFO( m_bSafety ) ),
+		RecvPropFloat	( RECVINFO( m_flStamina ) ),
+		RecvPropInt		( RECVINFO( m_iPrimary ) ),
+		RecvPropInt		( RECVINFO( m_iSecondary ) ),
+		RecvPropInt		( RECVINFO( m_iEquipment ) ),
+		RecvPropBool	( RECVINFO( m_bStunned ) ),
+		RecvPropBool	( RECVINFO( m_bAura ) ),
+		RecvPropFloat	( RECVINFO( m_flBlur ) ),
+		RecvPropBool	( RECVINFO( m_bNightVision ) ),
+		RecvPropBool	( RECVINFO( m_bLAM ) ),
+		RecvPropBool	( RECVINFO( m_bZoom ) ),
+		RecvPropInt		( RECVINFO( m_iNewClass ) ),
+		RecvPropString	( RECVINFO( m_CurrentLocation ) ),
+		RecvPropBool	( RECVINFO( m_bNoHidden ) ),
+		RecvPropBool	( RECVINFO( m_bRequestAmmo ) ),
+		RecvPropInt		( RECVINFO( m_iWeighting ) ),
 
 	END_RECV_TABLE()
 
@@ -333,6 +354,13 @@ C_BasePlayer::C_BasePlayer() : m_iv_vecViewOffset( "C_BasePlayer::m_iv_vecViewOf
 	m_bResampleWaterSurface = true;
 	
 	ResetObserverMode();
+
+	m_surfaceProps = 0;
+	m_pSurfaceData = NULL;
+	m_surfaceFriction = 1.0f;
+	m_chTextureType = 0;
+
+	m_CurrentLocation = "";
 }
 
 C_BasePlayer *g_pLocalPlayer = NULL;
@@ -802,6 +830,17 @@ void C_BasePlayer::CreateMove( float flInputSampleTime, CUserCmd *pCmd )
 	// Check to see if we're in vgui input mode...
 	DetermineVguiInputMode( pCmd );
 
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the Hidden's aura vision only shows while he stands still
+//-----------------------------------------------------------------------------
+bool C_BasePlayer::IsViewing( void )
+{
+	if ( GetAbsVelocity().Length() > 0.5f )
+		return false;
+
+	return m_bAura;
 }
 
 

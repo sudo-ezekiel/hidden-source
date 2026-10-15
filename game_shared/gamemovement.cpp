@@ -2048,7 +2048,10 @@ bool CGameMovement::CheckPounceButton( void )
 
 	FinishGravity();
 
+#ifndef CLIENT_DLL
+	// Hidden: only the server spends stamina; client.dll's copy leaves it to the network
 	player->SetStamina( -20.0f );
+#endif
 
 	mv->m_nOldButtons |= IN_BULLRUSH;	// don't pounce again until released
 	return true;
@@ -2073,14 +2076,18 @@ void CGameMovement::WallCling( void )
 		return;
 	}
 
+#ifndef CLIENT_DLL
 	player->SetStamina( hdn_staminadrain.GetFloat() );
+#endif
 
 	if ( mv->m_nButtons & IN_JUMP )
 	{
 		mv->m_vecVelocity[0] = 0;
 		mv->m_vecVelocity[1] = 0;
 		mv->m_vecVelocity[2] = 0;
+#ifndef CLIENT_DLL
 		player->SetStamina( -10.0f );
+#endif
 		CheckJumpButton();
 	}
 	else
