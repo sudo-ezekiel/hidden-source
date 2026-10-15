@@ -12,7 +12,12 @@
 #ifndef _NAV_AREA_H_
 #define _NAV_AREA_H_
 
-class CNavArea;
+#include "nav_ladder.h"
+
+// BOTPORT: Clean up relationship between team index and danger storage in nav areas
+enum { MAX_NAV_TEAMS = 2 };
+
+
 
 //-------------------------------------------------------------------------------------------------------------------
 /**
@@ -30,66 +35,23 @@ union NavConnect
 };
 typedef CUtlLinkedList<NavConnect, int> NavConnectList;
 
-//--------------------------------------------------------------------------------------------------------------
+
+//-------------------------------------------------------------------------------------------------------------------
 /**
- * The NavLadder represents ladders in the Navigation Mesh, and their connections to adjacent NavAreas
- * @todo Deal with ladders that allow jumping off to areas in the middle
+ * The NavLadderConnect union is used to refer to connections to ladders
  */
-class CNavLadder
+union NavLadderConnect
 {
-public:
-	CNavLadder( void )
+	unsigned int id;
+	CNavLadder *ladder;
+
+	bool operator==( const NavLadderConnect &other ) const
 	{
-		m_topForwardArea = NULL;
-		m_topRightArea = NULL;
-		m_topLeftArea = NULL;
-		m_topBehindArea = NULL;
-		m_bottomArea = NULL;
-		m_entity = NULL;
-	}
-
-	enum LadderDirectionType
-	{
-		LADDER_UP = 0,
-		LADDER_DOWN,
-
-		NUM_LADDER_DIRECTIONS
-	};
-
-	Vector m_top;									///< world coords of the top of the ladder
-	Vector m_bottom;								///< world coords of the top of the ladder
-	float m_length;									///< the length of the ladder
-	NavDirType m_dir;								///< which way the ladder faces (ie: surface normal of climbable side)
-	Vector2D m_dirVector;							///< unit vector representation of m_dir
-	CBaseEntity *m_entity;							///< the ladder itself
-
-	CNavArea *m_topForwardArea;						///< the area at the top of the ladder
-	CNavArea *m_topLeftArea;					
-	CNavArea *m_topRightArea;					
-	CNavArea *m_topBehindArea;						///< area at top of ladder "behind" it - only useful for descending
-	CNavArea *m_bottomArea;							///< the area at the bottom of the ladder
-
-	bool m_isDangling;								///< if true, the bottom of the ladder is hanging too high to climb up
-
-	void OnDestroyNotify( CNavArea *dead )			///< invoked when given area is going away
-	{
-		if (dead == m_topForwardArea)
-			m_topForwardArea = NULL;
-
-		if (dead == m_topLeftArea)
-			m_topLeftArea = NULL;
-
-		if (dead == m_topRightArea)
-			m_topRightArea = NULL;
-
-		if (dead == m_topBehindArea)
-			m_topBehindArea = NULL;
-
-		if (dead == m_bottomArea)
-			m_bottomArea = NULL;
+		return (ladder == other.ladder) ? true : false;
 	}
 };
-typedef CUtlLinkedList< CNavLadder *, int > NavLadderList;
+typedef CUtlLinkedList<NavLadderConnect, int> NavLadderConnectList;
+
 
 //--------------------------------------------------------------------------------------------------------------
 /**
@@ -98,39 +60,50 @@ typedef CUtlLinkedList< CNavLadder *, int > NavLadderList;
 class HidingSpot
 {
 public:
-	HidingSpot( void );										///< for use when loading from a file
-	HidingSpot( const Vector *pos, int flags );				///< for use when generating - assigns unique ID
+	virtual ~HidingSpot()	{ }
 
 	enum 
 	{ 
 		IN_COVER			= 0x01,							///< in a corner with good hard cover nearby
 		GOOD_SNIPER_SPOT	= 0x02,							///< had at least one decent sniping corridor
-		IDEAL_SNIPER_SPOT	= 0x04							///< can see either very far, or a large area, or both
+		IDEAL_SNIPER_SPOT	= 0x04,							///< can see either very far, or a large area, or both
+		EXPOSED				= 0x08							///< spot in the open, usually on a ledge or cliff
 	};
 
-	bool HasGoodCover( void ) const					{ return (m_flags & IN_COVER) ? true : false; }	///< return true if hiding spot in in cover
-	bool IsGoodSniperSpot( void ) const			{ return (m_flags & GOOD_SNIPER_SPOT) ? true : false; }
-	bool IsIdealSniperSpot( void ) const		{ return (m_flags & IDEAL_SNIPER_SPOT) ? true : false; }
+	bool HasGoodCover( void ) const			{ return (m_flags & IN_COVER) ? true : false; }	///< return true if hiding spot in in cover
+	bool IsGoodSniperSpot( void ) const		{ return (m_flags & GOOD_SNIPER_SPOT) ? true : false; }
+	bool IsIdealSniperSpot( void ) const	{ return (m_flags & IDEAL_SNIPER_SPOT) ? true : false; }
+	bool IsExposed( void ) const			{ return (m_flags & EXPOSED) ? true : false; }	
 
-	void SetFlags( int flags )		{ m_flags |= flags; }	///< FOR INTERNAL USE ONLY
 	int GetFlags( void ) const		{ return m_flags; }
 
 	void Save( FileHandle_t file, unsigned int version ) const;
 	void Load( FileHandle_t file, unsigned int version );
+	NavErrorType PostLoad( void );
 
-	const Vector *GetPosition( void ) const	{ return &m_pos; }	///< get the position of the hiding spot
-	unsigned int GetID( void ) const				{ return m_id; }
+	const Vector &GetPosition( void ) const		{ return m_pos; }	///< get the position of the hiding spot
+	unsigned int GetID( void ) const			{ return m_id; }
+	const CNavArea *GetArea( void ) const		{ return m_area; }	///< return nav area this hiding spot is within
 
-	void Mark( void )												{ m_marker = m_masterMarker; }
-	bool IsMarked( void ) const							{ return (m_marker == m_masterMarker) ? true : false; }
-	static void ChangeMasterMarker( void )	{ ++m_masterMarker; }
+	void Mark( void )							{ m_marker = m_masterMarker; }
+	bool IsMarked( void ) const					{ return (m_marker == m_masterMarker) ? true : false; }
+	static void ChangeMasterMarker( void )		{ ++m_masterMarker; }
+
+
+public:
+	void SetFlags( int flags )				{ m_flags |= flags; }	///< FOR INTERNAL USE ONLY
+	void SetPosition( const Vector &pos )	{ m_pos = pos; }		///< FOR INTERNAL USE ONLY
 
 private:
 	friend class CNavMesh;
+	friend void ClassifySniperSpot( HidingSpot *spot );
+
+	HidingSpot( void );										///< must use factory to create
 
 	Vector m_pos;											///< world coordinates of the spot
 	unsigned int m_id;										///< this spot's unique ID
 	unsigned int m_marker;									///< this spot's unique marker
+	CNavArea *m_area;										///< the nav area containing this hiding spot
 
 	unsigned char m_flags;									///< bit flags
 
@@ -141,6 +114,7 @@ typedef CUtlLinkedList< HidingSpot *, int > HidingSpotList;
 extern HidingSpotList TheHidingSpotList;
 
 extern HidingSpot *GetHidingSpotByID( unsigned int id );
+
 
 //--------------------------------------------------------------------------------------------------------------
 /**
@@ -175,48 +149,57 @@ typedef CUtlLinkedList< SpotEncounter *, int > SpotEncounterList;
 
 //-------------------------------------------------------------------------------------------------------------------
 /**
- * A CNavArea is a rectangular region defining a walkable area in a map
+ * A CNavArea is a rectangular region defining a walkable area in the environment
  */
 class CNavArea
 {
 public:
 	CNavArea( CNavNode *nwNode, CNavNode *neNode, CNavNode *seNode, CNavNode *swNode );
 	CNavArea( void );
-	CNavArea( const Vector *corner, const Vector *otherCorner );
-	CNavArea( const Vector *nwCorner, const Vector *neCorner, const Vector *seCorner, const Vector *swCorner );
+	CNavArea( const Vector &corner, const Vector &otherCorner );
+	CNavArea( const Vector &nwCorner, const Vector &neCorner, const Vector &seCorner, const Vector &swCorner );
 
 	~CNavArea();
 
 	void ConnectTo( CNavArea *area, NavDirType dir );			///< connect this area to given area in given direction
 	void Disconnect( CNavArea *area );							///< disconnect this area from given area
 
+	void ConnectTo( CNavLadder *ladder );						///< connect this area to given ladder
+	void Disconnect( CNavLadder *ladder );						///< disconnect this area from given ladder
+
 	void Save( FileHandle_t file, unsigned int version ) const;
 	void Load( FileHandle_t file, unsigned int version );
 	NavErrorType PostLoad( void );
 
 	unsigned int GetID( void ) const	{ return m_id; }		///< return this area's unique ID
+	static void CompressIDs( void );							///< re-orders area ID's so they are continuous
 
-	void SetAttributes( int bits )		{ m_attributeFlags = (unsigned char)bits; }
+	void SetAttributes( int bits )		{ m_attributeFlags = (unsigned short)bits; }
 	int GetAttributes( void ) const		{ return m_attributeFlags; }
 
 	void SetPlace( Place place )		{ m_place = place; }	///< set place descriptor
 	Place GetPlace( void ) const		{ return m_place; }		///< get place descriptor
 
-	bool IsOverlapping( const Vector *pos ) const;				///< return true if 'pos' is within 2D extents of area.
+	void UpdateBlocked( void );									///< Updates the (un)blocked status of the nav area
+	void CheckFloor( CBaseEntity *ignore );						///< Checks if there is a floor under the nav area, in case a breakable floor is gone
+	bool IsBlocked( void ) const		{ return m_isBlocked; }
+
+	bool IsOverlapping( const Vector &pos ) const;				///< return true if 'pos' is within 2D extents of area.
 	bool IsOverlapping( const CNavArea *area ) const;			///< return true if 'area' overlaps our 2D extents
 	bool IsOverlappingX( const CNavArea *area ) const;			///< return true if 'area' overlaps our X extent
 	bool IsOverlappingY( const CNavArea *area ) const;			///< return true if 'area' overlaps our Y extent
-	int GetPlayerCount( int teamID = 0 ) const;					///< return number of players with given teamID in this area (teamID == 0 means any/all)
-	float GetZ( const Vector *pos ) const;						///< return Z of area at (x,y) of 'pos'
+	float GetZ( const Vector &pos ) const;						///< return Z of area at (x,y) of 'pos'
 	float GetZ( float x, float y ) const;						///< return Z of area at (x,y) of 'pos'
-	bool Contains( const Vector *pos ) const;					///< return true if given point is on or above this area, but no others
+	bool Contains( const Vector &pos ) const;					///< return true if given point is on or above this area, but no others
 	bool IsCoplanar( const CNavArea *area ) const;				///< return true if this area and given area are approximately co-planar
-	void GetClosestPointOnArea( const Vector *pos, Vector *close ) const;	///< return closest point to 'pos' on this area - returned point in 'close'
-	float GetDistanceSquaredToPoint( const Vector *pos ) const;	///< return shortest distance between point and this area
+	void GetClosestPointOnArea( const Vector &pos, Vector *close ) const;	///< return closest point to 'pos' on this area - returned point in 'close'
+	float GetDistanceSquaredToPoint( const Vector &pos ) const;	///< return shortest distance between point and this area
 	bool IsDegenerate( void ) const;							///< return true if this area is badly formed
 	bool IsRoughlySquare( void ) const;							///< return true if this area is approximately square
 
 	bool IsEdge( NavDirType dir ) const;						///< return true if there are no bi-directional links on the given side
+
+	bool IsVisible( const Vector &eye, Vector *visSpot = NULL ) const;	///< return true if area is visible from the given eyepoint, return visible spot
 
 	int GetAdjacentCount( NavDirType dir ) const	{ return m_connect[ dir ].Count(); }	///< return number of connected areas in given direction
 	CNavArea *GetAdjacentArea( NavDirType dir, int i ) const;	/// return the i'th adjacent area in the given direction
@@ -224,17 +207,18 @@ public:
 
 	const NavConnectList *GetAdjacentList( NavDirType dir ) const	{ return &m_connect[dir]; }
 	bool IsConnected( const CNavArea *area, NavDirType dir ) const;	///< return true if given area is connected in given direction
+	bool IsConnected( const CNavLadder *ladder, CNavLadder::LadderDirectionType dir ) const;	///< return true if given ladder is connected in given direction
 	float ComputeHeightChange( const CNavArea *area );			///< compute change in height from this area to given area
 
-	const NavLadderList *GetLadderList( CNavLadder::LadderDirectionType dir ) const	{ return &m_ladder[dir]; }
+	const NavLadderConnectList *GetLadderList( CNavLadder::LadderDirectionType dir ) const	{ return &m_ladder[dir]; }
 
 	void ComputePortal( const CNavArea *to, NavDirType dir, Vector *center, float *halfWidth ) const;		///< compute portal to adjacent area
-	void ComputeClosestPointInPortal( const CNavArea *to, NavDirType dir, const Vector *fromPos, Vector *closePos ) const; ///< compute closest point within the "portal" between to adjacent areas
+	void ComputeClosestPointInPortal( const CNavArea *to, NavDirType dir, const Vector &fromPos, Vector *closePos ) const; ///< compute closest point within the "portal" between to adjacent areas
 	NavDirType ComputeDirection( Vector *point ) const;			///< return direction from this area to the given point
 
 	//- for hunting algorithm ---------------------------------------------------------------------------
-	void SetClearedTimestamp( int teamID )	{ m_clearedTimestamp[ teamID ] = gpGlobals->curtime; } ///< set this area's "clear" timestamp to now
-	float GetClearedTimestamp( int teamID )	{ return m_clearedTimestamp[ teamID ]; }	///< get time this area was marked "clear"
+	void SetClearedTimestamp( int teamID );						///< set this area's "clear" timestamp to now
+	float GetClearedTimestamp( int teamID ) const;				///< get time this area was marked "clear"
 
 	//- hiding spots ------------------------------------------------------------------------------------
 	const HidingSpotList *GetHidingSpotList( void ) const	{ return &m_hidingSpotList; }
@@ -243,16 +227,18 @@ public:
 
 	SpotEncounter *GetSpotEncounter( const CNavArea *from, const CNavArea *to );	///< given the areas we are moving between, return the spots we will encounter
 	void ComputeSpotEncounters( void );							///< compute spot encounter data - for map learning
+	int GetSpotEncounterCount( void ) const				{ return m_spotEncounterList.Count(); }
 
 	//- "danger" ----------------------------------------------------------------------------------------
 	void IncreaseDanger( int teamID, float amount );			///< increase the danger of this area for the given team
 	float GetDanger( int teamID );								///< return the danger of this area (decays over time)
 
+	//- extents -----------------------------------------------------------------------------------------
 	float GetSizeX( void ) const			{ return m_extent.hi.x - m_extent.lo.x; }
 	float GetSizeY( void ) const			{ return m_extent.hi.y - m_extent.lo.y; }
-	const Extent *GetExtent( void ) const	{ return &m_extent; }
-	const Vector *GetCenter( void ) const	{ return &m_center; }
-	const Vector *GetCorner( NavCornerType corner ) const;
+	const Extent &GetExtent( void ) const	{ return m_extent; }
+	const Vector &GetCenter( void ) const	{ return m_center; }
+	const Vector &GetCorner( NavCornerType corner ) const;
 
 	//- approach areas ----------------------------------------------------------------------------------
 	struct ApproachInfo
@@ -266,6 +252,16 @@ public:
 	const ApproachInfo *GetApproachInfo( int i ) const	{ return &m_approach[i]; }
 	int GetApproachInfoCount( void ) const				{ return m_approachCount; }
 	void ComputeApproachAreas( void );							///< determine the set of "approach areas" - for map learning
+
+	//- occupy time ------------------------------------------------------------------------------------
+	float GetEarliestOccupyTime( int teamID ) const;			///< returns the minimum time for someone of the given team to reach this spot from their spawn
+	bool IsBattlefront( void ) const	{ return m_isBattlefront; }	///< true if this area is a "battlefront" - where rushing teams initially meet
+
+	//- player counting --------------------------------------------------------------------------------
+	void IncrementPlayerCount( int teamID );					///< add one player to this area's count
+	void DecrementPlayerCount( int teamID );					///< subtract one player from this area's count
+	void ClearPlayerCount( void );								///< set the player count to zero
+	unsigned char GetPlayerCount( int teamID = 0 ) const;		///< return number of players of given team currently within this area (team of zero means any/all)
 
 	//- A* pathfinding algorithm ------------------------------------------------------------------------
 	static void MakeNewMarker( void )	{ ++m_masterMarker; if (m_masterMarker == 0) m_masterMarker = 1; }
@@ -296,49 +292,64 @@ public:
 	float GetCostSoFar( void ) const	{ return m_costSoFar; }
 
 	//- editing -----------------------------------------------------------------------------------------
-	void Draw( byte red, byte green, byte blue, int duration = 50 );	///< draw area for debugging & editing
-	void DrawConnectedAreas( void );
-	void DrawMarkedCorner( NavCornerType corner, byte red, byte green, byte blue, int duration = 50 );
+	void Draw( void ) const;					///< draw area for debugging & editing
+	void DrawConnectedAreas( void ) const;
+	void DrawHidingSpots( void ) const;
 	bool SplitEdit( bool splitAlongX, float splitEdge, CNavArea **outAlpha = NULL, CNavArea **outBeta = NULL );	///< split this area into two areas at the given edge
 	bool MergeEdit( CNavArea *adj );							///< merge this area and given adjacent area 
 	bool SpliceEdit( CNavArea *other );							///< create a new area between this area and given area 
+	void DrawMarkedCorner( NavCornerType corner ) const;
 	void RaiseCorner( NavCornerType corner, int amount );		///< raise/lower a corner (or all corners if corner == NUM_CORNERS)
+	void PlaceOnGround( NavCornerType corner, float inset = 0.0f );	///< places a corner (or all corners if corner == NUM_CORNERS) on the ground
 
 	//- ladders -----------------------------------------------------------------------------------------
-	void AddLadderUp( CNavLadder *ladder )		{ m_ladder[ CNavLadder::LADDER_UP ].AddToTail( ladder ); }
-	void AddLadderDown( CNavLadder *ladder )	{ m_ladder[ CNavLadder::LADDER_DOWN ].AddToTail( ladder ); }
+	void AddLadderUp( CNavLadder *ladder )		{ NavLadderConnect tmp; tmp.ladder = ladder; m_ladder[ CNavLadder::LADDER_UP ].AddToTail( tmp ); }
+	void AddLadderDown( CNavLadder *ladder )	{ NavLadderConnect tmp; tmp.ladder = ladder; m_ladder[ CNavLadder::LADDER_DOWN ].AddToTail( tmp ); }
 
 private:
 	friend class CNavMesh;
+	friend class CNavLadder;
 
 	void Initialize( void );									///< to keep constructors consistent
 	static bool m_isReset;										///< if true, don't bother cleaning up in destructor since everything is going away
+
+	/*
+	extent.lo
+		nw           ne
+		 +-----------+
+		 | +-->x     |
+		 | |         |
+		 | v         |
+		 | y         |
+		 |           |
+		 +-----------+
+		sw           se
+					extent.hi
+	*/
 
 	static unsigned int m_nextID;								///< used to allocate unique IDs
 	unsigned int m_id;											///< unique area ID
 	Extent m_extent;											///< extents of area in world coords (NOTE: lo.z is not necessarily the minimum Z, but corresponds to Z at point (lo.x, lo.y), etc
 	Vector m_center;											///< centroid of area
-	unsigned char m_attributeFlags;								///< set of attribute bit flags (see NavAttributeType)
+	unsigned short m_attributeFlags;							///< set of attribute bit flags (see NavAttributeType)
 	Place m_place;												///< place descriptor
+	bool m_isBlocked;											///< if true, some part of the world is preventing movement through this nav area
 
 	/// height of the implicit corners
 	float m_neZ;
 	float m_swZ;
 
-	// BOTPORT: Clean up relationship between team index and danger storage in nav areas
-	enum { MAX_AREA_TEAMS = 2 };
-
 	//- for hunting -------------------------------------------------------------------------------------
-	float m_clearedTimestamp[ MAX_AREA_TEAMS ];					///< time this area was last "cleared" of enemies
+	float m_clearedTimestamp[ MAX_NAV_TEAMS ];					///< time this area was last "cleared" of enemies
 
 	//- "danger" ----------------------------------------------------------------------------------------
-	float m_danger[ MAX_AREA_TEAMS ];							///< danger of this area, allowing bots to avoid areas where they died in the past - zero is no danger
-	float m_dangerTimestamp[ MAX_AREA_TEAMS ];					///< time when danger value was set - used for decaying
+	float m_danger[ MAX_NAV_TEAMS ];							///< danger of this area, allowing bots to avoid areas where they died in the past - zero is no danger
+	float m_dangerTimestamp[ MAX_NAV_TEAMS ];					///< time when danger value was set - used for decaying
 	void DecayDanger( void );
 
 	//- hiding spots ------------------------------------------------------------------------------------
 	HidingSpotList m_hidingSpotList;
-	bool IsHidingSpotCollision( const Vector *pos ) const;		///< returns true if an existing hiding spot is too close to given position
+	bool IsHidingSpotCollision( const Vector &pos ) const;		///< returns true if an existing hiding spot is too close to given position
 
 	//- encounter spots ---------------------------------------------------------------------------------
 	SpotEncounterList m_spotEncounterList;						///< list of possible ways to move thru this area, and the spots to look at as we do
@@ -348,6 +359,12 @@ private:
 	enum { MAX_APPROACH_AREAS = 16 };
 	ApproachInfo m_approach[ MAX_APPROACH_AREAS ];
 	unsigned char m_approachCount;
+
+	float m_earliestOccupyTime[ MAX_NAV_TEAMS ];				///< min time to reach this spot from spawn
+	void ComputeEarliestOccupyTimes( void );
+	bool m_isBattlefront;
+
+	unsigned char m_playerCount[ MAX_NAV_TEAMS ];				///< the number of players currently in this area
 
 	void Strip( void );											///< remove "analyzed" data from nav area
 
@@ -365,10 +382,11 @@ private:
 
 	//- connections to adjacent areas -------------------------------------------------------------------
 	NavConnectList m_connect[ NUM_DIRECTIONS ];					///< a list of adjacent areas for each direction
-	NavLadderList m_ladder[ CNavLadder::NUM_LADDER_DIRECTIONS ];///< list of ladders leading up and down from this area
+	NavLadderConnectList m_ladder[ CNavLadder::NUM_LADDER_DIRECTIONS ];	///< list of ladders leading up and down from this area
 
 	//---------------------------------------------------------------------------------------------------
 	CNavNode *m_node[ NUM_CORNERS ];							///< nav nodes at each corner of the area
+
 
 	void FinishMerge( CNavArea *adjArea );						///< recompute internal data once nodes have been adjusted during merge
 	void MergeAdjacentConnections( CNavArea *adjArea );			///< for merging with "adjArea" - pick up all of "adjArea"s connections
@@ -379,6 +397,7 @@ private:
 	CUtlLinkedList<CNavArea *, int> m_overlapList;				///< list of areas that overlap this area
 
 	void OnDestroyNotify( CNavArea *dead );						///< invoked when given area is going away
+	void OnDestroyNotify( CNavLadder *dead );					///< invoked when given ladder is going away
 
 	CNavArea *m_prevHash, *m_nextHash;							///< for hash table in CNavMesh
 };
@@ -461,5 +480,98 @@ inline void CNavArea::RemoveFromClosedList( void )
 {
 	// since "closed" is defined as visited (marked) and not on open list, do nothing
 }
+
+//--------------------------------------------------------------------------------------------------------------
+inline void CNavArea::SetClearedTimestamp( int teamID )
+{
+	m_clearedTimestamp[ teamID % MAX_NAV_TEAMS ] = gpGlobals->curtime;
+}
+
+//--------------------------------------------------------------------------------------------------------------
+inline float CNavArea::GetClearedTimestamp( int teamID ) const
+{ 
+	return m_clearedTimestamp[ teamID % MAX_NAV_TEAMS ];
+}
+
+//--------------------------------------------------------------------------------------------------------------
+inline float CNavArea::GetEarliestOccupyTime( int teamID ) const
+{
+	return m_earliestOccupyTime[ teamID % MAX_NAV_TEAMS ];
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+inline bool CNavArea::IsVisible( const Vector &eye, Vector *visSpot ) const
+{
+	Vector corner;
+	trace_t result;
+	CTraceFilterNoNPCsOrPlayer traceFilter( NULL, COLLISION_GROUP_NONE );
+	const float offset = 0.75f * HumanHeight;
+
+	// check center first
+	UTIL_TraceLine( eye, GetCenter() + Vector( 0, 0, offset ), MASK_OPAQUE | CONTENTS_MONSTER, &traceFilter, &result );
+	if (result.fraction == 1.0f)
+	{
+		// we can see this area
+		if (visSpot)
+		{
+			*visSpot = GetCenter();
+		}
+		return true;
+	}
+
+	for( int c=0; c<NUM_CORNERS; ++c )
+	{
+		corner = GetCorner( (NavCornerType)c );
+		UTIL_TraceLine( eye, corner + Vector( 0, 0, offset ), MASK_OPAQUE | CONTENTS_MONSTER, &traceFilter, &result );
+		if (result.fraction == 1.0f)
+		{
+			// we can see this area
+			if (visSpot)
+			{
+				*visSpot = corner;
+			}
+			return true;
+		}
+	}
+
+	return false;
+}
+
+inline void CNavArea::IncrementPlayerCount( int teamID )
+{
+	++m_playerCount[ teamID % MAX_NAV_TEAMS ];
+}
+
+inline void CNavArea::DecrementPlayerCount( int teamID )
+{
+	--m_playerCount[ teamID % MAX_NAV_TEAMS ];
+}
+
+inline void CNavArea::ClearPlayerCount( void )
+{
+	for( int i=0; i<MAX_NAV_TEAMS; ++i )
+	{
+		m_playerCount[ i ] = 0;
+	}
+}
+
+inline unsigned char CNavArea::GetPlayerCount( int teamID ) const
+{
+	if (teamID)
+	{
+		return m_playerCount[ teamID % MAX_NAV_TEAMS ];
+	}
+
+	// sum all players
+	unsigned char total = 0;
+	for( int i=0; i<MAX_NAV_TEAMS; ++i )
+	{
+		total += m_playerCount[i];
+	}
+
+	return total;
+}
+
 
 #endif // _NAV_AREA_H_

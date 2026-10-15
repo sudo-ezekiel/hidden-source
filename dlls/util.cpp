@@ -558,6 +558,46 @@ CBasePlayer *UTIL_GetListenServerHost( void )
 }
 
 
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Returns true if the command was issued by the listenserver host, or by the dedicated server, via rcon or the server console.
+ * This is valid during ConCommand execution.
+ */
+bool UTIL_IsCommandIssuedByServerAdmin( void )
+{
+	int issuingPlayerIndex = UTIL_GetCommandClientIndex();
+
+	if ( engine->IsDedicatedServer() && issuingPlayerIndex > 0 )
+		return false;
+
+	if ( issuingPlayerIndex > 1 )
+		return false;
+
+	return true;
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Returns a CBaseEntity pointer by entindex.  Index is 1 based.
+ */
+CBaseEntity	*UTIL_EntityByIndex( int entityIndex )
+{
+	CBaseEntity *entity = NULL;
+
+	if ( entityIndex > 0 )
+	{
+		edict_t *edict = INDEXENT( entityIndex );
+		if ( edict && !edict->IsFree() )
+		{
+			entity = GetContainingEntity( edict );
+		}
+	}
+	
+	return entity;
+}
+
+
 int ENTINDEX( CBaseEntity *pEnt )
 {
 	// This works just like ENTINDEX for edicts.

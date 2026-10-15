@@ -212,6 +212,12 @@ CBasePlayer *UTIL_GetListenServerHost( void );
 CBasePlayer* UTIL_PlayerByUserId( int userID );
 CBasePlayer* UTIL_PlayerByName( const char *name ); // not case sensitive
 
+// Returns true if the command was issued by the listenserver host, or by the dedicated server, via rcon or the server console.
+// This is valid during ConCommand execution.
+bool UTIL_IsCommandIssuedByServerAdmin( void );
+
+CBaseEntity* UTIL_EntityByIndex( int entityIndex );
+
 void		UTIL_GetPlayerConnectionInfo( int playerIndex, int& ping, int &packetloss );
 
 void		UTIL_SetClientVisibilityPVS( edict_t *pClient, const unsigned char *pvs, int pvssize );

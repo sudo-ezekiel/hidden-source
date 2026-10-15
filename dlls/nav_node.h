@@ -14,6 +14,14 @@
 
 #include "nav.h"
 
+// If DEBUG_NAV_NODES is true, nav_show_nodes controls drawing node positions, and
+// nav_show_node_id allows you to show the IDs of nodes that didn't get used to create areas.
+#ifdef _DEBUG
+#define DEBUG_NAV_NODES 1
+#else
+#define DEBUG_NAV_NODES 0
+#endif
+
 //--------------------------------------------------------------------------------------------------------------
 /**
  * Navigation Nodes.
@@ -23,9 +31,9 @@
 class CNavNode
 {
 public:
-	CNavNode( const Vector *pos, const Vector *normal, CNavNode *parent = NULL );
+	CNavNode( const Vector &pos, const Vector &normal, CNavNode *parent = NULL );
 
-	static CNavNode *GetNode( const Vector *pos );					///< return navigation node at the position, or NULL if none exists
+	static CNavNode *GetNode( const Vector &pos );					///< return navigation node at the position, or NULL if none exists
 
 	CNavNode *GetConnectedNode( NavDirType dir ) const;				///< get navigation node connected in given direction, or NULL if cant go that way
 	const Vector *GetPosition( void ) const;
@@ -35,7 +43,9 @@ public:
 	static CNavNode *GetFirst( void )			{ return m_list; }
 	static unsigned int GetListLength( void )	{ return m_listLength; }
 	CNavNode *GetNext( void )					{ return m_next; }
-	
+
+	void Draw( void );
+
 	void ConnectTo( CNavNode *node, NavDirType dir );				///< create a connection FROM this node TO the given node, in the given direction
 	CNavNode *GetParent( void ) const;
 
