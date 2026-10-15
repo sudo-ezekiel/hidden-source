@@ -36,7 +36,7 @@
 
 ConVar mp_roundtime( "mp_roundtime", "240", FCVAR_REPLICATED | FCVAR_NOTIFY, "length of a round in seconds" );
 ConVar hdn_hiddenrounds( "hdn_hiddenrounds", "5", FCVAR_REPLICATED | FCVAR_NOTIFY, "0 is unlimited" );
-ConVar hdn_radio_limit( "hdn_radio_limit", "5", FCVAR_REPLICATED | FCVAR_NOTIFY, "time limit, in seconds, between radio messages / taunts", true, 0, false, 0 );
+ConVar hdn_radio_limit( "hdn_radio_limit", "5", FCVAR_REPLICATED | FCVAR_NOTIFY, "time limit, in seconds, between radio messages / taunts", true, 0, false, 0, NULL );
 ConVar hdn_deathnotices( "hdn_deathnotices", "0", FCVAR_REPLICATED | FCVAR_NOTIFY, "display death notices" );
 ConVar hdn_jointime( "hdn_jointime", "15", FCVAR_REPLICATED | FCVAR_NOTIFY, "delay, in seconds, before attempting to start the first round after a map change" );
 ConVar hdn_limitbombs( "hdn_limitbombs", "1", FCVAR_REPLICATED | FCVAR_NOTIFY, "limits the number of hidden bombs if enabled" );
@@ -263,7 +263,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 	{
 		if ( pEdict->IsPlayer() )
 		{
-			CBasePlayer *pPlayer = ToBasePlayer( pEdict );
+			CBasePlayer *pPlayer = static_cast<CBasePlayer *>( pEdict );
 
 			if ( FStrEq( pcmd, "vguicancel" ) )
 			{
@@ -286,17 +286,19 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				if ( engine->Cmd_Argc() < 2 )
 					return false;
 
-				switch ( atoi( engine->Cmd_Argv( 1 ) ) )
+				int iNoHidden = atoi( engine->Cmd_Argv( 1 ) );
+				if ( iNoHidden < 0 || iNoHidden > 1 )
+					iNoHidden = 1;
+
+				if ( iNoHidden == 0 )
 				{
-				case 0:
 					pPlayer->SetNoHidden( false );
 					DevMsg( 1, "I Do Want to be the Hidden\n" );
-					break;
-				case 1:
-				default:
+				}
+				else
+				{
 					pPlayer->SetNoHidden( true );
 					DevMsg( 1, "I DON'T Want to be the Hidden\n" );
-					break;
 				}
 				return true;
 			}
@@ -362,73 +364,73 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					}
 				}
 
-				if ( pPlayer->GetTeamNumber() != TEAM_IRIS )
-					return true;
-
-				// IRIS taunts are spoken to everyone
-				switch ( iMessage )
+				if ( pPlayer->GetTeamNumber() == TEAM_IRIS )
 				{
-				case 5:
-					pPlayer->EmitSound( "IRIS.OneUglyMother" );
-					engine->ClientCommand( pPlayer->edict(), "say You are one UGLY mother!\n" );
-					return true;
-				case 6:
-					pPlayer->EmitSound( "IRIS.IfItBleeds" );
-					engine->ClientCommand( pPlayer->edict(), "say If it bleeds, we can kill it!\n" );
-					return true;
-				case 7:
-					pPlayer->EmitSound( "IRIS.BringIt" );
-					engine->ClientCommand( pPlayer->edict(), "say Bring it!\n" );
-					return true;
-				}
-
-				// The rest go to the team, and the clients play the radio sound
-				IGameEvent *event = gameeventmanager->CreateEvent( "iris_radio" );
-				int iReport = random->RandomInt( 0, 2 );
-
-				switch ( iMessage )
-				{
-				case 0:
-					engine->ClientCommand( pPlayer->edict(), "say_team Agent Down\n" );
-					break;
-				case 1:
-					engine->ClientCommand( pPlayer->edict(), "say_team Subject Sighted\n" );
-					break;
-				case 2:
-					engine->ClientCommand( pPlayer->edict(), "say_team Affirmative\n" );
-					break;
-				case 3:
-					if ( pPlayer->GetAmmoRecieved() )
+					// IRIS taunts are spoken to everyone
+					switch ( iMessage )
+					{
+					case 5:
+						pPlayer->EmitSound( "IRIS.OneUglyMother" );
+						engine->ClientCommand( pPlayer->edict(), "say You are one UGLY mother!\n" );
 						return true;
+					case 6:
+						pPlayer->EmitSound( "IRIS.IfItBleeds" );
+						engine->ClientCommand( pPlayer->edict(), "say If it bleeds, we can kill it!\n" );
+						return true;
+					case 7:
+						pPlayer->EmitSound( "IRIS.BringIt" );
+						engine->ClientCommand( pPlayer->edict(), "say Bring it!\n" );
+						return true;
+					}
 
-					engine->ClientCommand( pPlayer->edict(), "say_team I need ammo!\n" );
-					pPlayer->SetAmmoRequest( true );
-					break;
-				case 4:
-					engine->ClientCommand( pPlayer->edict(), "say_team Report In\n" );
-					break;
-				case 10:
-					// Answer to "Report In"
-					switch ( iReport )
+					// The rest go to the team, and the clients play the radio sound
+					IGameEvent *event = gameeventmanager->CreateEvent( "iris_radio" );
+					int iReport = random->RandomInt( 0, 2 );
+
+					switch ( iMessage )
 					{
 					case 0:
-						engine->ClientCommand( pPlayer->edict(), "say_team Reporting In\n" );
+						engine->ClientCommand( pPlayer->edict(), "say_team Agent Down\n" );
 						break;
 					case 1:
-						engine->ClientCommand( pPlayer->edict(), "say_team Still Here!\n" );
+						engine->ClientCommand( pPlayer->edict(), "say_team Subject Sighted\n" );
 						break;
 					case 2:
-						engine->ClientCommand( pPlayer->edict(), "say_team Checking In\n" );
+						engine->ClientCommand( pPlayer->edict(), "say_team Affirmative\n" );
+						break;
+					case 3:
+						if ( pPlayer->GetAmmoRecieved() )
+							return true;
+
+						engine->ClientCommand( pPlayer->edict(), "say_team I need ammo!\n" );
+						pPlayer->SetAmmoRequest( true );
+						break;
+					case 4:
+						engine->ClientCommand( pPlayer->edict(), "say_team Report In\n" );
+						break;
+					case 10:
+						// Answer to "Report In"
+						switch ( iReport )
+						{
+						case 0:
+							engine->ClientCommand( pPlayer->edict(), "say_team Reporting In\n" );
+							break;
+						case 1:
+							engine->ClientCommand( pPlayer->edict(), "say_team Still Here!\n" );
+							break;
+						case 2:
+							engine->ClientCommand( pPlayer->edict(), "say_team Checking In\n" );
+							break;
+						}
 						break;
 					}
-					break;
-				}
 
-				if ( event )
-				{
-					event->SetInt( "message", iMessage );
-					event->SetInt( "userid", pPlayer->GetUserID() );
-					gameeventmanager->FireEvent( event );
+					if ( event )
+					{
+						event->SetInt( "message", iMessage );
+						event->SetInt( "userid", pPlayer->GetUserID() );
+						gameeventmanager->FireEvent( event );
+					}
 				}
 
 				return true;
@@ -455,10 +457,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				// -2: pick one for a player who has none
 				if ( iCharacter == -2 )
 				{
-					if ( pPlayer->m_iCharacterSkin >= 0 )
+					if ( pPlayer->m_iCharacterSkin < 0 )
+						iCharacter = HDN_MAX_CHARACTERS;
+					else
 						return false;
-
-					iCharacter = HDN_MAX_CHARACTERS;
 				}
 
 				// Give up the old character
@@ -483,17 +485,19 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				// HDN_MAX_CHARACTERS is "any": take the first free one
 				if ( iCharacter == HDN_MAX_CHARACTERS )
 				{
+					bool bFound = false;
 					int iFree = -1;
 					for ( int i = 0; i < HDN_MAX_CHARACTERS; i++ )
 					{
 						if ( !m_bPlayer[i] )
 						{
+							bFound = true;
 							iFree = i;
 							break;
 						}
 					}
 
-					if ( iFree != -1 )
+					if ( bFound == true )
 					{
 						pPlayer->m_iCharacterSkin = iFree;
 						pPlayer->m_iCharacterBody = iFree;
@@ -600,9 +604,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					continue;
 				}
 
-				// blast's don't tavel into or out of water
-				if (bInWater && pEntity->GetWaterLevel() == 0)
-					continue;
+				// blast's don't tavel into water
 				if (!bInWater && pEntity->GetWaterLevel() == 3)
 					continue;
 
@@ -672,6 +674,14 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 						// Now hit all triggers along the way that respond to damage...
 						pEntity->TraceAttackToTriggers( adjustedInfo, vecSrc, vecEndPos, dir );
+
+						// Hidden: the blast blurs the player's view
+						CBasePlayer *pPlayer = ToBasePlayer( pEntity );
+						if ( pPlayer )
+						{
+							DevMsg( 1, "Shockwave - sdkgamerules\n" );
+							pPlayer->Shockwave( flAdjustedDamage / 12.0f, 5.0f );
+						}
 					}
 				}
 			}
@@ -693,12 +703,12 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 	void CSDKGameRules::GameOverThink( void )
 	{
-		if ( gpGlobals->curtime < m_flIntermissionEnd )
-			return;
-
-		DevMsg( 1, "Intermission over, changing levels\n" );
-		m_HiddenSelector.ClearHidden();
-		ChangeLevel();
+		if ( gpGlobals->curtime >= m_flIntermissionEnd )
+		{
+			DevMsg( 1, "Intermission over, changing levels\n" );
+			m_HiddenSelector.ClearHidden();
+			ChangeLevel();
+		}
 	}
 
 	CSDKGameRules::GAMETHINKPTR CSDKGameRules::GameThinkSet( GAMETHINKPTR func )
@@ -758,11 +768,15 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 	bool CSDKGameRules::HiddenWins( void )
 	{
-		if ( m_iMarines > 0 )
-			return false;
+		bool bWins = false;
 
-		UTIL_ClientPrintAll( HUD_PRINTCENTER, "Hidden Wins" );
-		return true;
+		if ( m_iMarines <= 0 )
+		{
+			UTIL_ClientPrintAll( HUD_PRINTCENTER, "Hidden Wins" );
+			bWins = true;
+		}
+
+		return bWins;
 	}
 
 	bool CSDKGameRules::CountMarines( void )
@@ -944,8 +958,9 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 			pPlayer->SetSafe( true );
 
-			if ( pPlayer->GetActiveWeapon() )
-				pPlayer->GetActiveWeapon()->SetSafe();
+			CBaseCombatWeapon *pWeapon = pPlayer->GetActiveWeapon();
+			if ( pWeapon )
+				pWeapon->SetSafe();
 		}
 
 		float flTimeLimit = mp_timelimit.GetFloat() * 60;
@@ -1105,11 +1120,11 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 			{
 				switch ( pPlayer->GetTeamNumber() )
 				{
-				case TEAM_IRIS:
-					MarineDisconnected( pPlayer );
-					break;
 				case TEAM_HIDDEN:
 					HiddenDisconnected( pPlayer );
+					break;
+				case TEAM_IRIS:
+					MarineDisconnected( pPlayer );
 					break;
 				}
 
@@ -1139,7 +1154,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 	{
 		bool bRoundOver = false;
 
-		if ( m_fStart < 0 || GetRoundTimerRemain() <= 0 )
+		if ( m_fStart < 0 || m_iDuration - (int)( gpGlobals->curtime - m_fStart ) <= 0 )
 		{
 			DevMsg( 1, "round timer ended\n" );
 			bRoundOver = true;
@@ -1150,7 +1165,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 			for ( int i = 0; i <= gpGlobals->maxClients; i++ )
 			{
 				CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
-				if ( pPlayer && pPlayer->IsAlive() && pPlayer->GetTeamNumber() == TEAM_IRIS )
+				if ( !pPlayer )
+					continue;
+
+				if ( pPlayer->IsAlive() && pPlayer->GetTeamNumber() == TEAM_IRIS )
 					pPlayer->IncrementFragCount( 1 );
 			}
 		}
@@ -1160,11 +1178,15 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 	bool CSDKGameRules::IRISWins( void )
 	{
-		if ( m_iHiddens > 0 && !IsRoundOver() )
-			return false;
+		bool bWins = false;
 
-		UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Wins" );
-		return true;
+		if ( m_iHiddens <= 0 || IsRoundOver() )
+		{
+			UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Wins" );
+			bWins = true;
+		}
+
+		return bWins;
 	}
 
 #endif
@@ -1247,16 +1269,18 @@ CAmmoDef* GetAmmoDef()
 // Chat prefixes name the speaker's team; dead players' chat says so.
 const char *CSDKGameRules::GetDeadChatPrefix( bool bTeamOnly, CBasePlayer *pPlayer )
 {
-	if ( pPlayer )
-	{
-		if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
-			return "(Hidden)";
+	const char *pszPrefix = NULL;
 
-		if ( pPlayer->GetTeamNumber() == TEAM_IRIS )
-			return "(IRIS)";
-	}
+	if ( !pPlayer )	// dedicated server output
+		pszPrefix = "";
+	else if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+		pszPrefix = "(Hidden)";
+	else if ( pPlayer->GetTeamNumber() == TEAM_IRIS )
+		pszPrefix = "(IRIS)";
+	else
+		pszPrefix = "";
 
-	return "";
+	return pszPrefix;
 }
 
 // Marines' chat says where they are
@@ -1325,7 +1349,7 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 	pVictim->IncrementDeathCount( 1 );
 
 	// Dying makes a player less likely to be picked as the Hidden
-	pVictim->m_iWeighting -= 20;
+	pVictim->m_iWeighting.GetForModify() -= 20;
 
 	FireTargets( "game_playerdie", pVictim, pVictim, USE_TOGGLE, 0 );
 
@@ -1353,13 +1377,16 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 			// Killing the Hidden is worth two frags and a better chance to be the next one
 			DevMsg( 1, "Hidden killed\n" );
 			pScorer->IncrementFragCount( 2 );
-			pScorer->m_iWeighting += 50;
+			pScorer->m_iWeighting.GetForModify() += 50;
 			m_HiddenSelector.NewHidden( pScorer );
 		}
 		else
 		{
 			// The Hidden scores for kills, marines lose a frag for team kills
-			pScorer->IncrementFragCount( pScorer->GetTeamNumber() == TEAM_HIDDEN ? 1 : -1 );
+			if ( pScorer->GetTeamNumber() == TEAM_HIDDEN )
+				pScorer->IncrementFragCount( 1 );
+			else
+				pScorer->IncrementFragCount( -1 );
 		}
 
 		// Allow the scorer to immediately paint a decal
@@ -1382,6 +1409,15 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 	DevMsg( 1, "Marines Left:%i\n", m_iMarines );
 	DevMsg( 1, "Hiddens Left:%i\n", m_iHiddens );
 	DevMsg( 1, "Total Players Left:%i\n", m_iTotalPlayers );
+}
+
+void CSDKGameRules::IntermissionThink( void )
+{
+	if ( gpGlobals->curtime >= m_flIntermissionEnd )
+	{
+		DevMsg( 1, "Intermission over, restarting round\n" );
+		RestartRound();
+	}
 }
 
 void CSDKGameRules::RestartRound( void )
@@ -1449,14 +1485,7 @@ void CommandRestartRound( void )
 	SDKGameRules()->RestartRound();
 }
 
-void CSDKGameRules::IntermissionThink( void )
-{
-	if ( gpGlobals->curtime < m_flIntermissionEnd )
-		return;
-
-	DevMsg( 1, "Intermission over, restarting round\n" );
-	RestartRound();
-}
+static ConCommand hdn_restartround( "hdn_restartround", CommandRestartRound, "Restarts the round", FCVAR_GAMEDLL );
 
 float CSDKGameRules::FlPlayerFallDamage( CBasePlayer *pPlayer )
 {
@@ -1499,9 +1528,9 @@ CSDKGameRules::CSDKGameRules()
 	CreateEntityByName( "sdk_gamerules" );
 
 	m_bLastRound = false;
-	m_iTotalPlayers = 0;
 	m_iMarines = -1;
 	m_iHiddens = -1;
+	m_iTotalPlayers = 0;
 	m_flIntermissionEnd = -1;
 	m_bUnknown290 = false;
 	m_iUnknown284 = 1;
@@ -1517,7 +1546,5 @@ CSDKGameRules::CSDKGameRules()
 	GoToIntermission();
 	m_flIntermissionEnd = gpGlobals->curtime + hdn_jointime.GetInt();
 }
-
-static ConCommand hdn_restartround( "hdn_restartround", CommandRestartRound, "Restarts the round", FCVAR_GAMEDLL );
 
 #endif
