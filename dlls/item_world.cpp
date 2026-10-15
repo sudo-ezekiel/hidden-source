@@ -148,8 +148,8 @@ void CItem::Spawn( void )
 	if ( CreateItemVPhysicsObject() == false )
 		 return;
 	
-	m_vOriginalSpawnSpot = GetAbsOrigin();
-
+	// REBUILD: mid-2005 Spawn no longer records m_vOriginalSpawnSpot here (the 2006 SDK sets the
+	// spawn origin from outside, through SetOriginalSpawnOrigin)
 	m_takedamage = DAMAGE_EVENTS_ONLY;
 }
 
