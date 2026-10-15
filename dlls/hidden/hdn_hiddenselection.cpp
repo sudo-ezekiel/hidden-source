@@ -7,12 +7,10 @@
 #include "cbase.h"
 #include "player.h"
 #include "hidden/hdn_hiddenselection.h"
+#include "sdk_bot_temp.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
-
-// Puts the tutorial Hidden bot in the game (sdk_bot_temp.cpp).
-CBasePlayer *TutorialBotPutInServer( void );
 
 ConVar hdn_selectmethod( "hdn_selectmethod", "0", FCVAR_REPLICATED | FCVAR_NOTIFY, "0 = weighted, 1 = classic, 2 = random - defaults to weighted" );
 
