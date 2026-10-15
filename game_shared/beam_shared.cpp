@@ -858,6 +858,17 @@ int CBeam::DrawModel( int flags )
 		}
 	}
 
+	// Hidden: don't draw beams attached to the local player
+	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+	for (int i=0;i<MAX_BEAM_ENTS;i++)
+	{
+		C_BasePlayer *pPlayer = dynamic_cast<C_BasePlayer *>(m_hAttachEntity[i].Get());
+		if ( pLocalPlayer == pPlayer )
+		{
+			return 0;
+		}
+	}
+
 	beams->DrawBeam( this );
 	return 0;
 }
