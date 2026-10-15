@@ -6219,9 +6219,10 @@ void CBasePlayer::Boost( void )
 void CBasePlayer::Stun( CBasePlayer *pAttacker )
 {
 	StunTracker tracker;
-	tracker.pAttacker = pAttacker;
 	tracker.flExpireTime = gpGlobals->curtime + 10.0f;
+	tracker.pAttacker = pAttacker;
 	m_StunTrackers.AddToTail( tracker );
+
 
 	if ( !IsStunned() )
 	{
