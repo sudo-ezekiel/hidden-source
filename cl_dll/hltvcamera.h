@@ -12,7 +12,7 @@
 
 #include <igameevents.h>
 
-class C_HLTVCamera : IGameEventListener
+class C_HLTVCamera : IGameEventListener2
 {
 public:
 	C_HLTVCamera();
@@ -23,7 +23,7 @@ public:
 	void Shutdown();
 
 	void GetCurrentView(Vector& origin, QAngle& angles, float& fov);
-	void FireGameEvent( KeyValues * event);
+	void FireGameEvent( IGameEvent *event );
 
 	void SetMode(int iMode);
 	void SetChaseCamParams( float flOffset, float flDistance, float flTheta, float flPhi  );

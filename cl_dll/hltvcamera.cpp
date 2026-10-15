@@ -46,7 +46,12 @@ C_HLTVCamera::~C_HLTVCamera()
 
 void C_HLTVCamera::Init()
 {
-	gameeventmanager->AddListener( this, false );
+	gameeventmanager->AddListener( this, "game_newmap", false );
+	gameeventmanager->AddListener( this, "hltv_cameraman", false );
+	gameeventmanager->AddListener( this, "hltv_fixed", false );
+	gameeventmanager->AddListener( this, "hltv_chase", false );
+	gameeventmanager->AddListener( this, "hltv_fov", false );
+	gameeventmanager->AddListener( this, "hltv_inertia", false );
 
 	m_vCamOrigin.Init();
 	m_aCamAngle.Init();
@@ -304,7 +309,7 @@ void C_HLTVCamera::SpecNextPlayer( bool bInverse )
 	m_iTraget1 = index;
 }
 
-void C_HLTVCamera::FireGameEvent( KeyValues * event)
+void C_HLTVCamera::FireGameEvent( IGameEvent *event )
 {
 	if ( !engine->IsHLTV() )
 		return;	// not in HLTV mode
