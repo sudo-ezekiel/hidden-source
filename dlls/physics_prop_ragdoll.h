@@ -100,6 +100,10 @@ public:
 	void			SetKiller( CBaseEntity *pKiller ) { m_hKiller = pKiller; }
 	void			GetAngleOverrideFromCurrentState( char *pOut, int size );
 
+	// Hidden: the health left in a corpse, which the Hidden's knife feeds on
+	int				GetHealth( void );
+	void			SetHealth( int iHealth );	// adds iHealth to the corpse's health
+
 	DECLARE_DATADESC();
 
 protected:
@@ -131,6 +135,7 @@ private:
 
 	string_t			m_strSourceClassName;
 	bool				m_bHasBeenPhysgunned;
+	int					m_iRagdollHealth;	// REBUILD: name. Read by GetHealth, changed by SetHealth.
 
 	// If not 1, then allow underlying sequence to blend in with simulated bone positions
 	CNetworkVar( float, m_flBlendWeight );

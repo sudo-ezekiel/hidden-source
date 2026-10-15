@@ -122,6 +122,9 @@ WEAPON_FILE_INFO_HANDLE GetInvalidWeaponInfoHandle( void )
 	return (WEAPON_FILE_INFO_HANDLE)m_WeaponInfoDatabase.InvalidIndex();
 }
 
+// REBUILD: Hidden's server precaches the weapon scripts once (Valve's mid-2005 code) and no
+// longer has ResetFileWeaponInfoDatabase; the client still calls it.
+#ifdef CLIENT_DLL
 void ResetFileWeaponInfoDatabase( void )
 {
 	int c = m_WeaponInfoDatabase.Count(); 
@@ -134,6 +137,32 @@ void ResetFileWeaponInfoDatabase( void )
 #ifdef _DEBUG
 	memset(g_bUsedWeaponSlots, 0, sizeof(g_bUsedWeaponSlots));
 #endif
+}
+#endif
+
+void PrecacheFileWeaponInfoDatabase( IFileSystem *filesystem, const unsigned char *pICEKey )
+{
+	if ( m_WeaponInfoDatabase.Count() )
+		return;
+
+	FileFindHandle_t findHandle;
+	const char *pFilename = filesystem->FindFirstEx( "scripts/weapon_*.txt", "MOD", &findHandle );
+	while ( pFilename != NULL )
+	{
+		char fileBase[512];
+		Q_FileBase( pFilename, fileBase, sizeof(fileBase) );
+		WEAPON_FILE_INFO_HANDLE tmp;
+#ifdef CLIENT_DLL
+		if ( ReadWeaponDataFromFileForSlot( filesystem, fileBase, &tmp, pICEKey ) )
+		{
+			gWR.LoadWeaponSprites( tmp );
+		}
+#else
+		ReadWeaponDataFromFileForSlot( filesystem, fileBase, &tmp, pICEKey );
+#endif
+		pFilename = filesystem->FindNext( findHandle );
+	}
+	filesystem->FindClose( findHandle );
 }
 
 
