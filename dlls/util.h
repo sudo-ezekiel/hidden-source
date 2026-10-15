@@ -209,6 +209,10 @@ CBasePlayer* UTIL_GetLocalPlayer( void );
 // get the local player on a listen server
 CBasePlayer *UTIL_GetListenServerHost( void );
 
+// Returns true if the command was issued by the listenserver host, or by the dedicated server, via rcon or the server console.
+// This is valid during ConCommand execution.
+bool UTIL_IsCommandIssuedByServerAdmin( void );
+
 CBasePlayer* UTIL_PlayerByUserId( int userID );
 CBasePlayer* UTIL_PlayerByName( const char *name ); // not case sensitive
 
