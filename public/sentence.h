@@ -132,6 +132,7 @@ enum
 	CC_JAPANESE,
 	CC_RUSSIAN,
 	CC_THAI,
+	CC_PORTUGUESE,	// Hidden: client.dll has a twelfth language
 	// etc etc
 
 	CC_NUM_LANGUAGES
