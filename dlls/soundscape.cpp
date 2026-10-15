@@ -460,9 +460,9 @@ private:
 LINK_ENTITY_TO_CLASS( trigger_soundscape, CTriggerSoundscape );
 
 BEGIN_DATADESC( CTriggerSoundscape )
+	DEFINE_THINKFUNC( PlayerUpdateThink ),
 	DEFINE_KEYFIELD( m_SoundscapeName, FIELD_STRING, "soundscape" ),
 	DEFINE_FIELD( m_hSoundscape, FIELD_EHANDLE ),
-	DEFINE_THINKFUNC( PlayerUpdateThink ),
 END_DATADESC()
 
 
