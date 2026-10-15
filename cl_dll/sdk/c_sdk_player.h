@@ -35,6 +35,10 @@ public:
 	virtual void PostDataUpdate( DataUpdateType_t updateType );
 	virtual void OnDataChanged( DataUpdateType_t updateType );
 
+	// Hidden: the Hidden casts no shadow
+	virtual ShadowType_t ShadowCastType( void );
+	virtual void PostThink( void );
+
 
 // Called by shared code.
 public:
@@ -57,6 +61,9 @@ public:
 	EHANDLE	m_hRagdoll;
 
 	CWeaponSDKBase *GetActiveSDKWeapon() const;
+
+	// Hidden: the networked eye angles, for drawing another player's laser dot
+	QAngle GetAnimEyeAngles( void ) { return m_angEyeAngles; }
 
 	C_BaseAnimating *BecomeRagdollOnClient( bool bCopyEntity);
 	IRagdoll* C_SDKPlayer::GetRepresentativeRagdoll() const;

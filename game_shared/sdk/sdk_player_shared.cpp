@@ -158,14 +158,15 @@ void CSDKPlayer::FireBullet(
 		} // bDoEffects
 
 		// add damage to entity that we hit
+		// Hidden: the client dispatches the trace attack too; triggers and ApplyMultiDamage stay on the server
 
-#ifdef GAME_DLL
 		ClearMultiDamage();
 
 		CTakeDamageInfo info( pevAttacker, pevAttacker, fCurrentDamage, iDamageType );
 		CalculateBulletDamageForce( &info, iBulletType, vecDir, tr.endpos );
 		tr.m_pEnt->DispatchTraceAttack( info, vecDir, &tr );
 
+#ifdef GAME_DLL
 		TraceAttackToTriggers( info, tr.startpos, tr.endpos, vecDir );
 
 		ApplyMultiDamage();
