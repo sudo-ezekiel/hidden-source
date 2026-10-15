@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+rebuild/docker/debs/
+rebuild/docker/gcc345/debs/
