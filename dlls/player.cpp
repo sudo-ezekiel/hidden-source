@@ -566,12 +566,14 @@ int CBasePlayer::ShouldTransmit( const CCheckTransmitInfo *pInfo )
 		}
 	}
 
-	if ( IsEffectActive( EF_NODRAW ) )
+	// Transmit for a short time after death so ragdolls can access reliable player data
+	if ( IsEffectActive( EF_NODRAW ) || ( IsObserver() && ( gpGlobals->curtime - m_flDeathTime > 0.5 ) ) )
 	{
 		return FL_EDICT_DONTSEND;
 	}
 
 	return BaseClass::ShouldTransmit( pInfo );
+
 }
 
 
@@ -1965,45 +1967,12 @@ void CBasePlayer::PlayerDeathThink(void)
 
 	AddEffects( EF_NOINTERP );
 	m_flPlaybackRate = 0.0;
-	
-	int fAnyButtonDown = (m_nButtons & ~IN_SCORE);
-	
-	// wait for all buttons released
-	if (m_lifeState == LIFE_DEAD)
-	{
-		if (fAnyButtonDown)
-			return;
 
-		if ( g_pGameRules->FPlayerCanRespawn( this ) )
-		{
-			m_lifeState = LIFE_RESPAWNABLE;
-		}
-		
-		return;
-	}
-
-// if the player has been dead for one second longer than allowed by forcerespawn, 
-// forcerespawn isn't on. Send the player off to an intermission camera until they 
-// choose to respawn.
-	if ( g_pGameRules->IsMultiplayer() && ( gpGlobals->curtime > (m_flDeathTime + DEATH_ANIMATION_TIME) ) && !IsObserver() )
-	{
-		// go to dead camera. 
-		StartObserverMode( m_iObserverLastMode );
-	}
-	
-// wait for any button down,  or mp_forcerespawn is set and the respawn time is up
-	if (!fAnyButtonDown 
-		&& !( g_pGameRules->IsMultiplayer() && forcerespawn.GetInt() > 0 && (gpGlobals->curtime > (m_flDeathTime + 5))) )
-		return;
-
-	m_nButtons = 0;
-	m_iRespawnFrames = 0;
-
-	//Msg( "Respawn\n");
-
-	respawn( this, !IsObserver() );// don't copy a corpse if we're in deathcam.
-	SetNextThink( TICK_NEVER_THINK );
+	// Hidden: no respawn wait; the dead player goes straight to spectating until the next round
+	m_lifeState = LIFE_ALIVE;
+	StartObserverMode( m_iObserverLastMode );
 }
+
 
 /*
 
@@ -2911,7 +2880,9 @@ void CBasePlayer::PhysicsSimulate( void )
 					ctx->cmds[ i ].forwardmove = 0;
 					ctx->cmds[ i ].sidemove = 0;
 					ctx->cmds[ i ].upmove = 0;
-					VectorCopy ( pl.v_angle, ctx->cmds[ i ].viewangles );
+					// REBUILD: GetForModify, the binary flags the player state as changed here
+					VectorCopy ( pl.v_angle.GetForModify(), ctx->cmds[ i ].viewangles );
+
 				}
 			}
 			
@@ -3890,7 +3861,18 @@ void CBasePlayer::PostThink()
 			m_Local.m_flFallVelocity = 0;
 		}
 
+		// Hidden: stun wears off, and the Hidden's aura view drains stamina until it runs out
+		if ( IsStunned() )
+			UpdateStun();
+
+		if ( IsViewing() )
+			SetStamina( -0.1f );
+
+		if ( GetStamina() < 1 && IsViewing() )
+			SetAura( false );
+
 		// select the proper animation for the player character	
+
 		if ( IsAlive() )
 		{
 			// If he's in a vehicle, sit down
@@ -4968,16 +4950,63 @@ void CBasePlayer::ImpulseCommands( )
 	switch (iImpulse)
 	{
 	case 100:
-        // temporary flashlight for level designers
-        if ( FlashlightIsOn() )
+		// Hidden: the impulse uses whatever equipment the marine carries
+		if ( GetEquipment() == 0 )
 		{
-			FlashlightTurnOff();
+			DevMsg( 1, "laser toggle\n" );
+			if ( LAMIsOn() )
+			{
+				DevMsg( 1, "laser off\n" );
+				LaserTurnOff();
+			}
+			else
+			{
+				DevMsg( 1, "laser on\n" );
+				LaserTurnOn();
+			}
 		}
-        else 
+
+		if ( GetEquipment() == 1 )
 		{
-			FlashlightTurnOn();
+			DevMsg( 1, "Flash Light toggle\n" );
+			if ( FlashlightIsOn() )
+			{
+				FlashlightTurnOff();
+			}
+			else
+			{
+				FlashlightTurnOn();
+			}
+		}
+
+		if ( GetEquipment() == 2 )
+		{
+			DevMsg( 1, "Night vision toggle\n" );
+			if ( NightVisionEnabled() )
+			{
+				EmitSound( "IRIS.UnDeployNV" );
+				SetNightVision( false );
+			}
+			else
+			{
+				EmitSound( "IRIS.DeployNV" );
+				SetNightVision( true );
+			}
+		}
+
+		if ( GetEquipment() == 4 )
+		{
+			DevMsg( 1, "Boost values : %i - %i", IsBoosted(), GetBoost() );
+			if ( !IsBoosted() && GetBoost() > 0 )
+			{
+				DevMsg( 1, "Boost!\n" );
+				Boost();
+				SetBoost( -1 );
+				Shockwave( 2.0f, 10.0f );
+			}
 		}
 		break;
+
 
 	case 200:
 		if ( sv_cheats->GetBool() )
@@ -6153,8 +6182,10 @@ void CBasePlayer::SetSpawnTimer( int iTime, int iStart )
 void CBasePlayer::SetStamina( float flAmount )
 {
 	float flStamina = m_flStamina + flAmount;
-	if ( flStamina <= 100 && flStamina >= 0 )
-		m_flStamina = flStamina;
+	if ( flStamina > 100 || flStamina < 0 )
+		return;
+	m_flStamina += flAmount;
+
 }
 
 //-----------------------------------------------------------------------------
@@ -6204,8 +6235,8 @@ void CBasePlayer::UpdateStun( void )
 		{
 			for ( int i = 0; i < m_StunTrackers.Count(); i++ )
 			{
-				CBasePlayer *pAttacker = m_StunTrackers[i].pAttacker;
-				TakeDamage( CTakeDamageInfo( pAttacker, pAttacker, GetAbsVelocity(), GetAbsOrigin(), 0.3f, DMG_DIRECT ) );
+				TakeDamage( CTakeDamageInfo( m_StunTrackers[i].pAttacker, m_StunTrackers[i].pAttacker, GetAbsVelocity(), GetAbsOrigin(), 0.3f, DMG_DIRECT ) );
+
 			}
 		}
 
@@ -6221,7 +6252,8 @@ void CBasePlayer::UpdateStun( void )
 		}
 	}
 
-	if ( m_flShockwaveEnd < gpGlobals->curtime && m_StunTrackers.Count() == 0 )
+	if ( gpGlobals->curtime > m_flShockwaveEnd && m_StunTrackers.Count() == 0 )
+
 		m_bStunned = false;
 }
 
@@ -6230,7 +6262,11 @@ void CBasePlayer::UpdateStun( void )
 //-----------------------------------------------------------------------------
 void CBasePlayer::Shockwave( float flBlur, float flDuration )
 {
-	m_flShockwaveEnd = max( m_flShockwaveEnd, gpGlobals->curtime ) + flDuration;
+	if ( m_flShockwaveEnd > gpGlobals->curtime )
+		m_flShockwaveEnd = flDuration + m_flShockwaveEnd;
+	else
+		m_flShockwaveEnd = flDuration + gpGlobals->curtime;
+
 	m_bStunned = true;
 
 	if ( m_flBlur > 1.0f && m_flBlur < 10.0f && IsStunned() )
