@@ -354,6 +354,25 @@ void C_PhysPropClientside::StartFadeOut( float fDelay )
 	SetNextClientThink( gpGlobals->curtime + fDelay );
 }
 
+float C_PhysPropClientside::GetMass()
+{
+	if ( VPhysicsGetObject() )
+	{
+		return VPhysicsGetObject()->GetMass();
+	}
+
+	return 0.0f;
+}
+
+bool C_PhysPropClientside::IsAsleep()
+{
+	if ( VPhysicsGetObject() )
+	{
+		return VPhysicsGetObject()->IsAsleep();
+	}
+
+	return true;
+}
 
 void C_PhysPropClientside::Break()
 {

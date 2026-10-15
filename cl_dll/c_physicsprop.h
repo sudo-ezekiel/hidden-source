@@ -25,7 +25,7 @@ public:
 
 	int				InternalDrawModel( int flags );
 
-private:
+protected:
 	// Networked vars.
 	bool m_bAwake;
 
