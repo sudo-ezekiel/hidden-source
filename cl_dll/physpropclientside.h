@@ -33,6 +33,8 @@ public:
 	virtual	void			ImpactTrace( trace_t *pTrace, int iDamageType, char *pCustomImpactName );
 	virtual	bool			IsClientCreated( void ) const { return true; }
 	virtual int				GetMultiplayerPhysicsMode() { return m_iPhysicsMode; }
+	virtual float			GetMass();
+	virtual bool			IsAsleep();
 	
 	virtual bool			KeyValue( const char *szKeyName, const char *szValue );
 

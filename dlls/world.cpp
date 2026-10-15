@@ -33,6 +33,7 @@
 #include "tier0/memdbgon.h"
 
 extern CBaseEntity				*g_pLastSpawn;
+extern CBaseEntity				*g_pLastHiddenSpawn;	// Hidden: the Hidden's own spawn point rotation (player.cpp)
 void InitBodyQue(void);
 extern void W_Precache(void);
 extern void ActivityList_Free( void );
@@ -566,6 +567,7 @@ void CWorld::Precache( void )
 	g_WorldEntity = this;
 	g_fGameOver = false;
 	g_pLastSpawn = NULL;
+	g_pLastHiddenSpawn = NULL;
 
 	ConVar *stepsize = ( ConVar * )cvar->FindVar( "sv_stepsize" );
 	if ( stepsize )

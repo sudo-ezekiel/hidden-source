@@ -256,6 +256,8 @@ inline int UTIL_PointContents( const Vector &vec )
 void UTIL_TraceModel( const Vector &vecStart, const Vector &vecEnd, const Vector &hullMin, 
 					  const Vector &hullMax, CBaseEntity *pentModel, int collisionGroup, trace_t *ptr );
 
+void		UTIL_ClipTraceToPlayers( const CBasePlayer *pIgnorePlayer, const Vector& vecAbsStart, const Vector& vecAbsEnd, unsigned int mask, trace_t *tr );
+
 
 void		UTIL_Tracer( const Vector &vecStart, const Vector &vecEnd, int iEntIndex = 0, int iAttachment = TRACER_DONT_USE_ATTACHMENT, float flVelocity = 0, bool bWhiz = false, const char *pCustomTracerName = NULL);
 
@@ -276,6 +278,60 @@ CBasePlayer *UTIL_PlayerByIndex( int entindex );
 
 // decodes a buffer using a 64bit ICE key (inplace)
 void		UTIL_DecodeICE( unsigned char * buffer, int size, const unsigned char *key);
+
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Given a position and a ray, return the shortest distance between the two.
+ * If 'pos' is beyond either end of the ray, the returned distance is negated.
+ */
+inline float DistanceToRay( const Vector &pos, const Vector &rayStart, const Vector &rayEnd, float *along = NULL, Vector *pointOnRay = NULL )
+{
+	Vector to = pos - rayStart;
+	Vector dir = rayEnd - rayStart;
+	float length = dir.NormalizeInPlace();
+
+	float rangeAlong = DotProduct( dir, to );
+	if (along)
+	{
+		*along = rangeAlong;
+	}
+
+	float range;
+
+	if (rangeAlong < 0.0f)
+	{
+		// off start point
+		range = -(pos - rayStart).Length();
+
+		if (pointOnRay)
+		{
+			*pointOnRay = rayStart;
+		}
+	}
+	else if (rangeAlong > length)
+	{
+		// off end point
+		range = -(pos - rayEnd).Length();
+
+		if (pointOnRay)
+		{
+			*pointOnRay = rayEnd;
+		}
+	}
+	else // within ray bounds
+	{
+		Vector onRay = rayStart + rangeAlong * dir;
+		range = (pos - onRay).Length();
+
+		if (pointOnRay)
+		{
+			*pointOnRay = onRay;
+		}
+	}
+
+	return range;
+}
 
 
 //--------------------------------------------------------------------------------------------------------------
