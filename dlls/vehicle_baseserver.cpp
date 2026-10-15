@@ -593,7 +593,7 @@ bool CBaseServerVehicle::HandlePassengerExit( CBasePlayer *pPlayer )
 
 			// To prevent anything moving into the volume the player's going to occupy at the end of the exit
 			Vector vecExitFeetPoint = vecExitPoint - VEC_VIEW;
-			m_hExitBlocker = CEntityBlocker::Create( vecExitFeetPoint, VEC_HULL_MIN, VEC_HULL_MAX, NULL, true );
+			m_hExitBlocker = CEntityBlocker::Create( vecExitFeetPoint, VEC_HULL_MIN, VEC_HULL_MAX, pPlayer, true );
 			return true;
 		}
 	}
