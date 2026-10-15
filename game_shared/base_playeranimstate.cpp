@@ -736,7 +736,7 @@ void CBasePlayerAnimState::ComputePoseParam_BodyYaw()
 	// Find out which way he's running (m_flEyeYaw is the way he's looking).
 	Vector vel;
 	GetOuterAbsVelocity( vel );
-	bool bIsMoving = vel.Length2D() > 2;
+	bool bIsMoving = vel.Length2D() > MOVING_MINIMUM_SPEED;
 
 	// If we just initialized this guy (maybe he just came into the PVS), then immediately
 	// set his feet in the right direction, otherwise they'll spin around from 0 to the 

@@ -279,8 +279,8 @@ void CalculateMeleeDamageForce( CTakeDamageInfo *info, const Vector &vecMeleeDir
 {
 	info->SetDamagePosition( vecForceOrigin );
 
-	// Calculate an impulse large enough to push a 75kg man 4 in/sec per point of damage
-	float flForceScale = info->GetBaseDamage() * ImpulseScale( 75, 4 );
+	// REBUILD: Hidden's melee factor is 100, a third of Valve's ImpulseScale( 75, 4 ); the arguments are ours
+	float flForceScale = info->GetBaseDamage() * ImpulseScale( 25, 4 );
 	Vector vecForce = vecMeleeDir;
 	VectorNormalize( vecForce );
 	vecForce *= flForceScale;

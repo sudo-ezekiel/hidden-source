@@ -47,7 +47,7 @@ ConVar physcannon_pullforce( "physcannon_pullforce", "4000" );
 ConVar physcannon_mega_pullforce( "physcannon_mega_pullforce", "8000" );
 ConVar physcannon_cone( "physcannon_cone", "0.97" );
 ConVar physcannon_ball_cone( "physcannon_ball_cone", "0.997" );
-ConVar player_throwforce( "player_throwforce", "1000" );
+ConVar player_throwforce( "player_throwforce", "7500" );
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
@@ -942,7 +942,7 @@ bool CGrabController::UpdateObject( CBasePlayer *pPlayer, float flError )
 	float playerRadius = player2d.Length2D();
 	float radius = playerRadius + fabs(DotProduct( forward, radial ));
 
-	float distance = 24 + ( radius * 2.0f );
+	float distance = 18 + ( radius * 2.0f );
 
 	Vector start = pPlayer->Weapon_ShootPosition();
 	Vector end = start + ( forward * distance );

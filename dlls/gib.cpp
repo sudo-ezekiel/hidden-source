@@ -71,7 +71,7 @@ void CGib::SpawnStickyGibs( CBaseEntity *pVictim, Vector vecOrigin, int cGibs )
 	{
 		CGib *pGib = (CGib *)CreateEntityByName( "gib" );
 
-		pGib->Spawn( "models/stickygib.mdl" );
+		pGib->Spawn( "models/gibs/hgibs_rib.mdl" );
 		pGib->m_nBody = random->RandomInt(0,2);
 
 		if ( pVictim )

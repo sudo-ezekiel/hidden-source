@@ -212,7 +212,7 @@ void CBaseProp::Precache( void )
 	if ( GetModelName() == NULL_STRING )
 	{
 		Msg( "%s at (%.3f, %.3f, %.3f) has no model name!\n", GetClassname(), GetAbsOrigin().x, GetAbsOrigin().y, GetAbsOrigin().z );
-		SetModelName( AllocPooledString( "models/error.mdl" ) );
+		SetModelName( AllocPooledString( "models/error/error.mdl" ) );
 	}
 
 	PrecacheModel( STRING( GetModelName() ) );

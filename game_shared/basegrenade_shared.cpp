@@ -258,7 +258,7 @@ void CBaseGrenade::Detonate( void )
 	Vector		vecSpot;// trace starts here!
 
 	vecSpot = GetAbsOrigin() + Vector ( 0 , 0 , 8 );
-	UTIL_TraceLine ( vecSpot, vecSpot + Vector ( 0, 0, -16 ), MASK_SHOT_HULL, this, COLLISION_GROUP_NONE, & tr);
+	UTIL_TraceLine ( vecSpot, vecSpot + Vector ( 0, 0, -32 ), MASK_SHOT_HULL, this, COLLISION_GROUP_NONE, & tr);
 
 	Explode( &tr, DMG_BLAST );
 

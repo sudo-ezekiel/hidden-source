@@ -26,7 +26,7 @@ ConVar	forcerespawn( "mp_forcerespawn","1", FCVAR_NOTIFY );
 ConVar	footsteps( "mp_footsteps","1", FCVAR_NOTIFY );
 ConVar	flashlight( "mp_flashlight","0", FCVAR_NOTIFY );
 ConVar	aimcrosshair( "mp_autocrosshair","1", FCVAR_NOTIFY );
-ConVar	decalfrequency( "decalfrequency","10", FCVAR_NOTIFY );
+ConVar	decalfrequency( "decalfrequency","30", FCVAR_NOTIFY );
 ConVar	teamlist( "mp_teamlist","hgrunt;scientist", FCVAR_NOTIFY );
 ConVar	teamoverride( "mp_teamoverride","1" );
 ConVar	defaultteam( "mp_defaultteam","0" );
