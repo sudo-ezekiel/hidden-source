@@ -39,6 +39,12 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
+#if !defined( CLIENT_DLL )
+	extern ConVar sv_pushaway_max_force;	// obstacle_pushaway.cpp
+	extern ConVar sv_pushaway_force;		// obstacle_pushaway.cpp
+	extern ConVar sv_turbophysics;			// props.cpp
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Output : float
@@ -150,6 +156,12 @@ void CBasePlayer::ItemPostFrame()
 	}
 
 #if !defined( CLIENT_DLL )
+	// Hidden: the Hidden gets his stamina back while he stands on the ground with his aura off
+	if ( GetTeamNumber() == TEAM_HIDDEN && GetStamina() < 100.0f && GetGroundEntity() && !IsViewing() )
+	{
+		SetStamina( 0.3f );
+	}
+
 	// check if the player is using something
 	if ( m_hUseEntity != NULL )
 	{
@@ -999,6 +1011,40 @@ void CBasePlayer::PlayerUse ( void )
 			ObserverUse( false );
 		
 		return;
+	}
+
+	// Hidden: push objects in turbo physics mode (Valve's later SDK code)
+	if ( (m_nButtons & IN_USE) && sv_turbophysics.GetBool() )
+	{
+		Vector forward, up;
+		EyeVectors( &forward, NULL, &up );
+
+		trace_t tr;
+		// Search for objects in a sphere (tests for entities that are not solid, yet still useable)
+		Vector searchCenter = EyePosition();
+
+		UTIL_TraceLine( searchCenter, searchCenter + forward * 96.0f, MASK_SOLID, this, COLLISION_GROUP_NONE, &tr );
+
+		// try the hit entity if there is one, or the ground entity if there isn't.
+		CBaseEntity *entity = tr.m_pEnt;
+
+		if ( entity )
+		{
+			IPhysicsObject *pObj = entity->VPhysicsGetObject();
+			if ( pObj )
+			{
+				Vector vPushAway = (entity->WorldSpaceCenter() - WorldSpaceCenter());
+				vPushAway.z = 0;
+
+				float flDist = VectorNormalize( vPushAway );
+				flDist = max( flDist, 1 );
+
+				float flForce = sv_pushaway_force.GetFloat() / flDist;
+				flForce = min( flForce, sv_pushaway_max_force.GetFloat() );
+
+				pObj->ApplyForceOffset( vPushAway * flForce, WorldSpaceCenter() );
+			}
+		}
 	}
 
 	if ( m_afButtonPressed & IN_USE )
