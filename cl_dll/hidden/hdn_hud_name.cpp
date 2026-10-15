@@ -50,7 +50,7 @@ CHudName::CHudName( const char *pElementName ) : CHudElement( pElementName ), Ba
 
 	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT );
 
-	m_pLabel = SETUP_PANEL( new vgui::Label( this, "NameLabel", "" ) );
+	m_pLabel = vgui::SETUP_PANEL( new vgui::Label( this, "NameLabel", "" ) );
 	m_pLabel->SetScheme( scheme );
 	m_pLabel->SetFont( vgui::scheme()->GetIScheme( scheme )->GetFont( "Default" ) );
 	m_pLabel->SetKeyBoardInputEnabled( false );

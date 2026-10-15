@@ -2,9 +2,10 @@
 
 Hidden's client.dll was built with MSVC 7.1 (Visual Studio .NET 2003 RTM, cl.exe 13.10.3077, per
 the PE Rich header) from `cl_dll/client_sdk.vcproj`, configuration "Release SDK|Win32". There is no
-PDB. Until an MSVC build exists the client is checked structurally: every file must compile, every
-class's vtable must match the reference slot for slot, and every RecvTable must match. That exact
-compiler (Visual C++ Toolkit 2003 1.01) now unpacks and runs under Wine; see `msvc/MSVC.md`.
+PDB. The client is checked structurally with GCC: every file must compile, every class's vtable must
+match the reference slot for slot, and every RecvTable must match. It is also built with that exact
+compiler (Visual C++ Toolkit 2003 1.01) under Wine and compared with client.dll function by
+function (section 5; the toolchain is in `msvc/MSVC.md`).
 
 Reference files, all under `~/.cache/subject51764/hsrebuild/`:
 
@@ -99,7 +100,9 @@ class we do not have yet: `CHudHAmmo::vfunc81_at_14` = slot 81 of the vftable at
 When the original compiler is available, `tools/vtable_names.py --ours-dll <our client.dll>
 --ours-map <our client.map>` takes our order and names from our own MSVC build (RTTI plus the
 `/MAP` file) instead of the GCC dumps, so the same report and naming work against a real build.
-That mode is untested (no MSVC build exists yet).
+Against the MSVC build of section 5 it reports 703 classes MATCH, 0 MISMATCH and 3 MISSING; the 3
+are anonymous-namespace classes (GripPanel, CaptionGripPanel, ScrollBarButton) whose RTTI names
+carry a per-build hash, and they are in our build under another hash.
 
 ## 3. RecvTables
 
@@ -157,7 +160,9 @@ GCC follow client.dll in each (all GCC-only, so an MSVC build is unchanged):
   first members, which MSVC never does, so a base class whose members end 4 bytes short of a
   multiple of 8 ends with `REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )` (`REBUILD_MSVC_TAIL_PAD_BYTES`
   when they end on an odd boundary). A leaf class needs no pad.
-  Which C_BaseEntity member gives MSVC the 8-byte alignment is not known yet.
+  The MSVC build shows what gives C_BaseEntity its 8-byte alignment: BASEPTR and ENTITYFUNCPTR
+  name C_BaseEntity before it is complete, so they are 16-byte member function pointers, which
+  MSVC 7.1 aligns to 8 (in thinkfunc_t, m_pfnThink moves to +8 behind a 4-byte member).
 
 With these, 51 of the 58 factory sizes match. The other 7 are C_WeaponSDKBase and the weapons
 derived from it, all 8 bytes short: client.dll's C_WeaponSDKBase has two CMaterialReference members
@@ -165,12 +170,71 @@ at 0x820 and 0x824 (constructor 241ef660) that ours lacks. To look for tail
 padding reuse, build with CLASSDUMP=1 and compare `size=` with `base size=` in the .class dumps for
 every class that has derived classes: where they differ, GCC places the derived members early.
 
+## 5. MSVC build and function comparison
+
+    JOBS=6 sh rebuild/msvc/build_client.sh ~/.cache/hsrebuild-msvc-<lane> [file.cpp ...]
+    sh rebuild/msvc/compare_client.sh ~/.cache/hsrebuild-msvc-<lane>
+    NAME=<part of our name, or a reference address> sh rebuild/msvc/compare_client.sh ~/.cache/hsrebuild-msvc-<lane>
+
+The build (`msvc/MSVC.md`, "Building client.dll") compiles vgui_controls and the 415 client files
+with cl 13.10.3077 under Wine and links client.dll with /MAP, in about half a minute. The compare
+writes `<work>/cmp_client.tsv` and prints the totals and the objects with the most changed code;
+with NAME it prints the normalised diff of the matching functions instead.
+
+`tools/msvc_compare.py` does what `compare_builds.py` does for the server, except that client.dll
+has no symbols, so its functions are first mapped to ours:
+
+- Functions: ours from the map file; client.dll's from the decompile's function list plus every
+  vftable slot, direct call target, import thunk and tail jump, without the decompile's seeds that
+  sit where code falls through (a real start never does) or inside a jump table. objdump's linear
+  sweep is redone from any start it ran past. After a first mapping, starts the mapping implies
+  (a reference body that is ours plus more code after a ret, a branch where ours goes to a function
+  start) are added and the mapping runs again.
+- Mapping, repeated until nothing changes: vftables of the same class and subobject with the same
+  slot count, slot by slot; the export and the entry point; names.tsv names unique among ours; the
+  call graph (in a mapped pair whose bodies line up, the call and jump targets and function pointers
+  at the same positions); link order (between two mapped functions in the same order on both
+  sides, functions with the same body, or in order when the counts agree and the bodies are 60%
+  alike); the same string literals; the same body. The method is in the row.
+- Normalisation: branches inside the function become offsets, branches out of it the callee's name
+  (ours; on client.dll's side the name of the function it is mapped to, so a call to an unmapped
+  function is never "same"), image addresses ADDR, import slots IMP:<name>. Jump and index tables
+  after the code are compared as lists of in-function offsets. Trailing int3 and nop are dropped.
+
+Rows: object (lib:object from the map), status (same, changed, unmapped, or only-ref and only-ours
+for a function in a vftable of a class the other build lacks, of which there are none now),
+similarity, ref size, our size, our name, demangled name, ref address, our address, method,
+names.tsv name. A call graph mapping makes the callee's name agree in the caller by construction;
+a wrong pairing then shows up as a changed callee.
+
+Result (main 9178d3b plus this lane's fixes):
+
+| | functions | bytes |
+|---|---|---|
+| client.dll functions | 24320 | 2,148,634 |
+| mapped | 23623 (97.1%) | 2,105,370 |
+| same | 23263 | 1,986,372 |
+| changed | 360 | 118,998 |
+| unmapped, client.dll | 697 | 43,264 |
+| unmapped, ours | 573 | 18,362 |
+
+By origin of our function: client objects 19704 same, 269 changed; vgui_controls 2965 same, 37
+changed; libc.lib 461 same, 53 changed; nvtc.lib 19 same, 1 changed; import thunks 114 same.
+Mapped by vftable 5418, call graph 4510, order 12795, string 788, body 112. Most unmapped
+functions are 32 bytes or less (467 of 697), copies of small inline functions that nothing tells
+apart.
+
+What is left is mostly source: Hidden's code that differs from ours (CViewRender::RenderView,
+CClientScoreBoardDialog, CSpectatorGUI, CHudCrosshair::Paint, the weapons' WeaponIdle),
+vgui_controls files older than Hidden's (Label, ScrollBar, URLLabel, WizardPanel), and mapping
+limits in hand-written CRT code.
+
 ## Original build settings ("Release SDK|Win32", cl_dll/client_sdk.vcproj)
 
 Compiler (VCCLCompilerTool), as attributes and the cl.exe 13.10 switches they stand for:
 
-- Optimization=3 (/Ox), GlobalOptimizations (/Og), InlineFunctionExpansion=0 (/Ob0 in the VS 2003
-  enumeration; confirm in the IDE, since /Ox alone implies /Ob2), EnableIntrinsicFunctions (/Oi),
+- Optimization=3 (/Ox), GlobalOptimizations (/Og), InlineFunctionExpansion=0 (no switch, so /Ox's
+  own inlining applies; the MSVC build confirms it, see msvc/MSVC.md), EnableIntrinsicFunctions (/Oi),
   FavorSizeOrSpeed=1 (/Ot), OptimizeForProcessor=3 (/G7)
 - StringPooling (/GF), ExceptionHandling=FALSE (no /EHsc), RuntimeLibrary=4 (/ML, single-threaded
   static CRT), BufferSecurityCheck=FALSE (/GS-), EnableFunctionLevelLinking (/Gy),

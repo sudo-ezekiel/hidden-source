@@ -88,7 +88,7 @@ Compiler, from the configuration's VCCLCompilerTool:
 | EnableIntrinsicFunctions | TRUE | /Oi |
 | FavorSizeOrSpeed | 1 | /Ot |
 | OptimizeForProcessor | 3 | /G7 |
-| InlineFunctionExpansion | 0 | none (the IDE's "Default"), to confirm |
+| InlineFunctionExpansion | 0 | none (the IDE's "Default", so /Ox's inlining applies; checked below) |
 | StringPooling | TRUE | /GF |
 | EnableFunctionLevelLinking | TRUE | /Gy |
 | RuntimeTypeInfo | TRUE | /GR |
@@ -111,16 +111,84 @@ Linker: /DLL /INCREMENTAL:NO /DEBUG /PDB /MAP /SUBSYSTEM:WINDOWS /BASE:0x2400000
 /IMPLIB, /NODEFAULTLIB for libcd.lib, LIBCD, LIBCMT and libcmtd.lib, and the libraries winmm.lib,
 lib/public/nvtc.lib, tier0.lib, vgui_controls.lib and vstdlib.lib.
 
-To check against the reference before trusting a full build:
+## Checked against the reference
 
-- InlineFunctionExpansion 0: whether the IDE passed nothing (so /Ox's /Ob2 applies) or /Ob0.
-- Whether the IDE also linked its default Windows libraries (kernel32.lib, user32.lib and so on);
-  the reference's import table answers it.
-- No /OPT is set: whether the reference shows unreferenced COMDATs removed or identical
-  functions folded.
+Each answer comes from a full build (below) compared with client.dll by `tools/msvc_compare.py`.
 
-## Next
+- **InlineFunctionExpansion 0 means no switch.** With nothing passed, 19704 of the client's own
+  mapped functions are identical to client.dll's; with /Ob1, 15317; with /Ob0, 8502 (/Ob0 also
+  shrinks the DLL from 3,223,552 to 2,797,568 bytes, because every inline accessor becomes a call).
+  Both binaries also keep out-of-line copies of inline functions nobody calls (CUtlVector::Size and
+  the like), which is what /Ox with /Gy and no /OPT:REF leaves.
+- **The IDE linked its default Windows libraries.** client.dll imports SystemParametersInfoA
+  (in_mouse.cpp) from USER32.dll, and user32.lib is not in the vcproj, so the IDE's inherited
+  kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib
+  oleaut32.lib uuid.lib odbc32.lib odbccp32.lib were on the link line (an import library only
+  adds what is referenced). Our link gives the same 118 imports from the same five DLLs in the
+  same order (WINMM, KERNEL32, USER32, tier0, vstdlib); only Q_strncat sits elsewhere in
+  vstdlib's list. odbc32.lib and odbccp32.lib are not in the Platform SDK tree and are left out.
+- **No /OPT: link 7.1's /DEBUG defaults, /OPT:NOREF and /OPT:NOICF.** No folding: 6049 of
+  client.dll's functions sit in groups of byte-identical bodies (the largest has 640 copies), 5990
+  of ours do (642). No removal: 10065 of client.dll's functions are never called, jumped to or
+  pointed at from code or data, 10078 of ours.
 
-Build every source with these switches under Wine, link with /MAP, map our functions to the
-reference's (the `--ours-map` mode of the vtable tools in CLIENT.md section 2), and diff function
-by function the way the server lanes did.
+Two more things the reference settles that the vcproj does not say:
+
+- **vgui_controls.lib was compiled with /GL.** Hidden linked Valve's prebuilt vgui_controls.lib.
+  client.dll's Rich header counts 37 objects from Utc1310_LTCG_CPP (cl 13.10.3077 with /GL), its
+  vgui_controls functions come first in .text (link.exe generates LTCG code before the rest), and
+  they are inlined across files (Panel::SetBorder reads g_pPanelInterface where the source calls
+  vgui::ipanel()). vgui_controls.vcproj's Release configuration has no /GL, so build_client.sh adds
+  it. With it, 2965 vgui_controls functions are identical instead of 621, and 19704 of the client
+  objects' instead of 19412 (the linker takes inline functions such as the GetMessageMap of
+  DECLARE_PANELMESSAGEMAP from the LTCG objects, where the message map dictionary is inlined), and
+  our Rich header has the same 37 LTCG objects.
+- **ddraw.h** came from the DirectX SDK (public/nvtc.h includes it for imageloader.cpp), which the
+  Platform SDK does not have. `include/ddraw.h` is a stand-in with the two structures and the flags
+  used, laid out as client.dll's DXT conversion shows.
+
+The Rich headers agree otherwise: 148 C objects and 38 MASM objects (libc.lib), 118 import
+objects. client.dll has 426 objects from Utc1310_CPP, ours 425, so Hidden's link had one more
+C++ object; which one is not known (no cluster of unmapped functions points at it). The import
+library objects differ in origin only (client.dll: 4 from Linker600 8447 and Implib710 2067 and
+2179; ours: Implib710 2179, 3077 and 4035), which changes no code.
+
+## Building client.dll
+
+    JOBS=6 sh rebuild/msvc/build_client.sh ~/.cache/hsrebuild-msvc-<name> [file.cpp ...]
+
+The repo is mirrored into `<work>/src`. `vcproj_to_msvc.py` writes a makefile per project:
+vgui_controls.vcproj "Release|Win32" (58 files, plus /GL) into a static library through
+`link /lib` (the Toolkit has no lib.exe), then client_sdk.vcproj "Release SDK|Win32" with the
+switches above and the per-file settings (415 files, 43 without the precompiled header,
+c_te_firebullets1.obj), then the link with the vcproj's linker settings and /MAP. Objects are
+linked in project order, as the IDE did. Output in `<work>/out/msvc/client`: client.dll,
+client.map, client.pdb, a `.obj.log` per file, client.dll.log, and build.tsv (file, OK or FAIL,
+first error). With file arguments only those objects are rebuilt. A full build takes about half a
+minute at JOBS=6.
+
+Details:
+
+- One vc70.pdb cannot be shared by parallel cl.exe 7.1 processes, and a /Yu compile must name the
+  PDB its precompiled header was made with. So stdafx.cpp makes the precompiled header once per job
+  slot (pch0 to pch<JOBS-1>, each with its own PDB), every /Yu file is assigned a slot, and compiles
+  of one slot take turns under flock. stdafx.obj itself is slot 0's.
+- /FR and /FD are left out (they only write side files). vgui_controls.vcproj's /YX (automatic
+  precompiled headers) is left out too.
+- The repo's lib/public/*.lib are Git LFS pointers. tier0.lib and vstdlib.lib are import libraries,
+  so their names are all that matters: SDKLIB defaults to the 2006 SDK's lib-vc7/public
+  (`~/.cache/subject51764/hsrebuild/hl2sdk-episode1/lib-vc7/public`), whose nvtc.lib is the same
+  file as the 2004 SDK's (same SHA256 as the LFS pointer). vgui_controls.lib is built from our
+  source.
+- Make variables are MSCL and MSLINK: make exports command-line variables, and cl.exe and link.exe
+  read CL and LINK from the environment as extra switches.
+
+The first build compiled 412 of 415 files. The three MSVC errors were real ones in our source and
+are fixed (LoadWeaponSprites took a C_BaseCombatWeapon * where client.dll's takes the file info
+handle; vgui::SETUP_PANEL needed its namespace in hdn_hud_name.cpp) or worked around (ddraw.h).
+The link had no unresolved externals.
+
+Result: client.dll 3,223,552 bytes (client.dll 3,235,840); .text 0x238f3a (0x23b6ea), .rdata
+0x6a72d (0x6a7ad), .data 0x2f000 (0x2f000).
+
+The comparison is in CLIENT.md section 5.
