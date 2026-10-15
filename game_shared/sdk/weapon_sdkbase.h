@@ -137,7 +137,6 @@ public:
 
 protected:
 #ifdef CLIENT_DLL
-	int					m_iUnknown;			// REBUILD: 4 bytes in Hidden's client that no code reads or writes
 	CMaterialReference	m_hSpriteMaterial;	// Used for the laser glint
 	CMaterialReference	m_hBeamMaterial;	// Used for the laser beam
 	Beam_t				*m_pBeam;			// Laser beam temp entity
@@ -146,7 +145,9 @@ protected:
 	bool	m_bDeployed;		// REBUILD: name. Set by Deploy, cleared by Holster; the weapons only fire when it is set.
 	bool	m_bJustDeployed;	// REBUILD: name. Set by Deploy, cleared by the sonic weapon; nothing on the server reads it.
 
-#ifndef CLIENT_DLL
+#ifdef CLIENT_DLL
+	REBUILD_MSVC_TAIL_PAD_BYTES( m_MSVCTailPad, 2 )	// 0x82e; client.dll's C_WeaponSDKBase is 0x830 bytes
+#else
 	CHandle<CLaserDot>	m_hLaserDot;
 #endif
 
