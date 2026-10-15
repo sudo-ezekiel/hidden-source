@@ -17,10 +17,17 @@ void SDK_EjectBrass( int shell, const CEffectData &data )
 {
 	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
 
-	if( !pPlayer )
-		return;
-
 	tempents->CSEjectBrass( data.m_vOrigin, data.m_vAngles, data.m_fFlags, shell, pPlayer );
+}
+
+void SDK_FX_EjectBrass_57_Callback( const CEffectData &data )
+{
+	SDK_EjectBrass( CS_SHELL_57, data );
+}
+
+void SDK_FX_EjectBrass_556_Callback( const CEffectData &data )
+{
+	SDK_EjectBrass( CS_SHELL_556, data );
 }
 
 void SDK_FX_EjectBrass_9mm_Callback( const CEffectData &data )
@@ -35,6 +42,8 @@ void SDK_FX_EjectBrass_12Gauge_Callback( const CEffectData &data )
 
 
 
+DECLARE_CLIENT_EFFECT( "EjectBrass_57", SDK_FX_EjectBrass_57_Callback );
+DECLARE_CLIENT_EFFECT( "EjectBrass_556", SDK_FX_EjectBrass_556_Callback );
 DECLARE_CLIENT_EFFECT( "EjectBrass_9mm", SDK_FX_EjectBrass_9mm_Callback );
 DECLARE_CLIENT_EFFECT( "EjectBrass_12Gauge",SDK_FX_EjectBrass_12Gauge_Callback );
 
