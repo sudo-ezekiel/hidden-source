@@ -58,6 +58,6 @@ if [ $# -gt 0 ] && [ -z "$TARGETS" ]; then
     exit 1
 fi
 docker run --rm --platform linux/386 -u "$(id -u):$(id -g)" -v "$WORK/src":/src:ro -v "$WORK/out":/out -v "$WORK/case":/case:ro -w /out \
-    hsrebuild-gcc34 make -k -j"${JOBS:-6}" -f /out/client.mk OBJ=/out/client_obj ${TARGETS:-all} \
+    "${GCC_IMAGE:-hsrebuild-gcc34}" make -k -j"${JOBS:-6}" -f /out/client.mk OBJ=/out/client_obj ${TARGETS:-all} \
     > "$WORK/out/client_check.log" 2>&1 || true
 python3 -I "$REPO/rebuild/tools/client_check_report.py" "$WORK/out" "$REPO/rebuild/client_shims/msvc_only.txt" "$@"
