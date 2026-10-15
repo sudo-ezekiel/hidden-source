@@ -110,6 +110,6 @@ protected:
 };
 
 extern IGameSystem* HLTVDirectorSystem();
-extern CHLTVDirector* HLTVDirector();
+extern IHLTVDirector* HLTVDirector();
 
 #endif // HLTVDIRECTOR_H

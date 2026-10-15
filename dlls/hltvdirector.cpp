@@ -48,7 +48,7 @@ static CHLTVDirector s_HLTVDirector;	// singleton
 
 EXPOSE_SINGLE_INTERFACE_GLOBALVAR(CHLTVDirector, IHLTVDirector, INTERFACEVERSION_HLTVDIRECTOR, s_HLTVDirector );
 
-CHLTVDirector* HLTVDirector()
+IHLTVDirector* HLTVDirector()
 {
 	return &s_HLTVDirector;
 }
