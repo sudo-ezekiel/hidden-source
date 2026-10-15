@@ -65,6 +65,9 @@ def stack_args(body, start, explicit):
         nn = int(m.group(1), 16) - 4 * int(m.group(2) or 0)
         slots[nn] = m.group(3).strip()
     vals = [v for nn, v in sorted(slots.items(), reverse=True)]
+    # a return address Ghidra took for a string pointer ("j"): the out pointer follows it
+    if not explicit and len(vals) > 1 and not vals[0].startswith("&") and re.match(r"^(?:\(\w+ \*\))?&DAT_", vals[1]):
+        vals = vals[1:]
     if vals and re.match(r"^(?:\(\w+ \*\))?0x240[0-9a-f]{5}$|^(?:\(\w+ \*\))?0x241[0-9a-f]{5}$|^(?:\(\w+ \*\))?0x242[0-3][0-9a-f]{4}$", vals[0]):
         vals = vals[1:]
     # explicit arguments, if any, are the first ones; the slots hold the rest
@@ -477,7 +480,10 @@ def significant(props):
     for i, p in enumerate(props):
         if p["type"] == "Exclude" or p["name"] == "should_never_see_this":
             continue
-        if i + 1 < len(props) and props[i + 1]["type"] == "Array":
+        # the element prop of a RecvPropArray/SendPropArray comes right before the array and has
+        # its name ("m_hViewModel[0]" or "m_hViewModel"); our source parser gives the array alone
+        if (i + 1 < len(props) and props[i + 1]["type"] == "Array"
+                and p["name"].split("[")[0] == props[i + 1]["name"]):
             continue
         out.append(p)
     return out
