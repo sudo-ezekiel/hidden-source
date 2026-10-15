@@ -416,13 +416,6 @@ int C_BaseCombatWeapon::DrawModel( int flags )
 		if ( localplayer->GetObserverMode() == OBS_MODE_IN_EYE &&
 			 localplayer->GetObserverTarget() == GetOwner() ) 
 			return false;
-
-		if ( engine->IsHLTV()  )
-		{
-			if ( HLTVCamera()->GetMode() == OBS_MODE_IN_EYE &&
-				 HLTVCamera()->GetPrimaryTraget() == GetOwner()->entindex() )
-				return 0;
-		}
 	}
 
 	return BaseClass::DrawModel( flags );

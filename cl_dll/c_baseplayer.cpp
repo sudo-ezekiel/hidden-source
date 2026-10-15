@@ -84,6 +84,7 @@ void RecvProxy_LocalVelocityZ( const CRecvProxyData *pData, void *pStruct, void 
 
 	BEGIN_RECV_TABLE_NOBASE(CPlayerState, DT_PlayerState)
 		RecvPropInt		(RECVINFO(deadflag)),
+		RecvPropVector	(RECVINFO(v_angle)),	// Hidden: networked
 	END_RECV_TABLE()
 
 
@@ -418,14 +419,13 @@ bool C_BasePlayer::IsHLTV() const
 
 CBaseEntity	*C_BasePlayer::GetObserverTarget() const	// returns players targer or NULL
 {
-	if ( GetObserverMode() == OBS_MODE_ROAMING )
+	// Hidden: the HLTV camera's target, as in Valve's later SDK; no roaming test
+	if ( engine->IsHLTV() && IsLocalPlayer() )
 	{
-		return NULL;	// no traget in roaming mode
+		return HLTVCamera()->GetPrimaryTarget();
 	}
-	else
-	{
-		return m_hObserverTarget;
-	}
+
+	return m_hObserverTarget;
 }
 
 CBaseEntity	*C_BasePlayer::GetObserverTargetPlayer() const
@@ -435,6 +435,12 @@ CBaseEntity	*C_BasePlayer::GetObserverTargetPlayer() const
 
 int C_BasePlayer::GetObserverMode() const 
 { 
+	// Hidden: the HLTV camera's mode, as in Valve's later SDK
+	if ( engine->IsHLTV() && IsLocalPlayer() )
+	{
+		return HLTVCamera()->GetMode();
+	}
+
 	return m_iObserverMode; 
 }
 
@@ -448,7 +454,8 @@ bool C_BasePlayer::ViewModel_IsTransparent( void )
 //-----------------------------------------------------------------------------
 void C_BasePlayer::SetLocalViewAngles( const QAngle &viewAngles )
 {
-	pl.v_angle = viewAngles;
+	// Hidden: v_angle is networked; client.dll marks it changed without comparing
+	pl.v_angle.GetForModify() = viewAngles;
 }
 
 surfacedata_t* C_BasePlayer::GetGroundSurface()
@@ -606,10 +613,16 @@ void C_BasePlayer::PostDataUpdate( DataUpdateType_t updateType )
 			{  
 				// Set a new sensitivity that is proportional to the change from the FOV default and scaled
 				//  by a separate compensating factor
-				gHUD.m_flMouseSensitivity = 
-					sensitivity.GetFloat() * // regular sensitivity
-					((float)localFOV / (float)iDefaultFOV) * // linear fov downscale
-					zoom_sensitivity_ratio.GetFloat(); // sensitivity scale factor
+				// Hidden: only the IRIS get the compensating factor
+				// REBUILD: client.dll asks GetTeamNumber() twice here; the exact expression is not known
+				float flFOVRatio = (float)localFOV / (float)iDefaultFOV; // linear fov downscale
+
+				if ( GetTeamNumber() == TEAM_IRIS )
+				{
+					flFOVRatio *= zoom_sensitivity_ratio.GetFloat(); // sensitivity scale factor
+				}
+
+				gHUD.m_flMouseSensitivity = flFOVRatio * sensitivity.GetFloat(); // regular sensitivity
 			}
 		}
 
@@ -691,25 +704,7 @@ void C_BasePlayer::OnDataChanged( DataUpdateType_t updateType )
 		// Reset engine areabits pointer
 		( *render->GetAreaBits() ) = m_Local.m_chAreaBits;
 
-		// Check for Ammo pickups.
-		for ( int i = 0; i < MAX_AMMO_TYPES; i++ )
-		{
-			if ( GetAmmoCount(i) > m_iOldAmmo[i] )
-			{
-				// Don't add to ammo pickup if the ammo doesn't do it
-				const FileWeaponInfo_t *pWeaponData = gWR.GetWeaponFromAmmo(i);
-
-				if ( !pWeaponData || !( pWeaponData->iFlags & ITEM_FLAG_NOAMMOPICKUPS ) )
-				{
-					// We got more ammo for this ammo index. Add it to the ammo history
-					CHudHistoryResource *pHudHR = GET_HUDELEMENT( CHudHistoryResource );
-					if( pHudHR )
-					{
-						pHudHR->AddToHistory( HISTSLOT_AMMO, i, abs(GetAmmoCount(i) - m_iOldAmmo[i]) );
-					}
-				}
-			}
-		}
+		// Hidden: no ammo pickup history
 
 		Soundscape_Update( m_Local.m_audio );
 	}
@@ -983,10 +978,15 @@ void C_BasePlayer::AddDamage( PlayerDamageRecord_t damage )
 				return;
 			}
 		}
-	}
 
-	damage.m_iShots = 1;
-	m_DamageRecords.AddToTail( damage );
+		damage.m_iShots = 1;
+		m_DamageRecords.AddToTail( damage );
+	}
+	else
+	{
+		damage.m_iShots = 1;
+		m_DamageRecords.AddToTail( damage );
+	}
 }
 
 
@@ -1178,7 +1178,8 @@ void C_BasePlayer::OverrideView( CViewSetup *pSetup )
 
 bool C_BasePlayer::ShouldDraw()
 {
-	return ( !IsLocalPlayer() || input->CAM_IsThirdPerson() || (GetObserverMode() == OBS_MODE_DEATHCAM ) ) &&
+	// Hidden: no death cam test
+	return ( !IsLocalPlayer() || input->CAM_IsThirdPerson() ) &&
 		   BaseClass::ShouldDraw();
 }
 
@@ -1192,14 +1193,6 @@ int C_BasePlayer::DrawModel( int flags )
 		if ( player->GetObserverMode() == OBS_MODE_IN_EYE &&
 			 player->GetObserverTarget() == this )
 			return 0;
-	
-		// in HLTV don't draw this player if we're spectating him first person
-		if ( engine->IsHLTV() )
-		{
-			if ( HLTVCamera()->GetMode() == OBS_MODE_IN_EYE &&
-				 HLTVCamera()->GetPrimaryTraget() == entindex() )
-				return 0;
-		}
 	}
 
 	return BaseClass::DrawModel( flags );
@@ -1319,7 +1312,8 @@ void C_BasePlayer::CalcRoamingView(Vector& eyeOrigin, QAngle& eyeAngles, float& 
 
 void C_BasePlayer::CalcInEyeCamView(Vector& eyeOrigin, QAngle& eyeAngles, float& fov)
 {
-	C_BaseEntity *target = GetObserverTarget();
+	// Hidden: the target is taken as a player without a test
+	C_BasePlayer *target = static_cast< C_BasePlayer * >( GetObserverTarget() );
 
 	if ( !target ) 
 	{
@@ -1336,13 +1330,29 @@ void C_BasePlayer::CalcInEyeCamView(Vector& eyeOrigin, QAngle& eyeAngles, float&
 		return;
 	}
 
-	fov = GetFOV();	// TODO use tragets FOV
+	// Hidden: the target's FOV and eye position
+	fov = target->GetFOV();
 
 	m_flObserverChaseDistance = 0.0;
 
 	eyeAngles = target->EyeAngles();
-	eyeOrigin = target->GetAbsOrigin();
-	eyeOrigin += m_vecViewOffset;
+	eyeOrigin = target->EyePosition();
+
+	if ( engine->IsHLTV() )
+	{
+		if ( GetFlags() & FL_DUCKING )
+		{
+			eyeOrigin += GameRules()->GetViewVectors()->m_vDuckView;
+		}
+		else
+		{
+			eyeOrigin += GameRules()->GetViewVectors()->m_vView;
+		}
+	}
+	else
+	{
+		eyeOrigin += m_vecViewOffset;
+	}
 
 	// Apply punch angle
 	VectorAdd( eyeAngles, m_Local.m_vecPunchAngle, eyeAngles );
@@ -1498,10 +1508,10 @@ void C_BasePlayer::PostThink( void )
 		}
 
 		// Hidden: repeat the aura loop sound while the aura is on
-		if ( IsViewing() && m_flNextAuraSound > 0 && m_flNextAuraSound < gpGlobals->curtime )
+		if ( IsViewing() && m_flNextAuraSound > 0 && gpGlobals->curtime > m_flNextAuraSound )
 		{
 			EmitSound( "Hidden.AuraLoop" );
-			m_flNextAuraSound = gpGlobals->curtime + 3.9;
+			m_flNextAuraSound = gpGlobals->curtime + 3.9f;
 		}
 
 		StudioFrameAdvance();

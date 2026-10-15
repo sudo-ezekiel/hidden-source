@@ -19,13 +19,6 @@
 static Vector WALL_MIN(-WALL_OFFSET,-WALL_OFFSET,-WALL_OFFSET);
 static Vector WALL_MAX(WALL_OFFSET,WALL_OFFSET,WALL_OFFSET);
 
-static ConVar hltv_cam_distance( "hltv_cam_distance", "96", 0, "Default HLTV chase camera distance" );
-static ConVar hltv_cam_offset( "hltv_cam_offset", "64", 0, "Default HLTV chase camera offset" );
-static ConVar hltv_cam_theta( "hltv_cam_theta", "0", 0, "Default HLTV chase camera theta angle" );
-static ConVar hltv_cam_phi( "hltv_cam_phi", "0", 0, "Default HLTV chase camera phi angle" );
-static ConVar hltv_cam_fov( "hltv_cam_fov", "90", 0, "Default HLTV chase camera FOV" );
-static ConVar hltv_cam_inertia( "hltv_cam_inertia", "100", 0, "Default HLTV chase camera inertia" );
-
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
@@ -53,9 +46,6 @@ void C_HLTVCamera::Init()
 	gameeventmanager->AddListener( this, "hltv_fov", false );
 	gameeventmanager->AddListener( this, "hltv_inertia", false );
 
-	m_vCamOrigin.Init();
-	m_aCamAngle.Init();
-
 	Reset();
 }
 
@@ -67,57 +57,64 @@ void C_HLTVCamera::Shutdown()
 void C_HLTVCamera::Reset()
 {
 	m_nCameraMode = OBS_MODE_FIXED;
-	m_iCameraMan  = m_iTraget1 = m_iTraget2 = 0;
-	m_flFOV = hltv_cam_fov.GetFloat();
-	m_flDistance = m_flLastDistance = hltv_cam_distance.GetFloat();
-	m_flInertia = hltv_cam_inertia.GetFloat();
-	m_flPhi = hltv_cam_phi.GetFloat();
-	m_flTheta = hltv_cam_theta.GetFloat();
-	m_flOffset = hltv_cam_offset.GetFloat();
+	m_iCameraMan  = 0;
+	m_iTraget1 = m_iTraget2 = 0;
+	m_flFOV = 90;
+	m_flDistance = m_flLastDistance = 96.0f;
+	m_flInertia = 10.0f;
+	m_flPhi = 0;
+	m_flTheta = 0;
+	m_flOffset = 0;
+
+	m_vCamOrigin.Init();
+	m_aCamAngle.Init();
 }
 
 void C_HLTVCamera::CalcChaseCamView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov )
 {
-	if ( m_iTraget1 && m_iTraget2 )
-	{
-		CalcChaseCamView2( eyeOrigin, eyeAngles, fov );
-	}
-	else if ( m_iTraget1 )
-	{
-		CalcChaseCamView1( eyeOrigin, eyeAngles, fov );
-	}
-}
-
-void C_HLTVCamera::CalcChaseCamView1( Vector& eyeOrigin, QAngle& eyeAngles, float& fov )
-{
-	QAngle tmpangles;
-
-	Vector forward;
+	Vector targetOrigin1, cameraOrigin, forward;
 
 	if ( m_iTraget1 == 0 )
 		return;
 
-	C_BaseEntity *target = ClientEntityList().GetBaseEntity( m_iTraget1 );
+	C_BaseEntity *target1 = GetPrimaryTarget();
 
-	if ( !target )
+	if ( !target1 )
 		return;
 
-	Vector targetOrigin, cameraOrigin;
-	QAngle targetAngles, cameraAngles;	
+	// get secondary target if set
+	C_BaseEntity *target2 = NULL;
 
-	targetAngles = target->EyeAngles();
-	targetOrigin = target->GetAbsOrigin(); // use abs origin, not eye origin
+	if ( m_iTraget2 > 0 )
+	{
+		target2 = ClientEntityList().GetBaseEntity( m_iTraget2 );
+	}
 
-	targetAngles.x = 0; // no PITCH
-	targetAngles.z = 0; // no ROLL
+	targetOrigin1 = target1->GetAbsOrigin();
+	targetOrigin1.z += m_flOffset; // add offset
 
-	targetOrigin.z += m_flOffset; // add offset
+	QAngle cameraAngles;
 
-	QAngle angleOffset( m_flTheta, m_flPhi, 0 );
+	if ( target2 )
+	{
+		// look into direction of second target
+		forward = target2->GetAbsOrigin() - target1->GetAbsOrigin();
+		VectorAngles( forward, cameraAngles );
+		cameraAngles.z = 0; // no ROLL
+	}
+	else
+	{
+		// look into direction where primary target is looking
+		cameraAngles = target1->EyeAngles();
+		cameraAngles.x = 0; // no PITCH
+		cameraAngles.z = 0; // no ROLL
+	}
 
-	cameraAngles = targetAngles + angleOffset;
+	// apply angle offset & smoothing
+	QAngle angleOffset( m_flPhi, m_flTheta, 0 );
+	cameraAngles += angleOffset;
 
-	InterpolateAngles( m_aCamAngle,	cameraAngles, cameraAngles, m_flInertia/100.0f );
+	InterpolateAngles( m_aCamAngle, cameraAngles, cameraAngles, m_flInertia/100.0f );
 
 	AngleVectors( cameraAngles, &forward );
 
@@ -136,22 +133,44 @@ void C_HLTVCamera::CalcChaseCamView1( Vector& eyeOrigin, QAngle& eyeAngles, floa
 		m_flLastDistance = m_flDistance;
 	}
 
-	// calc optimal camer aposition
-	VectorMA(targetOrigin, -m_flLastDistance, forward, cameraOrigin );
+	// calc optimal camera position
+	VectorMA(targetOrigin1, -m_flLastDistance, forward, cameraOrigin );
 
 	// clip against walls
 	trace_t trace;
-	C_BaseEntity::EnableAbsRecomputations( false ); // HACK don't recompute positions while doing RayTrace
-	UTIL_TraceHull( targetOrigin, cameraOrigin, WALL_MIN, WALL_MAX, MASK_SOLID, target, COLLISION_GROUP_NONE, &trace );
-	C_BaseEntity::EnableAbsRecomputations( true );
 
-	if (trace.fraction < 1.0)
+	// Hidden: when a wall is closer than 48 units, the camera tries up to twice more, 24 units higher each time
+	for ( int i = 3; i > 0; i-- ) // REBUILD: the loop counter's name is ours
 	{
-		// we hit a wall, correct poistion and distance
-		cameraOrigin = trace.endpos;
-		m_flLastDistance = VectorLength( cameraOrigin -  targetOrigin );
+		C_BaseEntity::EnableAbsRecomputations( false ); // HACK don't recompute positions while doing RayTrace
+		UTIL_TraceHull( targetOrigin1, cameraOrigin, WALL_MIN, WALL_MAX, MASK_SOLID, target1, COLLISION_GROUP_NONE, &trace );
+		C_BaseEntity::EnableAbsRecomputations( true );
+
+		if (trace.fraction < 1.0)
+		{
+			if ( VectorLength( trace.endpos - targetOrigin1 ) < 48 && i > 1 )
+			{
+				cameraOrigin.z += 24;
+				continue;
+			}
+
+			// we hit a wall, correct poistion and distance
+			cameraOrigin = trace.endpos;
+			m_flLastDistance = VectorLength( cameraOrigin -  targetOrigin1 );
+		}
+
+		break;
 	}
 
+	if ( target2 )
+	{
+		// if we have 2 targets look at point between them
+		forward = target2->GetAbsOrigin() - target1->GetAbsOrigin();
+		VectorMA( target1->GetAbsOrigin(), 0.5f, forward, targetOrigin1 );
+		forward = targetOrigin1 - cameraOrigin;
+		VectorAngles( forward, cameraAngles );
+		cameraAngles.z = 0; // no ROLL
+	}
 
 	VectorCopy( cameraAngles, m_aCamAngle );
 	VectorCopy( cameraOrigin, m_vCamOrigin );
@@ -160,19 +179,44 @@ void C_HLTVCamera::CalcChaseCamView1( Vector& eyeOrigin, QAngle& eyeAngles, floa
 	VectorCopy( m_vCamOrigin, eyeOrigin );
 }
 
-void C_HLTVCamera::CalcChaseCamView2( Vector& eyeOrigin, QAngle& eyeAngles, float& fov )
+int C_HLTVCamera::GetMode()
 {
+	if ( m_iCameraMan > 0 )
+	{
+		C_BasePlayer *pCameraMan = UTIL_PlayerByIndex( m_iCameraMan );
 
-}
+		if ( pCameraMan )
+			return pCameraMan->GetObserverMode();
+	}
 
-int  C_HLTVCamera::GetMode()
-{
 	return m_nCameraMode;	
 }
 
-int	 C_HLTVCamera::GetPrimaryTraget()
+C_BaseEntity* C_HLTVCamera::GetPrimaryTarget()
 {
-	return m_iTraget1;
+	if ( m_iCameraMan > 0 )
+	{
+		C_BasePlayer *pCameraMan = UTIL_PlayerByIndex( m_iCameraMan );
+		
+		if ( pCameraMan )
+		{
+			return pCameraMan->GetObserverTarget();
+		}
+	}
+
+	C_BaseEntity* target = ClientEntityList().GetEnt( m_iTraget1 );
+
+	// REBUILD: client.dll asks the target IsPlayer() here and does nothing with the answer
+	if ( target && target->IsPlayer() )
+	{
+	}
+
+	return target;
+}
+
+C_BaseEntity *C_HLTVCamera::GetCameraMan()
+{
+	return ClientEntityList().GetEnt( m_iCameraMan );
 }
 
 void C_HLTVCamera::CalcInEyeCamView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov )
@@ -234,30 +278,25 @@ void C_HLTVCamera::GetCurrentView(Vector& origin, QAngle& angles, float& fov)
 {
 	if ( m_iCameraMan > 0 )
 	{
-		CBasePlayer * cameraman = ToBasePlayer( ClientEntityList().GetBaseEntity(m_iCameraMan) );
-
-		if ( cameraman )
+		C_BasePlayer *pCameraMan = UTIL_PlayerByIndex( m_iCameraMan );
+		if ( pCameraMan )
 		{
-			float zNear;
-			float zFar;
-			cameraman->CalcView( origin, angles, zNear, zFar, fov );
+			float zNear,zFar;
+			pCameraMan->CalcView( origin, angles, zNear, zFar, fov );
+			pCameraMan->CalcViewModelView( origin, angles );
+			return;
 		}
-
-		return;
 	}
 
+	// Hidden: no roaming or chase views; mode 3 (the cameraman's) shows the fixed view
+	// REBUILD: client.dll switches on the values 1, 2 and 3; the name of 3 is shareddefs.h's guess
 	switch ( m_nCameraMode )
 	{
-		case OBS_MODE_ROAMING	:	CalcRoamingView( origin, angles, fov );
-									break;
-
-		case OBS_MODE_FIXED		:	CalcFixedView( origin, angles, fov );
+		case OBS_MODE_FIXED		:
+		case OBS_MODE_DEATHCAM	:	CalcFixedView( origin, angles, fov );
 									break;
 
 		case OBS_MODE_IN_EYE	:	CalcInEyeCamView( origin, angles, fov );
-									break;
-
-		case OBS_MODE_CHASE		:	CalcChaseCamView( origin, angles, fov  );
 									break;
 	}
 }
@@ -309,6 +348,28 @@ void C_HLTVCamera::SpecNextPlayer( bool bInverse )
 	m_iTraget1 = index;
 }
 
+void C_HLTVCamera::SpecNamedPlayer( const char *szPlayerName )
+{
+	// REBUILD: client.dll's loop stops before index maxClients
+	for ( int index = 1; index < gpGlobals->maxClients; ++index )
+	{
+		C_BasePlayer *pPlayer =	UTIL_PlayerByIndex( index );
+
+		if ( !pPlayer )
+			continue;
+
+		if ( !FStrEq( szPlayerName, pPlayer->GetPlayerName() ) )
+			continue;
+
+		// only follow living players or dedicated spectators
+		if ( pPlayer->IsObserver() && pPlayer->GetTeamNumber() != TEAM_SPECTATOR )
+			continue;
+
+		m_iTraget1 = index;
+		return;
+	}
+}
+
 void C_HLTVCamera::FireGameEvent( IGameEvent *event )
 {
 	if ( !engine->IsHLTV() )
@@ -326,11 +387,10 @@ void C_HLTVCamera::FireGameEvent( IGameEvent *event )
 	{
 		Reset();
 
-		m_nCameraMode = OBS_MODE_ROAMING;
+		// REBUILD: client.dll sets mode 3 here, where Valve's code has OBS_MODE_ROAMING
+		m_nCameraMode = OBS_MODE_DEATHCAM;
 		
-		int mode = event->GetInt("mode");
-
-		if ( mode > 0 )
+		if ( event->GetBool( "active" ) )
 		{
 			m_iCameraMan = event->GetInt( "index" );
 		}
@@ -344,50 +404,19 @@ void C_HLTVCamera::FireGameEvent( IGameEvent *event )
 
 	else if ( Q_strcmp( "hltv_fixed", type ) == 0 )
 	{
-		Reset();
-
 		m_nCameraMode = OBS_MODE_FIXED;
+		m_iCameraMan = 0;
 		
 		m_vCamOrigin.x = event->GetInt( "posx" );
 		m_vCamOrigin.y = event->GetInt( "posy" );
 		m_vCamOrigin.z = event->GetInt( "posz" );
 
-		m_aCamAngle.x = event->GetInt( "anglea" );
-		m_aCamAngle.y = event->GetInt( "angleb" );
+		m_aCamAngle.x = event->GetInt( "theta" );
+		m_aCamAngle.y = event->GetInt( "phi" );
 		m_aCamAngle.z = 0; // no roll yet
 
 		m_iTraget1 = event->GetInt( "target" );
 		
-		return;
-	}
-
-	else if ( Q_strcmp( "hltv_chase1", type ) == 0 )
-	{
-		Reset();
-
-		m_nCameraMode = OBS_MODE_CHASE;
-				
-		m_iTraget1 = event->GetInt( "target" );
-
-		m_flFOV		= event->GetFloat( "fov", hltv_cam_fov.GetFloat() );
-		m_flDistance= event->GetFloat( "distance", hltv_cam_distance.GetFloat() );
-		m_flOffset	= event->GetFloat( "offset", hltv_cam_offset.GetFloat() );
-		m_flTheta	= event->GetFloat( "theta", hltv_cam_theta.GetFloat() );
-		m_flPhi		= event->GetFloat( "phi", hltv_cam_phi.GetFloat() );
-		m_flInertia = event->GetFloat( "inertia", hltv_cam_inertia.GetFloat() );
-				
-		return;
-	}
-
-	else if ( Q_strcmp( "hltv_chase2", type ) == 0 )
-	{
-		Reset();
-
-		m_nCameraMode = OBS_MODE_CHASE;
-		
-		m_iTraget1	= event->GetInt( "target1" );
-		m_iTraget2	= event->GetInt( "target2" );
-
 		return;
 	}
 }
