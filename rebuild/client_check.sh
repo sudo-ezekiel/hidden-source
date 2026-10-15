@@ -10,7 +10,7 @@
 # recompiled; without, everything out of date is.
 #
 # Writes <work dir>/out/client_check.tsv (file, PASS/FAIL, first error) and prints a summary.
-# Each object's compiler output is <work dir>/out/obj/<dir>/<name>.o.log.
+# Each object's compiler output is <work dir>/out/client_obj/<dir>/<name>.o.log.
 #
 # JOBS=<n> limits parallel compiles (default 6). CLASSDUMP=1 adds -fdump-class-hierarchy; the dumps
 # land next to the objects as <name>.cpp.class (used by tools/vtable_names.py).
@@ -23,7 +23,7 @@ mkdir -p "$WORK/src" "$WORK/out"
 CHANGED=$(rsync -a --delete --exclude .git --itemize-changes "$REPO/" "$WORK/src/" | awk '{print $2}')
 if echo "$CHANGED" | grep -qiE '\.(h|hpp|inl)$'; then
     echo "headers changed, rebuilding everything"
-    rm -rf "$WORK/out/obj"
+    rm -rf "$WORK/out/client_obj"
 fi
 # -fno-operator-names: MSVC has no alternative tokens, and weapon_selection.h names a parameter "or".
 EXTRA="-fno-operator-names -I/src/rebuild/client_shims -I/case -include /src/rebuild/client_shims/client_shim.h"
@@ -31,7 +31,7 @@ STAMP="$WORK/out/classdump.on"
 if [ -n "$CLASSDUMP" ]; then
     EXTRA="$EXTRA -fdump-class-hierarchy"
     # objects built without the dump have no .class file: rebuild them once
-    [ -f "$STAMP" ] || rm -rf "$WORK/out/obj"
+    [ -f "$STAMP" ] || rm -rf "$WORK/out/client_obj"
     touch "$STAMP"
 else
     rm -f "$STAMP"
@@ -49,13 +49,13 @@ for f in "$@"; do
         echo "not in the Release SDK build: $f"
         continue
     fi
-    rm -f "$WORK/out/obj/$o"
-    TARGETS="$TARGETS /out/obj/$o"
+    rm -f "$WORK/out/client_obj/$o"
+    TARGETS="$TARGETS /out/client_obj/$o"
 done
 if [ $# -gt 0 ] && [ -z "$TARGETS" ]; then
     exit 1
 fi
 docker run --rm --platform linux/386 -u "$(id -u):$(id -g)" -v "$WORK/src":/src:ro -v "$WORK/out":/out -v "$WORK/case":/case:ro -w /out \
-    hsrebuild-gcc34 make -k -j"${JOBS:-6}" -f /out/client.mk OBJ=/out/obj ${TARGETS:-all} \
+    hsrebuild-gcc34 make -k -j"${JOBS:-6}" -f /out/client.mk OBJ=/out/client_obj ${TARGETS:-all} \
     > "$WORK/out/client_check.log" 2>&1 || true
 python3 -I "$REPO/rebuild/tools/client_check_report.py" "$WORK/out" "$REPO/rebuild/client_shims/msvc_only.txt" "$@"

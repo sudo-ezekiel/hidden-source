@@ -34,7 +34,9 @@ Each file is PASS, MSVC or FAIL. MSVC means every error GCC reported matches a p
 `rebuild/client_shims/msvc_only.txt`, a construct MSVC 7.1 accepts and GCC cannot (a temporary
 bound to `Color&`, the DirectDraw code in imageloader.cpp). Keep that list short; never use it to
 hide a real error. Results: `<work>/out/client_check.tsv`; compiler output per file:
-`<work>/out/obj/<dir>/<name>.o.log`.
+`<work>/out/client_obj/<dir>/<name>.o.log`. The objects live in `out/client_obj`, apart from
+the server build's `out/obj` (`rebuild/build.sh`), so one work dir can serve both; when both used
+`out/obj`, server objects of the shared files counted as client PASSes.
 
 What makes GCC accept the Windows sources, without editing them:
 
@@ -149,4 +151,4 @@ seeded). To redo it from scratch:
         -postScript RecoverFunctions.java <scratch>/seeds/seeds.txt <scratch>/seeds/labels.txt gaps \
         -postScript DumpAll.java <out dir>
     python3 -I rebuild/tools/pe_rtti.py <client.dll> <out dir>
-    python3 -I rebuild/tools/vtable_names.py <client.dll> <out dir> --dumps <work>/out/obj
+    python3 -I rebuild/tools/vtable_names.py <client.dll> <out dir> --dumps <work>/out/client_obj
