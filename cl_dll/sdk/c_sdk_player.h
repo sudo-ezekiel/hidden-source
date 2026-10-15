@@ -58,6 +58,9 @@ public:
 
 	CWeaponSDKBase *GetActiveSDKWeapon() const;
 
+	// Hidden: the networked eye angles, for drawing another player's laser dot
+	QAngle GetAnimEyeAngles( void ) { return m_angEyeAngles; }
+
 	C_BaseAnimating *BecomeRagdollOnClient( bool bCopyEntity);
 	IRagdoll* C_SDKPlayer::GetRepresentativeRagdoll() const;
 
