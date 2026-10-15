@@ -31,7 +31,9 @@ public:
 	void Reset( void );
 
 	// Sprite handling
-	void LoadWeaponSprites( C_BaseCombatWeapon *weapon );
+	// REBUILD: by file info handle, as in Valve's 2006 SDK: client.dll's LoadWeaponSprites (241b8a20)
+	// takes the 16-bit handle, and PrecacheFileWeaponInfoDatabase passes it one.
+	void LoadWeaponSprites( WEAPON_FILE_INFO_HANDLE hWeaponFileInfo );
 	void LoadAllWeaponSprites( void );
 
 	// Ammo Handling

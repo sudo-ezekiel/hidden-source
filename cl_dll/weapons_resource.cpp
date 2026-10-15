@@ -73,7 +73,7 @@ void WeaponsResource::LoadAllWeaponSprites( void )
 	{
 		if ( player->GetWeapon(i) )
 		{
-			LoadWeaponSprites( player->GetWeapon(i) );
+			LoadWeaponSprites( player->GetWeapon(i)->m_hWeaponFileInfo );
 		}
 	}
 }
@@ -81,13 +81,9 @@ void WeaponsResource::LoadAllWeaponSprites( void )
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
-void WeaponsResource::LoadWeaponSprites( C_BaseCombatWeapon *weapon )
+void WeaponsResource::LoadWeaponSprites( WEAPON_FILE_INFO_HANDLE hWeaponFileInfo )
 {
-	if ( !weapon )
-		return;
-
-	// WeaponsResource is a friend of C_BaseCombatWeapon
-	FileWeaponInfo_t *pWeaponInfo = GetFileWeaponInfoFromHandle( weapon->m_hWeaponFileInfo );
+	FileWeaponInfo_t *pWeaponInfo = GetFileWeaponInfoFromHandle( hWeaponFileInfo );
 
 	char sz[128];
 
@@ -111,7 +107,7 @@ void WeaponsResource::LoadWeaponSprites( C_BaseCombatWeapon *weapon )
 
 	CUtlDict< CHudTexture *, int > tempList;
 
-	LoadHudTextures( tempList, sz, weapon->GetEncryptionKey() );
+	LoadHudTextures( tempList, sz, g_pGameRules->GetEncryptionKey() );
 
 	if ( !tempList.Count() )
 	{
