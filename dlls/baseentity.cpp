@@ -5044,13 +5044,13 @@ void CBaseEntity::SetAbsVelocity( const Vector &vecAbsVelocity )
 //-----------------------------------------------------------------------------
 void CBaseEntity::Reset( void )
 {
-	if ( GetAbsOrigin() != m_vecSpawnOrigin )
+	if ( m_vecSpawnOrigin != GetAbsOrigin() )
 	{
 		AddEffects( EF_NOINTERP );
 		UTIL_SetOrigin( this, m_vecSpawnOrigin );
 	}
 
-	if ( GetAbsAngles() != m_angSpawnAngles )
+	if ( m_angSpawnAngles != GetAbsAngles() )
 	{
 		SetAbsAngles( m_angSpawnAngles );
 	}
@@ -5061,7 +5061,8 @@ void CBaseEntity::Reset( void )
 	if ( pPhysics )
 	{
 		pPhysics->SetVelocity( &vec3_origin, NULL );
-		pPhysics->SetPosition( GetAbsOrigin(), ( IsPlayer() || GetSolid() == SOLID_BBOX ) ? vec3_angle : GetAbsAngles(), true );
+		const QAngle &absAngles = GetAbsAngles();
+		pPhysics->SetPosition( GetAbsOrigin(), ( IsPlayer() || GetSolid() == SOLID_BBOX ) ? vec3_angle : absAngles, true );
 	}
 }
 
