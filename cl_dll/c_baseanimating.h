@@ -269,6 +269,8 @@ public:
 	virtual float					FrameAdvance( float flInterval = 0.0f );
 	virtual float					GetSequenceCycleRate( int iSequence );
 	virtual void					UpdateClientSideAnimation();
+	void							ClientSideAnimationChanged();
+	virtual unsigned int			ComputeClientSideAnimationFlags();
 	void SetCycle( float flCycle );
 	float GetCycle() const;
 

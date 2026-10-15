@@ -836,6 +836,27 @@ void C_BasePlayer::CreateMove( float flInputSampleTime, CUserCmd *pCmd )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: Hidden: the fixed cameras (info_spectator) and the death cam look out from the observer
+//			target's own origin and angles
+//-----------------------------------------------------------------------------
+void C_BasePlayer::CalcFixedView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov )
+{
+	C_BaseEntity *target = GetObserverTarget();
+
+	if ( !target )
+	{
+		// just copy a save in-map position
+		VectorCopy( EyePosition(), eyeOrigin );
+		VectorCopy( EyeAngles(), eyeAngles );
+		return;
+	}
+
+	eyeAngles = target->GetAbsAngles();
+	eyeOrigin = target->GetAbsOrigin();
+	engine->SetViewAngles( eyeAngles );
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Hidden: the Hidden's aura vision only shows while he stands still
 //-----------------------------------------------------------------------------
 bool C_BasePlayer::IsViewing( void )
@@ -844,6 +865,11 @@ bool C_BasePlayer::IsViewing( void )
 		return false;
 
 	return m_bAura;
+}
+
+int C_BasePlayer::GetWeighting( void )
+{
+	return m_iWeighting;
 }
 
 //-----------------------------------------------------------------------------
