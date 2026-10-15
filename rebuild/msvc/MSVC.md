@@ -243,9 +243,11 @@ the same.
 
 ## Comparing server.dll
 
-    sh rebuild/msvc/compare_server.sh <work> [Hidden's server.dll]
+    sh rebuild/msvc/compare_server.sh [--loose] <work> [Hidden's server.dll]
 
-`msvc_compare.py` maps and compares as for the client, with two more sources of names:
+`msvc_compare.py` maps and compares as for the client, strict by default (constants and the data
+behind addresses count, STRICT-COMPARE.md section 6; `--loose` or LOOSE=1 gives the original
+scoring), with two more sources of names:
 
 - **The May DLL** (the default) is mapped by name. `--ref-procs procs.tsv` gives every reference
   function's undecorated name, module and extent, so reference starts are taken from the PDB
@@ -255,7 +257,8 @@ the same.
   `cmp_server.tsv`.
 - **An August DLL** has no PDB. compare_server.sh first maps it to the May DLL (`--ours-procs`,
   the May DLL taking the place of ours) and keeps the pairs that are the same, or half alike and
-  64 bytes or more; those reference functions get the May names (`names_<dll>.tsv`, cached). The
+  64 bytes or more; those reference functions get the May names (`names_<dll>.tsv`, cached; this
+  step is always loose, so both modes start from the same names). The
   August DLL is then mapped to ours by vftables and exports first, then by the carried names,
   then the client's way. Small accessors are kept out because a class layout changed between May
   and August: CBasePlayer is 12 bytes shorter in May, so each May accessor body is equal to the
@@ -264,17 +267,26 @@ the same.
 Every result is also scored on the stable subset (`msvc_subset.py`): the functions whose source
 did not change between Hidden's May and August .so files (`stable_may_aug.tsv`, GCC names, joined
 by name and arguments), written to `cmp_server*_stable.tsv`. `NAME=<part of a name, or a reference
-address>` prints diffs. "Same" was checked on 300 random same pairs: the bytes differ only at base
+address; several, comma separated>` prints diffs. "Same" was checked on 300 random same pairs: the bytes differ only at base
 relocations and at rel32 call and jump targets.
 
 Results (our build against each DLL; the subset has 16111 functions, 14622 of them are functions
 in our build, the rest MSVC inlined everywhere):
 
-| Reference | Mapped | Same | Changed | Stable subset: same / changed / unmapped |
-|---|---|---|---|---|
-| May 2006 (by the PDB) | 30759 of 30779 | 30000 | 759 | 14585 / 38 / 0 |
-| 2006-08-18 4b1 | 30158 of 30701 | 30007 | 151 | 14493 / 37 / 93 |
-| 2006-08-08 4.1 | 30156 of 30698 | 30004 | 152 | 14493 / 37 / 93 |
+| Reference | Mode | Mapped | Same | Changed | Stable subset: same / changed / unmapped |
+|---|---|---|---|---|---|
+| May 2006 (by the PDB) | strict | 30760 of 30779 | 29989 | 771 | 14579 / 44 / 0 |
+| | --loose | 30759 of 30779 | 30000 | 759 | 14585 / 38 / 0 |
+| 2006-08-18 4b1 | strict | 30187 of 30701 | 30026 | 161 | 14490 / 40 / 93 |
+| | --loose | 30158 of 30701 | 30007 | 151 | 14493 / 37 / 93 |
+| 2006-08-08 4.1 | strict | 30185 of 30698 | 30023 | 162 | 14490 / 40 / 93 |
+| | --loose | 30156 of 30698 | 30004 | 152 | 14493 / 37 / 93 |
+
+(main f12fee2.) The functions same only in the loose mode are listed in STRICT-COMPARE.md section
+7: against the August DLLs 10, all same in the strict GCC compare and none a source constant
+(pointers the reference's extents or `$E` names pair wrongly); against the May DLL 12, four of
+them strings of the older May source. The strict mode also maps 29 more August functions.
+The counts in the next paragraph are the loose ones.
 
 Our source is the August 4b1 source, and the May DLL was built from older source than even the
 May .so: 30 of the 38 stable functions that differ from the May DLL are the same as the August
