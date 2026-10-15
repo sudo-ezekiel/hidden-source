@@ -200,7 +200,7 @@ public:
 
 	virtual float				GetFOV( void );	
 	int							GetDefaultFOV( void ) const;
-	virtual bool				IsZoomed( void )	{ return false; }
+	virtual bool				IsZoomed( void )	{ return m_bZoom; }	// Hidden: m_bZoom
 
 	float						GetFOVDistanceAdjustFactor();
 
@@ -274,6 +274,24 @@ public:
 
 	virtual void ExitLadder() {}
 
+	// Hidden: player state. Plain inline accessors on the client (the server's are virtual).
+	bool			GetSafe( void ) { return m_bSafety; }
+	float			GetStamina( void ) { return m_flStamina; }
+	int				GetEquipment( void ) { return m_iEquipment; }	// the server's returns -2 for the Hidden's team; the client's does not
+	int				GetPrimary( void ) { return m_iPrimary; }
+	int				GetSecondary( void ) { return m_iSecondary; }
+	int				GetNewClass( void ) { return m_iNewClass; }
+	bool			GetNoHidden( void ) { return m_bNoHidden; }
+	int				GetWeighting( void ) { return m_iWeighting; }	// REBUILD: name
+	bool			IsStunned( void ) { return m_bStunned; }
+	float			GetBlur( void ) { return m_flBlur; }			// REBUILD: name
+	bool			NightVisionEnabled( void ) { return m_bNightVision; }
+	bool			LAMIsOn( void ) { return m_bLAM; }
+	bool			RequestedAmmo( void ) { return m_bRequestAmmo; }
+	bool			IsViewing( void );	// the Hidden's aura vision, only while standing still
+	const char		*GetCurrentLocation( void ) { return m_CurrentLocation; }	// REBUILD: no client copy found; named as the server's
+	const char		*GetLastKnownPlaceName( void ) const { return m_szLastPlaceName; }	// REBUILD: no client copy found; named as the server's
+
 public:
 	int m_StuckLast;
 	
@@ -328,6 +346,34 @@ protected:
 	bool			JustEnteredVehicle();
 
 // DATA
+	// REBUILD: the observer members, m_flDeathTime and m_flStepSoundTime come before the
+	// vehicle handles in Hidden's client.dll (mid-2005 base), as in the 2006 SDK.
+	int				m_iObserverMode;	// if in spectator mode != 0
+	EHANDLE			m_hObserverTarget;	// current observer target
+	float			m_flObserverChaseDistance; // last distance to observer traget
+	float			m_flDeathTime;		// last time player died
+
+	float			m_flStepSoundTime;
+
+public:
+	// Hidden: networked player state, in client.dll's member order (DT_BasePlayer).
+	bool			m_bSafety;
+	float			m_flStamina;
+	char			*m_CurrentLocation;	// a pointer on the client (a 4-byte string prop); the server's is a char[25]
+	int				m_iEquipment;
+	int				m_iPrimary;
+	int				m_iSecondary;
+	bool			m_bNoHidden;
+	bool			m_bStunned;
+	bool			m_bAura;
+	bool			m_bZoom;
+	int				m_iNewClass;
+	float			m_flBlur;
+	bool			m_bNightVision;
+	bool			m_bLAM;
+	bool			m_bRequestAmmo;
+	int				m_iWeighting;
+
 private:
 	// Make sure no one calls this...
 	C_BasePlayer& operator=( const C_BasePlayer& src );
@@ -340,11 +386,6 @@ private:
 	float			m_flMaxspeed;
 	int				m_iHealth;
 
-	int				m_iObserverMode;	// if in spectator mode != 0
-	EHANDLE			m_hObserverTarget;	// current observer target
-	float			m_flObserverChaseDistance; // last distance to observer traget
-	float			m_flDeathTime;		// last time player died
-
 	CInterpolatedVar< Vector >	m_iv_vecViewOffset;
 
 	// Not replicated
@@ -352,7 +393,6 @@ private:
 	float			m_flWaterJumpTime;  // used to be called teleport_time
 	int				m_nImpulse;
 
-	float			m_flStepSoundTime;
 	float			m_flSwimSoundTime;
 	Vector			m_vecLadderNormal;
 	CHandle< C_FuncLadder >	m_hLadder;
@@ -418,7 +458,16 @@ private:
 	Vector m_vecPredictionError;
 	float m_flPredictionErrorTime;
 
+	char m_szLastPlaceName[MAX_PLACE_NAME_LENGTH];	// Hidden: the last nav place name the player occupied
+
 public:
+	// Texture names and surface data, used by CGameMovement (as on the server)
+	int				m_surfaceProps;
+	surfacedata_t*	m_pSurfaceData;
+	float			m_surfaceFriction;
+	char			m_chTextureType;
+	char			m_chPreviousTextureType;	// Separate from m_chTextureType. This is cleared if the player's not on the ground.
+
 
 	float GetLaggedMovementValue( void ){ return m_flLaggedMovementValue;	}
 	bool  ShouldGoSouth( Vector vNPCForward, Vector vNPCRight ); //Such a bad name.
