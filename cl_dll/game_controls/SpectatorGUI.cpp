@@ -731,7 +731,7 @@ static void ForwardSpecCmdToServer()
 	{
 		// forward the command with parameter
 		char command[128];
-		Q_snprintf( command, sizeof(command), "%s %s", engine->Cmd_Argv(0), engine->Cmd_Argv(1) );
+		Q_snprintf( command, sizeof(command), "%s \"%s\"", engine->Cmd_Argv(0), engine->Cmd_Argv(1) );
 		engine->ServerCmd( command );
 	}
 }

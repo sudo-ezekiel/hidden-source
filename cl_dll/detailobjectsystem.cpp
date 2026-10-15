@@ -743,7 +743,7 @@ void CDetailObjectSystem::UnserializeModelDict( CUtlBuffer& buf )
 		if (modelinfo->IsModelVertexLit(dict.m_pModel))
 		{
 			Warning("Detail prop model %s is using vertex-lit materials!\nIt must use unlit materials!\n", lump.m_Name );
-			dict.m_pModel = (model_t *)engine->LoadModel( "models/error.mdl" );
+			dict.m_pModel = (model_t *)engine->LoadModel( "models/error/error.mdl" );
 		}
 
 		m_DetailObjectDict.AddToTail( dict );

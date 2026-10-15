@@ -362,7 +362,7 @@ C_BasePlayer::C_BasePlayer() : m_iv_vecViewOffset( "C_BasePlayer::m_iv_vecViewOf
 	m_surfaceFriction = 1.0f;
 	m_chTextureType = 0;
 
-	m_CurrentLocation = "";
+	m_CurrentLocation = " ";
 }
 
 C_BasePlayer *g_pLocalPlayer = NULL;
