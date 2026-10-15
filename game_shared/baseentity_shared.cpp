@@ -1335,8 +1335,6 @@ void CBaseEntity::FireBullets( const FireBulletsInfo_t &info )
 			vecDir = Manipulator.ApplySpread( info.m_vecSpread );
 		}
 
-		iSeed++;
-
 		vecEnd = info.m_vecSrc + vecDir * info.m_flDistance;
 
 		if( IsPlayer() && info.m_iShots > 1 && iShot % 2 )
@@ -1497,6 +1495,9 @@ void CBaseEntity::FireBullets( const FireBulletsInfo_t &info )
 			HandleShotImpactingGlass( info, tr, vecDir, &traceFilter );
 		}
 #endif
+
+		// REBUILD: Hidden advances the seed at the end of the loop (as in the 2006 SDK)
+		iSeed++;
 	}
 
 #ifdef GAME_DLL
