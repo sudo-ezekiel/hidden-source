@@ -5281,9 +5281,13 @@ bool CBasePlayer::ClientCommand(const char *cmd)
 
 		RemoveAllItems( true );
 
+		// Hidden: forget the class, the player picks one again
+		m_iClass = -1;
+		m_iNewClass = -1;
+
 		ChangeTeam( TEAM_SPECTATOR );
 
-		StartObserverMode( OBS_MODE_ROAMING );
+		StartObserverMode( OBS_MODE_FIXED );
 		return true;
 	}
 	else if ( stricmp( cmd, "spec_mode" ) == 0 ) // new observer mode
@@ -5295,115 +5299,73 @@ bool CBasePlayer::ClientCommand(const char *cmd)
 		{
 			mode = atoi( engine->Cmd_Argv(1) );
 
-			if ( mode < OBS_MODE_IN_EYE || mode > OBS_MODE_ROAMING )
-				mode = OBS_MODE_IN_EYE;
+			if ( mode < OBS_MODE_FIXED || mode > OBS_MODE_IN_EYE )
+				mode = OBS_MODE_FIXED;
 		}
 		else
 		{
 			// sitch to next spec mode if no parameter give
 			mode = GetObserverMode() + 1;
 			
-			if ( mode > OBS_MODE_ROAMING )
+			if ( mode > OBS_MODE_IN_EYE )
+			{
+				mode = OBS_MODE_FIXED;
+			}
+			else if ( mode < OBS_MODE_FIXED )
 			{
 				mode = OBS_MODE_IN_EYE;
 			}
-			else if ( mode < OBS_MODE_IN_EYE )
-			{
-				mode = OBS_MODE_ROAMING;
-			}
 
 		}
+
+		DevMsg( 1, "Current Spectator Mode : %i\n", mode );
 	
-		// don't allow input while player or death cam animation
-		if ( GetObserverMode() > OBS_MODE_DEATHCAM )
+		// Hidden: the client is told the mode (cl_spec_mode) and picks a target for it
+		if ( GetObserverMode() > OBS_MODE_NONE )
 		{
 			// set new spectator mode, don't allow OBS_MODE_NONE
 			if ( !SetObserverMode( mode, false ) )
-				ClientPrint( this, HUD_PRINTCONSOLE, "#Spectator_Mode_Unkown");
+				ClientPrint( this, HUD_PRINTCONSOLE, "#Spectator_Mode_Unknown");
+			else
+				engine->ClientCommand( edict(), "cl_spec_mode %d", mode );
+
+			m_iObserverLastMode = mode;
+			engine->ClientCommand( edict(), "spec_next" );
 		}
 		else
 		{
 			// remember spectator mode for later use
 			m_iObserverLastMode = mode;
+			engine->ClientCommand( edict(), "cl_spec_mode %d", mode );
 		}
 
 		return true;
 	}
 	else if ( stricmp( cmd, "spec_next" ) == 0 ) // chase next player
 	{
-		if ( GetObserverMode() > OBS_MODE_FIXED )
-		{
-			// set new spectator mode
-			CBaseEntity * target = FindNextObserverTarget( false );
-			if ( target )
-				SetObserverTarget( target );
-		}
+		// Hidden: no interpolation across the jump to the next target
+		AddEffects( EF_NOINTERP );
+
+		CBaseEntity * target = FindNextObserverTarget( false );
+		if ( target )
+			SetObserverTarget( target );
+
+		RemoveEffects( EF_NOINTERP );
 		
 		return true;
 	}
 	else if ( stricmp( cmd, "spec_prev" ) == 0 ) // chase prevoius player
 	{
-		if ( GetObserverMode() > OBS_MODE_FIXED )
-		{
-			// set new spectator mode
-			CBaseEntity * target = FindNextObserverTarget( true );
-			if ( target )
-				SetObserverTarget( target );
-		}
+		AddEffects( EF_NOINTERP );
+
+		CBaseEntity * target = FindNextObserverTarget( true );
+		if ( target )
+			SetObserverTarget( target );
+
+		RemoveEffects( EF_NOINTERP );
 		
 		return true;
 	}
-	
-	else if ( stricmp( cmd, "spec_player" ) == 0 ) // chase next player
-	{
-		if ( GetObserverMode() > OBS_MODE_FIXED &&
-			 engine->Cmd_Argc() == 2 )
-		{
-			int index = atoi( engine->Cmd_Argv(1) );
-
-			CBasePlayer * target;
-
-			if ( index == 0 )
-			{
-				target = UTIL_PlayerByName( engine->Cmd_Argv(1) );
-			}
-			else
-			{
-				target = UTIL_PlayerByIndex( index );
-			}
-
-			if ( IsValidObserverTarget( target ) )
-			{
-				SetObserverTarget( target );
-			}
-		}
-		
-		return true;
-	}
-
-	else if ( stricmp( cmd, "spec_goto" ) == 0 ) // chase next player
-	{
-		if ( ( GetObserverMode() == OBS_MODE_FIXED ||
-			   GetObserverMode() == OBS_MODE_ROAMING ) &&
-			 engine->Cmd_Argc() == 6 )
-		{
-			Vector origin;
-			origin.x = atof( engine->Cmd_Argv(1) );
-			origin.y = atof( engine->Cmd_Argv(2) );
-			origin.z = atof( engine->Cmd_Argv(3) );
-
-			QAngle angle;
-			angle.x = atof( engine->Cmd_Argv(4) );
-			angle.y = atof( engine->Cmd_Argv(5) );
-			angle.z = 0.0f;
-
-			JumptoPosition( origin, angle );
-		}
-		
-		return true;
-	}
-
-
 
 	return false;
 }
