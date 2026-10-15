@@ -1361,9 +1361,6 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 				RelativePath="func_lod.cpp">
 			</File>
 			<File
-				RelativePath="hl2_dll\Func_Monitor.cpp">
-			</File>
-			<File
 				RelativePath="func_movelinear.cpp">
 			</File>
 			<File
@@ -5364,15 +5361,6 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath="hl2_dll\weapon_physcannon.cpp">
-					<FileConfiguration
-						Name="Debug SDK|Win32"
-						ExcludedFromBuild="TRUE">
-						<Tool
-							Name="VCCLCompilerTool"/>
-					</FileConfiguration>
-				</File>
-				<File
 					RelativePath="hl2_dll\weapon_physcannon.h">
 				</File>
 				<File
@@ -5727,15 +5715,6 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 							ExcludedFromBuild="TRUE">
 							<Tool
 								Name="VCCustomBuildTool"/>
-						</FileConfiguration>
-					</File>
-					<File
-						RelativePath="hl2_dll\grenade_tripmine.cpp">
-						<FileConfiguration
-							Name="Debug SDK|Win32"
-							ExcludedFromBuild="TRUE">
-							<Tool
-								Name="VCCLCompilerTool"/>
 						</FileConfiguration>
 					</File>
 					<File
@@ -6608,6 +6587,12 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 					RelativePath="..\game_shared\hidden\hdn_spectator.cpp">
 				</File>
 				<File
+					RelativePath="hidden\Func_Monitor.cpp">
+				</File>
+				<File
+					RelativePath="hidden\grenade_tripmine.cpp">
+				</File>
+				<File
 					RelativePath="hidden\hdn_ammocrate.cpp">
 				</File>
 				<File
@@ -6630,6 +6615,9 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(T
 				</File>
 				<File
 					RelativePath="hidden\hdn_marine_clip.cpp">
+				</File>
+				<File
+					RelativePath="hidden\weapon_physcannon.cpp">
 				</File>
 				<File
 					RelativePath="sdk\sdk_bot_temp.cpp">

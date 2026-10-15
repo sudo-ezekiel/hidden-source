@@ -142,11 +142,6 @@ bool CWeaponSDKBase::PlayEmptySound()
 	return 0;
 }
 
-CSDKPlayer* CWeaponSDKBase::GetPlayerOwner() const
-{
-	return dynamic_cast< CSDKPlayer* >( GetOwner() );
-}
-
 bool CWeaponSDKBase::Deploy()
 {
 #ifndef CLIENT_DLL
@@ -162,9 +157,14 @@ bool CWeaponSDKBase::Deploy()
 		CreateLaserPointer();
 #endif
 
-	m_bJustDeployed = true;
+	m_bLaserEnabled = true;
 
 	return BaseClass::Deploy();
+}
+
+CSDKPlayer* CWeaponSDKBase::GetPlayerOwner() const
+{
+	return dynamic_cast< CSDKPlayer* >( GetOwner() );
 }
 
 bool CWeaponSDKBase::ShouldRemoveOnRoundRestart() const
@@ -192,6 +192,152 @@ void CWeaponSDKBase::SendReloadEvents()
 }
 
 #endif
+
+//-----------------------------------------------------------------------------
+// Purpose: Same as CBaseCombatWeapon::Drop
+//-----------------------------------------------------------------------------
+void CWeaponSDKBase::Drop( const Vector &vecVelocity )
+{
+#if !defined( CLIENT_DLL )
+
+	// Once somebody drops a gun, it's fair game for removal when/if
+	// a game_weapon_manager does a cleanup on surplus weapons in the
+	// world.
+	SetRemoveable( true );
+
+	//If it was dropped then there's no need to respawn it.
+	AddSpawnFlags( SF_NORESPAWN );
+
+	StopAnimation();
+	StopFollowingEntity( );
+	SetMoveType( MOVETYPE_FLYGRAVITY );
+	// clear follow stuff, setup for collision
+	SetGravity(1.0);
+	m_iState = WEAPON_NOT_CARRIED;
+	RemoveEffects( EF_NODRAW );
+	FallInit();
+	SetGroundEntity( NULL );
+	SetThink( &CBaseCombatWeapon::SetPickupTouch );
+	SetTouch(NULL);
+
+	IPhysicsObject *pObj = VPhysicsGetObject();
+	if ( pObj != NULL )
+	{
+		AngularImpulse	angImp( 200, 200, 200 );
+		pObj->AddVelocity( &vecVelocity, &angImp );
+	}
+	else
+	{
+		SetAbsVelocity( vecVelocity );
+	}
+
+	SetNextThink( gpGlobals->curtime + 1.0f );
+	SetOwnerEntity( NULL );
+	SetOwner( NULL );
+#else
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
+#endif
+}
+
+void CWeaponSDKBase::SetSafe( void )
+{
+	SendWeaponAnim( ACT_VM_IDLE_TO_LOWERED );
+	SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
+
+#ifdef CLIENT_DLL
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
+#else
+	if ( m_hLaserDot != NULL )
+	{
+		m_hLaserDot->TurnOff();
+		UTIL_Remove( m_hLaserDot );
+		m_hLaserDot = NULL;
+	}
+#endif
+}
+
+bool CWeaponSDKBase::Holster( CBaseCombatWeapon *pSwitchingTo )
+{
+#ifdef CLIENT_DLL
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
+#else
+	if ( m_hLaserDot != NULL )
+	{
+		m_hLaserDot->TurnOff();
+		UTIL_Remove( m_hLaserDot );
+		m_hLaserDot = NULL;
+	}
+#endif
+
+	m_bDeployed = false;
+
+	return BaseClass::Holster( pSwitchingTo );
+}
+
+void CWeaponSDKBase::ItemPostFrame( void )
+{
+	BaseClass::ItemPostFrame();
+
+	if ( m_bInReload )
+		return;
+
+	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( !pPlayer )
+		return;
+
+#ifndef CLIENT_DLL
+	if ( !pPlayer->IsOnLadder() && pPlayer->GetTeamNumber() == TEAM_IRIS )
+		Deploy();
+#endif
+
+	if ( pPlayer->GetSafe() || pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+		return;
+
+#ifdef CLIENT_DLL
+	// The beam is created dark: light it once the laser aiming module is on
+	if ( pPlayer->LAMIsOn() && m_pBeam != NULL && m_pBeam->brightness == 0.0f )
+	{
+		DevMsg( 1, "Setting beam in ItemPostFrame\n" );
+		m_pBeam->brightness = 255.0f;
+	}
+#else
+	UpdateLaserPosition();
+
+	if ( pPlayer->LAMIsOn() && m_hLaserDot == NULL )
+	{
+		DevMsg( 1, "Creating laser pointer in ItemPostFrame\n" );
+		CreateLaserPointer();
+	}
+
+	if ( !pPlayer->LAMIsOn() && m_hLaserDot )
+	{
+		m_hLaserDot->TurnOff();
+		UTIL_Remove( m_hLaserDot );
+		m_hLaserDot = NULL;
+	}
+#endif
+}
 
 //-----------------------------------------------------------------------------
 // Purpose: Move the laser dot to where the weapon is pointing
@@ -257,152 +403,6 @@ void CWeaponSDKBase::CreateLaserPointer( void )
 		m_hLaserDot = CLaserDot::Create( GetAbsOrigin(), GetOwner() );
 
 		UpdateLaserPosition();
-	}
-#endif
-}
-
-void CWeaponSDKBase::ItemPostFrame( void )
-{
-	BaseClass::ItemPostFrame();
-
-	if ( m_bInReload )
-		return;
-
-	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
-	if ( !pPlayer )
-		return;
-
-#ifndef CLIENT_DLL
-	if ( !pPlayer->IsOnLadder() && pPlayer->GetTeamNumber() == TEAM_IRIS )
-		Deploy();
-#endif
-
-	if ( pPlayer->GetSafe() || pPlayer->GetTeamNumber() == TEAM_HIDDEN )
-		return;
-
-#ifdef CLIENT_DLL
-	// The beam is created dark: light it once the laser aiming module is on
-	if ( pPlayer->LAMIsOn() && m_pBeam != NULL && m_pBeam->brightness == 0.0f )
-	{
-		DevMsg( 1, "Setting beam in ItemPostFrame\n" );
-		m_pBeam->brightness = 255.0f;
-	}
-#else
-	UpdateLaserPosition();
-
-	if ( pPlayer->LAMIsOn() && m_hLaserDot == NULL )
-	{
-		DevMsg( 1, "Creating laser pointer in ItemPostFrame\n" );
-		CreateLaserPointer();
-	}
-
-	if ( !pPlayer->LAMIsOn() && m_hLaserDot )
-	{
-		m_hLaserDot->TurnOff();
-		UTIL_Remove( m_hLaserDot );
-		m_hLaserDot = NULL;
-	}
-#endif
-}
-
-bool CWeaponSDKBase::Holster( CBaseCombatWeapon *pSwitchingTo )
-{
-#ifdef CLIENT_DLL
-	if ( m_pBeam )
-	{
-		//Tell it to die right away and let the beam code free it.
-		m_pBeam->brightness = 0.0f;
-		m_pBeam->flags &= ~FBEAM_FOREVER;
-		m_pBeam->die = gpGlobals->curtime - 0.1;
-		m_pBeam = NULL;
-	}
-#else
-	if ( m_hLaserDot != NULL )
-	{
-		m_hLaserDot->TurnOff();
-		UTIL_Remove( m_hLaserDot );
-		m_hLaserDot = NULL;
-	}
-#endif
-
-	m_bDeployed = false;
-
-	return BaseClass::Holster( pSwitchingTo );
-}
-
-void CWeaponSDKBase::SetSafe( void )
-{
-	SendWeaponAnim( ACT_VM_IDLE_TO_LOWERED );
-	SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
-
-#ifdef CLIENT_DLL
-	if ( m_pBeam )
-	{
-		//Tell it to die right away and let the beam code free it.
-		m_pBeam->brightness = 0.0f;
-		m_pBeam->flags &= ~FBEAM_FOREVER;
-		m_pBeam->die = gpGlobals->curtime - 0.1;
-		m_pBeam = NULL;
-	}
-#else
-	if ( m_hLaserDot != NULL )
-	{
-		m_hLaserDot->TurnOff();
-		UTIL_Remove( m_hLaserDot );
-		m_hLaserDot = NULL;
-	}
-#endif
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: Same as CBaseCombatWeapon::Drop
-//-----------------------------------------------------------------------------
-void CWeaponSDKBase::Drop( const Vector &vecVelocity )
-{
-#if !defined( CLIENT_DLL )
-
-	// Once somebody drops a gun, it's fair game for removal when/if
-	// a game_weapon_manager does a cleanup on surplus weapons in the
-	// world.
-	SetRemoveable( true );
-
-	//If it was dropped then there's no need to respawn it.
-	AddSpawnFlags( SF_NORESPAWN );
-
-	StopAnimation();
-	StopFollowingEntity( );
-	SetMoveType( MOVETYPE_FLYGRAVITY );
-	// clear follow stuff, setup for collision
-	SetGravity(1.0);
-	m_iState = WEAPON_NOT_CARRIED;
-	RemoveEffects( EF_NODRAW );
-	FallInit();
-	SetGroundEntity( NULL );
-	SetThink( &CBaseCombatWeapon::SetPickupTouch );
-	SetTouch(NULL);
-
-	IPhysicsObject *pObj = VPhysicsGetObject();
-	if ( pObj != NULL )
-	{
-		AngularImpulse	angImp( 200, 200, 200 );
-		pObj->AddVelocity( &vecVelocity, &angImp );
-	}
-	else
-	{
-		SetAbsVelocity( vecVelocity );
-	}
-
-	SetNextThink( gpGlobals->curtime + 1.0f );
-	SetOwnerEntity( NULL );
-	SetOwner( NULL );
-#else
-	if ( m_pBeam )
-	{
-		//Tell it to die right away and let the beam code free it.
-		m_pBeam->brightness = 0.0f;
-		m_pBeam->flags &= ~FBEAM_FOREVER;
-		m_pBeam->die = gpGlobals->curtime - 0.1;
-		m_pBeam = NULL;
 	}
 #endif
 }

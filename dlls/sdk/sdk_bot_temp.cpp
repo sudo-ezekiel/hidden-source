@@ -82,7 +82,7 @@ public:
 // Purpose: Create a new Bot and put it in the game.
 // Output : Pointer to the new Bot, or NULL if there's no free clients.
 //-----------------------------------------------------------------------------
-CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int iTeam )
+CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int team )
 {
 	// This trick lets us create a CSDKBot for this client instead of the CSDKPlayer
 	// that we would normally get when ClientPutInServer is called.
@@ -102,7 +102,7 @@ CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int iTeam
 	pPlayer->ClearFlags();
 	pPlayer->AddFlag( FL_CLIENT | FL_FAKECLIENT );
 
-	pPlayer->m_iCharacterBody = pPlayer->m_iCharacterSkin = random->RandomInt( 0, 8 );
+	pPlayer->m_nBody_change = pPlayer->m_nSkin_change = random->RandomInt( 0, 8 );
 	pPlayer->SetEquipment( random->RandomInt( 0, 4 ) );
 	pPlayer->SetPrimary( random->RandomInt( 0, 3 ) );
 	pPlayer->SetSecondary( random->RandomInt( 0, 1 ) );
@@ -112,7 +112,7 @@ CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int iTeam
 		pPlayer->AddEFlags( EFL_BOT_FROZEN );
 
 	pPlayer->ChangeClass( 5 );
-	pPlayer->ChangeTeam( iTeam );
+	pPlayer->ChangeTeam( team );
 	pPlayer->RemoveAllItems( true );
 	pPlayer->UpdatePlayerInfo();
 
@@ -136,6 +136,36 @@ CBasePlayer *BotPutInServer( bool bFrozen )
 	return pPlayer;
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Put the tutorial's Hidden bot in the game at the Hidden spawn.
+//-----------------------------------------------------------------------------
+CBasePlayer *TutorialBotPutInServer( void )
+{
+	char botname[ 64 ];
+	Q_snprintf( botname, sizeof( botname ), "Subject 617" );
+
+	CBasePlayer *pPlayer = GenericBotPutInServer( false, botname, TEAM_HIDDEN );
+	if ( pPlayer )
+	{
+		CBaseEntity *pSpawnSpot = gEntList.FindEntityByClassname( NULL, "info_hidden_spawn" );
+		if ( pSpawnSpot )
+		{
+			pPlayer->SetLocalOrigin( pSpawnSpot->GetAbsOrigin() + Vector(0,0,1) );
+			pPlayer->SetAbsVelocity( vec3_origin );
+			pPlayer->SetLocalAngles( pSpawnSpot->GetLocalAngles() );
+			pPlayer->m_Local.m_vecPunchAngle = vec3_angle;
+			pPlayer->m_Local.m_vecPunchAngleVel = vec3_angle;
+			pPlayer->SnapEyeAngles( pSpawnSpot->GetLocalAngles() );
+		}
+
+		pPlayer->ChangeTeam( TEAM_HIDDEN );
+		pPlayer->Spawn();
+	}
+
+	return pPlayer;
+}
+
+
 // Handler for the "bot" command.
 void BotAdd_f()
 {
@@ -156,7 +186,6 @@ void BotAdd_f()
 	}
 }
 ConCommand cc_Bot( "bot_add", BotAdd_f, "Add a bot.", FCVAR_CHEAT );
-
 
 //-----------------------------------------------------------------------------
 // Purpose: Run through all the Bots in the game and let them think.
@@ -201,6 +230,8 @@ bool Bot_RunMimicCommand( CUserCmd& cmd )
 	return true;
 }
 
+
+
 //-----------------------------------------------------------------------------
 // Purpose: Simulates a single frame of movement for a player
 // Input  : *fakeclient - 
@@ -238,7 +269,6 @@ static void RunPlayerMove( CSDKPlayer *fakeclient, CUserCmd &cmd, float frametim
 	gpGlobals->frametime = flOldFrametime;
 	gpGlobals->curtime = flOldCurtime;
 }
-
 
 
 void Bot_UpdateStrafing( CSDKBot *pBot, CUserCmd &cmd )
@@ -498,35 +528,5 @@ void Bot_Think( CSDKBot *pBot )
 
 	float frametime = gpGlobals->frametime;
 	RunPlayerMove( pBot, cmd, frametime );
-}
-
-
-//-----------------------------------------------------------------------------
-// Purpose: Put the tutorial's Hidden bot in the game at the Hidden spawn.
-//-----------------------------------------------------------------------------
-CBasePlayer *TutorialBotPutInServer( void )
-{
-	char botname[ 64 ];
-	Q_snprintf( botname, sizeof( botname ), "Subject 617" );
-
-	CBasePlayer *pPlayer = GenericBotPutInServer( false, botname, TEAM_HIDDEN );
-	if ( pPlayer )
-	{
-		CBaseEntity *pSpawnSpot = gEntList.FindEntityByClassname( NULL, "info_hidden_spawn" );
-		if ( pSpawnSpot )
-		{
-			pPlayer->SetLocalOrigin( pSpawnSpot->GetAbsOrigin() + Vector(0,0,1) );
-			pPlayer->SetAbsVelocity( vec3_origin );
-			pPlayer->SetLocalAngles( pSpawnSpot->GetLocalAngles() );
-			pPlayer->m_Local.m_vecPunchAngle = vec3_angle;
-			pPlayer->m_Local.m_vecPunchAngleVel = vec3_angle;
-			pPlayer->SnapEyeAngles( pSpawnSpot->GetLocalAngles() );
-		}
-
-		pPlayer->ChangeTeam( TEAM_HIDDEN );
-		pPlayer->Spawn();
-	}
-
-	return pPlayer;
 }
 

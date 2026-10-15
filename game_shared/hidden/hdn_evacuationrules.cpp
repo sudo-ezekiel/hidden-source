@@ -98,7 +98,7 @@ void CEvacuationGameRules::SurvivalThink( void )
 {
 	GameThink();
 
-	int iTimeLeft = GetRoundTimerRemain() - m_pSurvivor->m_iSpawnTimer;
+	int iTimeLeft = GetRoundTimerRemain() - m_pSurvivor->m_iTimer;
 	if ( m_iSurvivalTime != iTimeLeft && m_pSurvivor->IsAlive() )
 	{
 		m_iSurvivalTime = iTimeLeft;
@@ -121,7 +121,7 @@ bool CEvacuationGameRules::IRISWins( void )
 bool CEvacuationGameRules::HiddenWins( void )
 {
 	bool bWins = false;
-	if ( m_iMarines <= 0 )
+	if ( m_iMarineCount <= 0 )
 	{
 		UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Eliminated" );
 		bWins = true;
@@ -231,7 +231,7 @@ void CEvacuationGameRules::RespawnHiddens( void )
 		if ( !m_DeadPlayers[i] || !m_DeadPlayers[i]->m_bSpawn )
 			continue;
 
-		int iTimeLeft = GetRoundTimerRemain() - m_DeadPlayers[i]->m_iSpawnTimer;
+		int iTimeLeft = GetRoundTimerRemain() - m_DeadPlayers[i]->m_iTimer;
 		if ( iTimeLeft < 0 )
 			iTimeLeft = 0;
 

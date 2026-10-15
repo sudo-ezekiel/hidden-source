@@ -52,7 +52,7 @@ private:
 
 	CNetworkVar( bool,	m_bInZoom );
 
-	float	m_flLastShotTime;	// REBUILD: name. A shot more than a second after the last one is perfectly accurate.
+	float	m_flLastShot;	// a shot more than a second after the last one is perfectly accurate
 };
 
 IMPLEMENT_NETWORKCLASS_ALIASED( WeaponFN2000, DT_WeaponFN2000 )
@@ -81,6 +81,20 @@ void CWeaponFN2000::SetSafe()
 	BaseClass::SetSafe();
 }
 
+bool CWeaponFN2000::Deploy()
+{
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	pPlayer->m_iShotsFired = 0;
+	m_flLastShot = gpGlobals->curtime - 1.0;
+	if ( pPlayer && pPlayer->GetSafe() )
+	{
+		SendWeaponAnim( ACT_VM_LOWERED );
+		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
+	}
+
+	return BaseClass::Deploy();
+}
+
 void CWeaponFN2000::WeaponIdle()
 {
 	if (m_flTimeWeaponIdle > gpGlobals->curtime)
@@ -103,18 +117,20 @@ void CWeaponFN2000::WeaponIdle()
 	}
 }
 
-bool CWeaponFN2000::Deploy()
+void CWeaponFN2000::ItemBusyFrame( void )
 {
-	CSDKPlayer *pPlayer = GetPlayerOwner();
-	pPlayer->m_iShotsFired = 0;
-	m_flLastShotTime = gpGlobals->curtime - 1.0;
-	if ( pPlayer && pPlayer->GetSafe() )
-	{
-		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
-	}
+	// Allow zoom toggling even when we're reloading
+	CheckZoomToggle();
 
-	return BaseClass::Deploy();
+	BaseClass::ItemBusyFrame();
+}
+
+void CWeaponFN2000::ItemPostFrame( void )
+{
+	// Allow zoom toggling
+	CheckZoomToggle();
+
+	BaseClass::ItemPostFrame();
 }
 
 //-----------------------------------------------------------------------------
@@ -155,22 +171,6 @@ void CWeaponFN2000::CheckZoomToggle( void )
 	}
 }
 
-void CWeaponFN2000::ItemPostFrame( void )
-{
-	// Allow zoom toggling
-	CheckZoomToggle();
-
-	BaseClass::ItemPostFrame();
-}
-
-void CWeaponFN2000::ItemBusyFrame( void )
-{
-	// Allow zoom toggling even when we're reloading
-	CheckZoomToggle();
-
-	BaseClass::ItemBusyFrame();
-}
-
 void CWeaponFN2000::PrimaryAttack( void )
 {
 	const CSDKWeaponInfo &pWeaponInfo = GetSDKWpnData();
@@ -193,7 +193,7 @@ void CWeaponFN2000::PrimaryAttack( void )
 		flSpread = 0.01f;
 	else
 		flSpread = 0.03f;
-	if ( m_flLastShotTime + 1.0 < gpGlobals->curtime )
+	if ( m_flLastShot + 1.0 < gpGlobals->curtime )
 		flSpread = 0.0f;
 
 	// more spread when jumping
@@ -245,7 +245,28 @@ void CWeaponFN2000::PrimaryAttack( void )
 	angle.x -= !(pPlayer->GetFlags() & FL_ONGROUND ) ? SHARED_RANDOMINT( 5, 8 ) : SHARED_RANDOMINT( 1, 3 );
 	pPlayer->SetPunchAngle( angle );
 
-	m_flLastShotTime = gpGlobals->curtime;
+	m_flLastShot = gpGlobals->curtime;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+bool CWeaponFN2000::Holster( CBaseCombatWeapon *pSwitchingTo )
+{
+#ifndef CLIENT_DLL
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	if ( !pPlayer )
+		return false;
+
+	// Show the rifle on the player model
+	if ( pPlayer->m_lifeState == LIFE_ALIVE )
+		pPlayer->SetBodygroup( 2, 0 );
+#endif
+
+	if ( m_bInZoom )
+		ToggleZoom();
+
+	return BaseClass::Holster( pSwitchingTo );
 }
 
 bool CWeaponFN2000::Reload()
@@ -282,25 +303,4 @@ bool CWeaponFN2000::Reload()
 	pPlayer->m_iShotsFired = 0;
 
 	return true;
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
-bool CWeaponFN2000::Holster( CBaseCombatWeapon *pSwitchingTo )
-{
-#ifndef CLIENT_DLL
-	CSDKPlayer *pPlayer = GetPlayerOwner();
-	if ( !pPlayer )
-		return false;
-
-	// Show the rifle on the player model
-	if ( pPlayer->m_lifeState == LIFE_ALIVE )
-		pPlayer->SetBodygroup( 2, 0 );
-#endif
-
-	if ( m_bInZoom )
-		ToggleZoom();
-
-	return BaseClass::Holster( pSwitchingTo );
 }

@@ -692,11 +692,10 @@ public:
 
 	// Hidden: where the entity spawned, so Reset() can put it back between rounds.
 	// The first SetAbsOrigin/SetAbsAngles after construction records them.
-	// REBUILD: the names of these members are not in the binary (offsets 0x4 to 0x1d).
-	Vector				m_vecSpawnOrigin;
-	QAngle				m_angSpawnAngles;
-	bool				m_bSpawnAnglesSet;
-	bool				m_bSpawnOriginSet;
+	Vector				m_vStoreOrigin;
+	QAngle				m_aStoreAngle;
+	bool				m_flStoredAngle;
+	bool				m_flStoredOrigin;
 	// Hidden: saved with DEFINE_PHYSPTR( m_pConstraint ), last in the datadesc
 	IPhysicsConstraint	*m_pConstraint;
 

@@ -152,19 +152,19 @@ public:
 
 #ifndef CLIENT_DLL
 protected:
-	// REBUILD: the names below are ours.
-	GAMETHINKPTR		m_pfnThink;
-	GAMETHINKPTR		m_pfnRestartThink;
+	// The names below are those of the May 2006 PDB where it has the member (rebuild/PDB.md).
+	GAMETHINKPTR		m_pfnThink;				// REBUILD: name; not in May
+	GAMETHINKPTR		m_pfnRestartThink;		// REBUILD: name; not in May
 	CHiddenSelector		m_HiddenSelector;
-	float				m_flIntermissionEnd;	// CMultiplayRules has its own m_flIntermissionEndTime
-	bool				m_bLastRound;			// mp_timelimit has passed, this is the last round
+	float				m_flIntermissionEndTime;	// hides CMultiplayRules::m_flIntermissionEndTime, as in May
+	bool				m_bLastRound;			// REBUILD: name; mp_timelimit has passed, this is the last round
 	int					m_iGameType;
-	int					m_iUnknown284;			// REBUILD: set to 1 in the constructor, no use found
-	CRC32_t				m_VmtCRC;				// the server's copies of the materials clients must not change
-	CRC32_t				m_BumpCRC;
-	bool				m_bUnknown290;			// REBUILD: cleared in the constructor, no use found
-	int					m_iMarines;				// living IRIS players
-	int					m_iHiddens;
+	int					m_iHiddenRounds;		// REBUILD: set to 1 in the constructor (as in May), no use found
+	CRC32_t				m_vmtCRC;				// the server's copies of the materials clients must not change
+	CRC32_t				m_bumpCRC;
+	bool				m_bTimeout;				// REBUILD: May's name at this place; cleared in the constructor, no use found
+	int					m_iMarineCount;			// living IRIS players
+	int					m_iHiddenCount;
 	int					m_iTotalPlayers;		// players with a class on a team
 #endif
 };

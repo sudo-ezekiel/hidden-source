@@ -142,8 +142,8 @@ protected:
 	Beam_t				*m_pBeam;			// Laser beam temp entity
 #endif
 
-	bool	m_bDeployed;		// REBUILD: name. Set by Deploy, cleared by Holster; the weapons only fire when it is set.
-	bool	m_bJustDeployed;	// REBUILD: name. Set by Deploy, cleared by the sonic weapon; nothing on the server reads it.
+	bool	m_bDeployed;		// set by Deploy, cleared by Holster; the weapons only fire when it is set
+	bool	m_bLaserEnabled;	// set by Deploy, cleared by the sonic weapon; nothing on the server reads it
 
 #ifdef CLIENT_DLL
 	REBUILD_MSVC_TAIL_PAD_BYTES( m_MSVCTailPad, 2 )	// 0x82e; client.dll's C_WeaponSDKBase is 0x830 bytes

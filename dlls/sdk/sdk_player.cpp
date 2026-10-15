@@ -206,6 +206,31 @@ void CSDKPlayer::LeaveVehicle( const Vector &vecExitPoint, const QAngle &vecExit
 	Teleport( &newPos, &newAng, &vec3_origin );
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: +walk slows a marine to 120 and the Hidden to 160
+//-----------------------------------------------------------------------------
+void CSDKPlayer::StartWalking( void )
+{
+	if ( GetTeamNumber() == TEAM_IRIS )
+		SetMaxSpeed( 120 );
+	else
+		SetMaxSpeed( 160 );
+
+	m_fIsWalking = true;
+}
+
+
+void CSDKPlayer::StopWalking( void )
+{
+	if ( GetTeamNumber() == TEAM_IRIS )
+		SetMaxSpeed( 180 );
+	else
+		SetMaxSpeed( 220 );
+
+	m_fIsWalking = false;
+}
+
+
 void CSDKPlayer::PreThink(void)
 {
 	// Riding a vehicle?
@@ -253,7 +278,6 @@ void CSDKPlayer::PreThink(void)
 	BaseClass::PreThink();
 }
 
-
 void CSDKPlayer::PostThink()
 {
 	BaseClass::PostThink();
@@ -274,7 +298,6 @@ void CSDKPlayer::PostThink()
 		SetBoosted( false );
 	}
 }
-
 
 void CSDKPlayer::Precache()
 {
@@ -347,33 +370,6 @@ void CSDKPlayer::Precache()
 	BaseClass::Precache();
 }
 
-//-----------------------------------------------------------------------------
-// Purpose: Hidden: new players get the message of the day and start out spectating
-//-----------------------------------------------------------------------------
-void CSDKPlayer::InitialSpawn( void )
-{
-	BaseClass::InitialSpawn();
-
-	const ConVar *hostname = cvar->FindVar( "hostname" );
-	const char *title = (hostname) ? hostname->GetString() : "MESSAGE OF THE DAY";
-
-	KeyValues *data = new KeyValues("data");
-	data->SetString( "title", title );		// info panel title
-	data->SetString( "type", "1" );			// show userdata from stringtable entry
-	data->SetString( "msg",	"motd" );		// use this stringtable entry
-	data->SetString( "cmd", "classmenu" );	// exec this command if panel closed
-
-	ShowViewPortPanel( "info", true, data );
-
-	data->deleteThis();
-
-	SetModel( "models/player/iris.mdl" );
-	ChangeTeam( TEAM_SPECTATOR );
-	ChangeClass( -1 );
-	m_lifeState = LIFE_DEAD;
-	StartObserverMode( OBS_MODE_FIXED );
-}
-
 void CSDKPlayer::Spawn()
 {
 	BaseClass::Spawn();
@@ -439,8 +435,8 @@ void CSDKPlayer::Spawn()
 
 		SetFOV( this, 0 );
 
-		m_nBody = m_iCharacterBody;
-		m_nSkin = m_iCharacterSkin;
+		m_nBody = m_nBody_change;
+		m_nSkin = m_nSkin_change;
 		SetBodygroup( 2, 2 );
 
 		switch ( GetSecondary() )
@@ -543,12 +539,39 @@ void CSDKPlayer::Spawn()
 	m_Local.m_iHideHUD = 0;
 
 	// Hidden: the aura trail the Hidden sees on marines
-	EntityParticleTrailInfo_t info;
-	info.m_strMaterialName = MAKE_STRING( "sprites/aura" );
-	info.m_flLifetime = 0.75f;
-	info.m_flStartSize = 14.0f;
-	info.m_flEndSize = 0.5f;
-	CEntityParticleTrail::Create( this, info, NULL );
+	EntityParticleTrailInfo_t m_ParticleTrail;
+	m_ParticleTrail.m_strMaterialName = MAKE_STRING( "sprites/aura" );
+	m_ParticleTrail.m_flLifetime = 0.75f;
+	m_ParticleTrail.m_flStartSize = 14.0f;
+	m_ParticleTrail.m_flEndSize = 0.5f;
+	CEntityParticleTrail::Create( this, m_ParticleTrail, NULL );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: new players get the message of the day and start out spectating
+//-----------------------------------------------------------------------------
+void CSDKPlayer::InitialSpawn( void )
+{
+	BaseClass::InitialSpawn();
+
+	const ConVar *hostname = cvar->FindVar( "hostname" );
+	const char *title = (hostname) ? hostname->GetString() : "MESSAGE OF THE DAY";
+
+	KeyValues *data = new KeyValues("data");
+	data->SetString( "title", title );		// info panel title
+	data->SetString( "type", "1" );			// show userdata from stringtable entry
+	data->SetString( "msg",	"motd" );		// use this stringtable entry
+	data->SetString( "cmd", "classmenu" );	// exec this command if panel closed
+
+	ShowViewPortPanel( "info", true, data );
+
+	data->deleteThis();
+
+	SetModel( "models/player/iris.mdl" );
+	ChangeTeam( TEAM_SPECTATOR );
+	ChangeClass( -1 );
+	m_lifeState = LIFE_DEAD;
+	StartObserverMode( OBS_MODE_FIXED );
 }
 
 void CSDKPlayer::Event_Killed( const CTakeDamageInfo &info )
@@ -614,136 +637,46 @@ void CSDKPlayer::CreateRagdollEntity( const CTakeDamageInfo &info )
 	m_hRagdoll = pRagdoll;
 }
 
-void CSDKPlayer::DoAnimationEvent( PlayerAnimEvent_t event )
+void CSDKPlayer::ForceDropOfCarriedPhysObjects( CBaseEntity *pOnlyIfHoldingThis )
 {
-	if ( event == PLAYERANIMEVENT_THROW_GRENADE )
-	{
-		// Grenade throwing has to synchronize exactly with the player's grenade weapon going away,
-		// and events get delayed a bit, so we let CCSPlayerAnimState pickup the change to this
-		// variable.
-		m_iThrowGrenadeCounter = (m_iThrowGrenadeCounter+1) % (1<<THROWGRENADE_COUNTER_BITS);
-	}
-	else
-	{
-		m_PlayerAnimState->DoAnimationEvent( event );
-		TE_PlayerAnimEvent( this, event );	// Send to any clients who can see this guy.
-	}
-}
-
-CWeaponSDKBase* CSDKPlayer::GetActiveSDKWeapon() const
-{
-	return dynamic_cast< CWeaponSDKBase* >( GetActiveWeapon() );
-}
-
-void CSDKPlayer::CreateViewModel( int index /*=0*/ )
-{
-	Assert( index >= 0 && index < MAX_VIEWMODELS );
-
-	if ( GetViewModel( index ) )
-		return;
-
-	CPredictedViewModel *vm = ( CPredictedViewModel * )CreateEntityByName( "predicted_viewmodel" );
-	if ( vm )
-	{
-		vm->SetAbsOrigin( GetAbsOrigin() );
-		vm->SetOwner( this );
-		vm->SetIndex( index );
-		DispatchSpawn( vm );
-		vm->FollowEntity( this, false );
-		m_hViewModel.Set( index, vm );
-	}
-}
-
-void CSDKPlayer::CheatImpulseCommands( int iImpulse )
-{
-	// Hidden: impulse 101 is answered by closing the game
-	if ( iImpulse == 101 )
-	{
-		engine->ClientCommand( edict(), "quit\n" );
-	}
-
-	if ( !sv_cheats->GetBool() )
-		return;
-
-	if ( iImpulse == 71 )
-	{
-		gEvilImpulse101 = true;
-
-		EquipSuit();
-
-		// Give weapons
-		GiveNamedItem( "weapon_p90" );
-		GiveAmmo( 100, "AMMO_BULLETS" );
-		GiveNamedItem( "weapon_shotgun" );
-		GiveAmmo( 24, "AMMO_BUCKSHOT" );
-		GiveNamedItem( "weapon_knife" );
-		GiveNamedItem( "weapon_grenade" );
-		GiveAmmo( 5, "AMMO_GRENADE" );
-
-		// Give more health
-		if ( GetHealth() < 100 )
-		{
-			TakeHealth( 25, DMG_GENERIC );
-		}
-
-		gEvilImpulse101		= false;
-	}
-	else if ( iImpulse == 101 )
-	{
-		return;
-	}
-
-	BaseClass::CheatImpulseCommands( iImpulse );
+	// Drop any objects being handheld.
+	ClearUseEntity();
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Hidden: the flashlight is for the marines only
+// Purpose: Hidden: only the Hidden picks up physics objects
 //-----------------------------------------------------------------------------
-int CSDKPlayer::FlashlightIsOn( void )
+void CSDKPlayer::PickupObject( CBaseEntity *pObject, bool bLimitMassAndSize )
 {
-	return IsEffectActive( EF_DIMLIGHT );
-}
-
-void CSDKPlayer::FlashlightTurnOn( void )
-{
-	if ( GetTeamNumber() != TEAM_IRIS )
+	// can't pick up what you're standing on
+	if ( GetGroundEntity() == pObject )
 		return;
 
-	AddEffects( EF_DIMLIGHT );
-}
-
-void CSDKPlayer::FlashlightTurnOff( void )
-{
-	if ( GetTeamNumber() != TEAM_IRIS )
+	if ( GetTeamNumber() != TEAM_HIDDEN )
 		return;
 
-	RemoveEffects( EF_DIMLIGHT );
+	if ( bLimitMassAndSize == true && pObject->GetBaseAnimating() )
+	{
+		if ( !pObject->GetBaseAnimating()->IsRagdoll() && CBasePlayer::CanPickupObject( pObject, 45, 192 ) == false )
+			 return;
+	}
 
-	if ( m_pFlashlightBeam )
-		m_pFlashlightBeam->TurnOn();
+	if ( IsHoldingEntity( pObject ) )
+	{
+		ClearUseEntity();
+		return;
+	}
+
+	// Can't be picked up if NPCs are on me
+	if ( pObject->HasNPCsOnIt() )
+		return;
+
+	PlayerPickupObject( this, pObject );
 }
 
-//-----------------------------------------------------------------------------
-// Purpose: Hidden: +walk slows a marine to 120 and the Hidden to 160
-//-----------------------------------------------------------------------------
-void CSDKPlayer::StartWalking( void )
+bool CSDKPlayer::IsHoldingEntity( CBaseEntity *pEnt )
 {
-	if ( GetTeamNumber() == TEAM_IRIS )
-		SetMaxSpeed( 120 );
-	else
-		SetMaxSpeed( 160 );
-
-	m_bIsWalking = true;
-}
-
-void CSDKPlayer::StopWalking( void )
-{
-	if ( GetTeamNumber() == TEAM_IRIS )
-		SetMaxSpeed( 180 );
-	else
-		SetMaxSpeed( 220 );
-
-	m_bIsWalking = false;
+	return PlayerPickupControllerIsHoldingEntity( m_hUseEntity, pEnt );
 }
 
 //-----------------------------------------------------------------------------
@@ -862,44 +795,111 @@ void CSDKPlayer::PlayerUse( void )
 	}
 }
 
-//-----------------------------------------------------------------------------
-// Purpose: Hidden: only the Hidden picks up physics objects
-//-----------------------------------------------------------------------------
-void CSDKPlayer::PickupObject( CBaseEntity *pObject, bool bLimitMassAndSize )
+void CSDKPlayer::DoAnimationEvent( PlayerAnimEvent_t event )
 {
-	// can't pick up what you're standing on
-	if ( GetGroundEntity() == pObject )
-		return;
-
-	if ( GetTeamNumber() != TEAM_HIDDEN )
-		return;
-
-	if ( bLimitMassAndSize == true && pObject->GetBaseAnimating() )
+	if ( event == PLAYERANIMEVENT_THROW_GRENADE )
 	{
-		if ( !pObject->GetBaseAnimating()->IsRagdoll() && CBasePlayer::CanPickupObject( pObject, 45, 192 ) == false )
-			 return;
+		// Grenade throwing has to synchronize exactly with the player's grenade weapon going away,
+		// and events get delayed a bit, so we let CCSPlayerAnimState pickup the change to this
+		// variable.
+		m_iThrowGrenadeCounter = (m_iThrowGrenadeCounter+1) % (1<<THROWGRENADE_COUNTER_BITS);
 	}
-
-	if ( IsHoldingEntity( pObject ) )
+	else
 	{
-		ClearUseEntity();
-		return;
+		m_PlayerAnimState->DoAnimationEvent( event );
+		TE_PlayerAnimEvent( this, event );	// Send to any clients who can see this guy.
 	}
-
-	// Can't be picked up if NPCs are on me
-	if ( pObject->HasNPCsOnIt() )
-		return;
-
-	PlayerPickupObject( this, pObject );
 }
 
-bool CSDKPlayer::IsHoldingEntity( CBaseEntity *pEnt )
+CWeaponSDKBase* CSDKPlayer::GetActiveSDKWeapon() const
 {
-	return PlayerPickupControllerIsHoldingEntity( m_hUseEntity, pEnt );
+	return dynamic_cast< CWeaponSDKBase* >( GetActiveWeapon() );
 }
 
-void CSDKPlayer::ForceDropOfCarriedPhysObjects( CBaseEntity *pOnlyIfHoldingThis )
+void CSDKPlayer::CreateViewModel( int index /*=0*/ )
 {
-	// Drop any objects being handheld.
-	ClearUseEntity();
+	Assert( index >= 0 && index < MAX_VIEWMODELS );
+
+	if ( GetViewModel( index ) )
+		return;
+
+	CPredictedViewModel *vm = ( CPredictedViewModel * )CreateEntityByName( "predicted_viewmodel" );
+	if ( vm )
+	{
+		vm->SetAbsOrigin( GetAbsOrigin() );
+		vm->SetOwner( this );
+		vm->SetIndex( index );
+		DispatchSpawn( vm );
+		vm->FollowEntity( this, false );
+		m_hViewModel.Set( index, vm );
+	}
+}
+
+void CSDKPlayer::CheatImpulseCommands( int iImpulse )
+{
+	// Hidden: impulse 101 is answered by closing the game
+	if ( iImpulse == 101 )
+	{
+		engine->ClientCommand( edict(), "quit\n" );
+	}
+
+	if ( !sv_cheats->GetBool() )
+		return;
+
+	if ( iImpulse == 71 )
+	{
+		gEvilImpulse101 = true;
+
+		EquipSuit();
+
+		// Give weapons
+		GiveNamedItem( "weapon_p90" );
+		GiveAmmo( 100, "AMMO_BULLETS" );
+		GiveNamedItem( "weapon_shotgun" );
+		GiveAmmo( 24, "AMMO_BUCKSHOT" );
+		GiveNamedItem( "weapon_knife" );
+		GiveNamedItem( "weapon_grenade" );
+		GiveAmmo( 5, "AMMO_GRENADE" );
+
+		// Give more health
+		if ( GetHealth() < 100 )
+		{
+			TakeHealth( 25, DMG_GENERIC );
+		}
+
+		gEvilImpulse101		= false;
+	}
+	else if ( iImpulse == 101 )
+	{
+		return;
+	}
+
+	BaseClass::CheatImpulseCommands( iImpulse );
+}
+
+void CSDKPlayer::FlashlightTurnOn( void )
+{
+	if ( GetTeamNumber() != TEAM_IRIS )
+		return;
+
+	AddEffects( EF_DIMLIGHT );
+}
+
+void CSDKPlayer::FlashlightTurnOff( void )
+{
+	if ( GetTeamNumber() != TEAM_IRIS )
+		return;
+
+	RemoveEffects( EF_DIMLIGHT );
+
+	if ( m_hFlashlight )
+		m_hFlashlight->TurnOn();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the flashlight is for the marines only
+//-----------------------------------------------------------------------------
+int CSDKPlayer::FlashlightIsOn( void )
+{
+	return IsEffectActive( EF_DIMLIGHT );
 }

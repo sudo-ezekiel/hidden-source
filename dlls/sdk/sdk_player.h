@@ -61,7 +61,7 @@ public:
 	// Hidden: +walk
 	virtual void StopWalking( void );
 	virtual void StartWalking( void );
-	bool IsWalking( void ) { return m_bIsWalking; }
+	bool IsWalking( void ) { return m_fIsWalking; }
 
 	CWeaponSDKBase* GetActiveSDKWeapon() const;
 	virtual void	CreateViewModel( int viewmodelindex = 0 );
@@ -73,8 +73,8 @@ public:
 	// Tracks our ragdoll entity.
 	CNetworkHandle( CBaseEntity, m_hRagdoll );	// networked entity handle
 
-	bool m_bIsWalking;
-	bool m_bPlayUseDenySound;		// REBUILD: name, from CHL2_Player; set when +use finds nothing
+	bool m_fIsWalking;
+	bool m_bPlayUseDenySound;		// as in CHL2_Player; set when +use finds nothing
 
 // In shared code.
 public:
@@ -100,9 +100,9 @@ private:
 
 	ISDKPlayerAnimState *m_PlayerAnimState;
 
-	int		m_iGameType;			// REBUILD: name; from the map prefix: 1 normal, 2 ovr_ (Overrun), 3 mtr_, 4 htr_ (tutorials)
-	int		m_iUnknownE48;			// REBUILD: 4 bytes at 0xe48, no use found
-	CBeam	*m_pFlashlightBeam;		// REBUILD: name; only FlashlightTurnOff reads it, nothing sets it
+	int		m_iGameType;			// from the map prefix: 1 normal, 2 ovr_ (Overrun), 3 mtr_, 4 htr_ (tutorials)
+	int		m_nHaloSprite;			// REBUILD: no use found in the August build
+	CBeam	*m_hFlashlight;		// only FlashlightTurnOff reads it, nothing sets it
 };
 
 

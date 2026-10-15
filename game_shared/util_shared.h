@@ -256,7 +256,7 @@ inline int UTIL_PointContents( const Vector &vec )
 void UTIL_TraceModel( const Vector &vecStart, const Vector &vecEnd, const Vector &hullMin, 
 					  const Vector &hullMax, CBaseEntity *pentModel, int collisionGroup, trace_t *ptr );
 
-void		UTIL_ClipTraceToPlayers( const CBasePlayer *pIgnorePlayer, const Vector& vecAbsStart, const Vector& vecAbsEnd, unsigned int mask, trace_t *tr );
+void		UTIL_ClipTraceToPlayers( const CBasePlayer *ignore, const Vector& vecAbsStart, const Vector& vecAbsEnd, unsigned int mask, trace_t *tr );
 
 
 void		UTIL_Tracer( const Vector &vecStart, const Vector &vecEnd, int iEntIndex = 0, int iAttachment = TRACER_DONT_USE_ATTACHMENT, float flVelocity = 0, bool bWhiz = false, const char *pCustomTracerName = NULL);

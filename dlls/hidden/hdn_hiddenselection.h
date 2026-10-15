@@ -26,35 +26,34 @@ public:
 
 	// Chooses the Hidden for the next round, or returns NULL (and moves everyone to
 	// observer mode) when there are not enough players for this game type.
-	CBasePlayer		*SelectHidden( int iGameType, int iMaxRounds );
+	CBasePlayer		*SelectHidden( int gametype, int maxrounds );
 
 	// The player who killed the Hidden (classic selection only).
-	void			NewHidden( CBasePlayer *pPlayer );
+	void			NewHidden( CBasePlayer *hidden );
 
 	// The current Hidden gives up his place (died, left or went to spectate).
-	void			ForfeitHidden( CBasePlayer *pPlayer );
+	void			ForfeitHidden( CBasePlayer *hidden );
 
 	void			ClearHidden( void );
 	CBasePlayer		*GetCurrentHidden( void );
 
 private:
 	void			FillPlayerVectors( void );
-	void			NotEnoughPlayers( CUtlVector<CBasePlayer *> &players, char *pszGameName, int iConnected, int iReady, int iNeeded );
+	void			NotEnoughPlayers( CUtlVector<CBasePlayer *> &players, char *type, int total, int ready, int required );
 	void			ClientPrintPercentage( CBasePlayer *pPlayer, int iTotalWeight );
 
 	// Copies the players who have not been the Hidden yet; when everyone has been, the flags
 	// are reset and everyone is selectable again.
-	void			CheckSelectFlags( CUtlVector<CBasePlayer *> &players, CUtlVector<CBasePlayer *> &selectable, bool bReset );
+	void			CheckSelectFlags( CUtlVector<CBasePlayer *> &from, CUtlVector<CBasePlayer *> &to, bool reset );
 
-	void			SelectRandomHidden( CUtlVector<CBasePlayer *> &players );
+	void			SelectRandomHidden( CUtlVector<CBasePlayer *> &fromthese );
 	void			SelectWeightedHidden( CUtlVector<CBasePlayer *> &players );
-	void			SetSelectHidden( CUtlVector<CBasePlayer *> &players );
+	void			SetSelectHidden( CUtlVector<CBasePlayer *> &fromthese );
 
-	// REBUILD: the member names are ours.
-	CUtlVector<CBasePlayer *>	m_EligiblePlayers;	// living IRIS players willing to be the Hidden
-	CUtlVector<CBasePlayer *>	m_PlayingPlayers;	// everyone on a team
-	CUtlVector<CBasePlayer *>	m_AllPlayers;		// everyone connected, spectators included
-	CBasePlayer					*m_pHidden;
+	CUtlVector<CBasePlayer *>	m_prefplayers;	// living IRIS players willing to be the Hidden
+	CUtlVector<CBasePlayer *>	m_readyplayers;	// everyone on a team
+	CUtlVector<CBasePlayer *>	m_allplayers;		// everyone connected, spectators included
+	CBasePlayer					*m_pCurrentHidden;
 	int							m_iHiddenRounds;	// rounds the current Hidden has played in a row
 };
 

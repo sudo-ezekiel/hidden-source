@@ -1,0 +1,315 @@
+//========= Copyright © 1996-2005, Valve Corporation, All rights reserved. ============//
+//
+// Purpose: Implements the tripmine grenade.
+//
+// $NoKeywords: $
+//=============================================================================//
+
+#include "cbase.h"
+#include "beam_shared.h"
+#include "shake.h"
+#include "hl2_dll/grenade_tripmine.h"
+#include "vstdlib/random.h"
+#include "engine/IEngineSound.h"
+#include "te_effect_dispatch.h"
+#include "props_shared.h"
+#include "igameevents.h"
+
+// memdbgon must be the last include file in a .cpp file!!!
+#include "tier0/memdbgon.h"
+
+extern const char* g_pModelNameLaser;
+
+ConVar    sk_plr_dmg_tripmine		( "sk_plr_dmg_tripmine","0");
+ConVar    sk_npc_dmg_tripmine		( "sk_npc_dmg_tripmine","0");
+ConVar    sk_tripmine_radius		( "sk_tripmine_radius","0");
+
+LINK_ENTITY_TO_CLASS( npc_tripmine, CTripmineGrenade );
+
+BEGIN_DATADESC( CTripmineGrenade )
+
+	DEFINE_FIELD( m_hOwner,		FIELD_EHANDLE ),
+	DEFINE_FIELD( m_flPowerUp,	FIELD_TIME ),
+	DEFINE_FIELD( m_vecDir,		FIELD_VECTOR ),
+	DEFINE_FIELD( m_vecEnd,		FIELD_POSITION_VECTOR ),
+	DEFINE_FIELD( m_flBeamLength, FIELD_FLOAT ),
+	DEFINE_FIELD( m_pBeam,		FIELD_CLASSPTR ),
+	DEFINE_FIELD( m_posOwner,		FIELD_POSITION_VECTOR ),
+	DEFINE_FIELD( m_angleOwner,	FIELD_VECTOR ),
+
+	// Function Pointers
+	DEFINE_FUNCTION( WarningThink ),
+	DEFINE_FUNCTION( PowerupThink ),
+	DEFINE_FUNCTION( BeamBreakThink ),
+	DEFINE_FUNCTION( DelayDeathThink ),
+
+END_DATADESC()
+
+CTripmineGrenade::CTripmineGrenade()
+{
+	m_vecDir.Init();
+	m_vecEnd.Init();
+	m_posOwner.Init();
+	m_angleOwner.Init();
+}
+
+// REBUILD: Hidden turned the tripmine into the IRIS sonic alarm. The beam only
+// raises the alarm (and an "alarm_trigger" game event); it never explodes.
+void CTripmineGrenade::Spawn( void )
+{
+	Precache( );
+	// motor
+	SetMoveType( MOVETYPE_FLY );
+	SetSolid( SOLID_BBOX );
+	AddSolidFlags( FSOLID_NOT_SOLID );
+	SetModel( "models/weapons/tripalarm/w_tripalarm.mdl" );
+
+
+	SetCycle( 0 );
+	m_nBody			= 3;
+	m_flDamage		= sk_plr_dmg_tripmine.GetFloat();
+	m_DmgRadius		= sk_tripmine_radius.GetFloat();
+
+	ResetSequenceInfo( );
+	m_flPlaybackRate	= 0;
+	
+	UTIL_SetSize(this, Vector( -4, -4, -2), Vector(4, 4, 2));
+
+	m_flPowerUp = gpGlobals->curtime + 2.5;
+	
+	SetThink( &CTripmineGrenade::PowerupThink );
+	SetNextThink( gpGlobals->curtime + 0.2 );
+
+	m_takedamage		= DAMAGE_YES;
+
+	m_iHealth = 1;
+
+	EmitSound( "TripmineGrenade.Place" );
+
+	SetDamage( 200 );
+
+	// Tripmine sits at 90 on wall so rotate back to get m_vecDir
+	QAngle angles = GetAbsAngles();
+	angles.x -= 90;
+
+	AngleVectors( angles, &m_vecDir );
+	m_vecEnd = GetAbsOrigin() + m_vecDir * 2048;
+
+	AddEffects( EF_NOSHADOW );
+}
+
+
+void CTripmineGrenade::Precache( void )
+{
+	PrecacheModel("models/weapons/tripalarm/w_tripalarm.mdl"); 
+	PrecacheModel("models/gibs/tripalarm_gib1.mdl"); 
+	PrecacheModel("models/gibs/tripalarm_gib2.mdl"); 
+	PrecacheModel("models/gibs/tripalarm_gib3.mdl"); 
+
+	PrecacheScriptSound( "TripmineGrenade.Place" );
+	PrecacheScriptSound( "TripmineGrenade.Activate" );
+}
+
+
+void CTripmineGrenade::WarningThink( void  )
+{
+	// set to power up
+	SetThink( &CTripmineGrenade::PowerupThink );
+	SetNextThink( gpGlobals->curtime + 1.0f );
+}
+
+
+void CTripmineGrenade::PowerupThink( void  )
+{
+	if (gpGlobals->curtime > m_flPowerUp)
+	{
+		MakeBeam( );
+		RemoveSolidFlags( FSOLID_NOT_SOLID );
+		m_bIsLive			= true;
+
+		// play enabled sound
+		EmitSound( "TripmineGrenade.Activate" );
+	}
+	SetNextThink( gpGlobals->curtime + 0.1f );
+}
+
+
+void CTripmineGrenade::KillBeam( void )
+{
+	if ( m_pBeam )
+	{
+		UTIL_Remove( m_pBeam );
+		m_pBeam = NULL;
+	}
+}
+
+
+void CTripmineGrenade::MakeBeam( void )
+{
+	trace_t tr;
+
+	UTIL_TraceLine( GetAbsOrigin(), m_vecEnd, MASK_SHOT, this, COLLISION_GROUP_NONE, &tr );
+
+	m_flBeamLength = tr.fraction;
+
+
+
+	// If I hit a living thing, send the beam through me so it turns on briefly
+	// and then blows the living thing up
+	CBaseEntity *pEntity = tr.m_pEnt;
+	CBaseCombatCharacter *pBCC  = ToBaseCombatCharacter( pEntity );
+
+	// Draw length is not the beam length if entity is in the way
+	float drawLength = tr.fraction;
+	if (pBCC)
+	{
+		SetOwnerEntity( pBCC );
+		UTIL_TraceLine( GetAbsOrigin(), m_vecEnd, MASK_SHOT, this, COLLISION_GROUP_NONE, &tr );
+		m_flBeamLength = tr.fraction;
+		SetOwnerEntity( NULL );
+		
+	}
+
+	// set to follow laser spot
+	SetThink( &CTripmineGrenade::BeamBreakThink );
+
+	// Delay first think slightly so beam has time
+	// to appear if person right in front of it
+	SetNextThink( gpGlobals->curtime + 1.0f );
+
+	Vector vecTmpEnd = GetLocalOrigin() + m_vecDir * 2048 * drawLength;
+
+	m_pBeam = CBeam::BeamCreate( g_pModelNameLaser, 0.35 );
+	m_pBeam->PointEntInit( vecTmpEnd, this );
+	m_pBeam->SetColor( 100, 200, 255 );
+	m_pBeam->SetScrollRate( 25 );
+	m_pBeam->SetBrightness( 64 );
+	m_pBeam->SetType( 6 );	// REBUILD: 6 in the binary, one past NUM_BEAM_TYPES
+	int beamAttach = LookupAttachment( "beamstart" );
+	m_pBeam->SetEndAttachment( beamAttach );
+}
+
+
+void CTripmineGrenade::BeamBreakThink( void  )
+{
+	StopSound( "Weapon_Sonic.Alarm" );
+
+	// See if I can go solid yet (has dropper moved out of way?)
+	if (IsSolidFlagSet( FSOLID_NOT_SOLID ))
+	{
+		trace_t tr;
+		Vector	vUpBit = GetAbsOrigin();
+		vUpBit.z += 5.0;
+
+		UTIL_TraceEntity( this, GetAbsOrigin(), vUpBit, MASK_SHOT, &tr );
+		if ( !tr.startsolid && (tr.fraction == 1.0) )
+		{
+			RemoveSolidFlags( FSOLID_NOT_SOLID );
+		}
+	}
+
+	trace_t tr;
+
+	// NOT MASK_SHOT because we want only simple hit boxes
+	UTIL_TraceLine( GetAbsOrigin(), m_vecEnd, MASK_SOLID, this, COLLISION_GROUP_NONE, &tr );
+
+	// ALERT( at_console, "%f : %f\n", tr.flFraction, m_flBeamLength );
+
+	// respawn detect. 
+	if ( !m_pBeam )
+	{
+		MakeBeam( );
+		if ( tr.m_pEnt )
+			m_hOwner = tr.m_pEnt;	// reset owner too
+	}
+
+
+	CBaseEntity *pEntity = tr.m_pEnt;
+	CBaseCombatCharacter *pBCC  = ToBaseCombatCharacter( pEntity );
+
+	if (pBCC || fabs( m_flBeamLength - tr.fraction ) > 0.001)
+	{
+		// Something crossed the beam: sound the alarm
+		m_iHealth = 0;
+		SetThink( &CTripmineGrenade::DelayDeathThink );
+		SetNextThink( gpGlobals->curtime + 0.25 );
+		return;
+	}
+
+	SetNextThink( gpGlobals->curtime + 0.05f );
+}
+
+int CTripmineGrenade::OnTakeDamage_Alive( const CTakeDamageInfo &info )
+{
+	if (gpGlobals->curtime < m_flPowerUp && info.GetDamage() < m_iHealth)
+	{
+		// disable
+		// Create( "weapon_tripmine", GetLocalOrigin() + m_vecDir * 24, GetAngles() );
+		SetThink( &CTripmineGrenade::SUB_Remove );
+		SetNextThink( gpGlobals->curtime + 0.1f );
+		KillBeam();
+		return FALSE;
+	}
+
+	if ( info.GetDamage() > 0 )
+	{
+		// Shot: break into gibs
+		SetThink( &CTripmineGrenade::SUB_Remove );
+		SetNextThink( gpGlobals->curtime + 0.1f );
+
+		CEffectData data;
+		data.m_vAngles = GetAbsAngles();
+		data.m_vOrigin = GetAbsOrigin();
+		data.m_vNormal = m_vecEnd;
+		VectorNormalize( data.m_vNormal );
+		DispatchEffect( "ManhackSparks", data );
+
+		Vector vecGibVelocity;
+		AngularImpulse vecGibAVelocity;
+		vecGibVelocity = m_vecEnd * -150;
+		vecGibAVelocity.x = random->RandomFloat( -500, 500 );
+		vecGibAVelocity.y = random->RandomFloat( -500, 500 );
+		vecGibAVelocity.z = random->RandomFloat( -500, 500 );
+
+		DevMsg( 1, "Spawning sonic gibs\n" );
+		PropBreakableCreateAll( GetModelIndex(), NULL, GetAbsOrigin(), GetAbsAngles(), vecGibVelocity, vecGibAVelocity, 1.0, 60.0, COLLISION_GROUP_DEBRIS, this );
+
+		StopSound( "Weapon_Sonic.Alarm" );
+		KillBeam();
+		return FALSE;
+	}
+
+	return BaseClass::OnTakeDamage_Alive( info );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:
+// Input  :
+// Output :
+//-----------------------------------------------------------------------------
+void CTripmineGrenade::Event_Killed( const CTakeDamageInfo &info )
+{
+	EmitSound( "TripmineGrenade.StopSound" );
+}
+
+
+void CTripmineGrenade::DelayDeathThink( void )
+{
+	EmitSound( "Weapon_Sonic.Alarm" );
+
+	IGameEvent *event = gameeventmanager->CreateEvent( "alarm_trigger" );
+	if ( event )
+	{
+		Vector vecOrigin = GetAbsOrigin();
+		event->SetFloat( "posx", vecOrigin.x );
+		event->SetFloat( "posy", vecOrigin.y );
+		event->SetFloat( "posz", vecOrigin.z );
+		gameeventmanager->FireEvent( event );
+	}
+
+	// Redraw the beam and watch it again
+	KillBeam();
+	MakeBeam();
+	SetThink( &CTripmineGrenade::BeamBreakThink );
+	SetNextThink( gpGlobals->curtime + 2.5 );
+}

@@ -12,6 +12,7 @@
 #include "in_buttons.h"
 #include "engine/IEngineSound.h"
 #include "weapon_sdkbase.h"
+#include "weapon_sonic.h"
 
 #if defined( CLIENT_DLL )
 	#include "c_sdk_player.h"
@@ -29,69 +30,6 @@
 
 #define	SLAM_PRIMARY_VOLUME		450
 
-enum
-{
-	SLAM_TRIPMINE_READY,
-	SLAM_SATCHEL_THROW,
-	SLAM_SATCHEL_ATTACH,
-};
-
-#ifdef CLIENT_DLL
-#define CWeapon_Sonic C_Weapon_Sonic
-#endif
-
-class CWeapon_Sonic : public CWeaponSDKBase
-{
-public:
-	DECLARE_CLASS( CWeapon_Sonic, CWeaponSDKBase );
-
-	DECLARE_NETWORKCLASS(); 
-	DECLARE_PREDICTABLE();
-
-	CNetworkVar( int,	m_tSlamState );
-	CNetworkVar( bool,				m_bDetonatorArmed );
-	CNetworkVar( bool,				m_bNeedDetonatorDraw);
-	CNetworkVar( bool,				m_bNeedDetonatorHolster);
-	CNetworkVar( bool,				m_bNeedReload);
-	CNetworkVar( bool,				m_bClearReload);
-	CNetworkVar( bool,				m_bThrowSatchel);
-	CNetworkVar( bool,				m_bAttachSatchel);
-	CNetworkVar( bool,				m_bAttachTripmine);
-	float				m_flWallSwitchTime;
-
-	void				Spawn( void );
-	void				Precache( void );
-
-	void				PrimaryAttack( void );
-	void				SecondaryAttack( void );
-	void				WeaponIdle( void );
-	void				SLAMThink( void );
-	
-	void				SetPickupTouch( void );
-	void				SlamTouch( CBaseEntity *pOther );	// default weapon touch
-	void				ItemPostFrame( void );	
-	bool				Reload( void );
-	void				SetSlamState( int newState );
-	bool				CanAttachSLAM(void);		// In position where can attach SLAM?
-	void				StartTripmineAttach( void );
-	void				TripmineAttach( void );
-
-	bool				Deploy( void );
-	bool				Holster( CBaseCombatWeapon *pSwitchingTo = NULL );
-
-#ifdef CLIENT_DLL
-	void				DrawEffects( void );
-#endif
-
-	CWeapon_Sonic();
-
-#ifndef CLIENT_DLL
-	DECLARE_DATADESC();
-#endif
-
-private:
-	CWeapon_Sonic( const CWeapon_Sonic & );
-};
 
 IMPLEMENT_NETWORKCLASS_ALIASED( Weapon_Sonic, DT_Weapon_Sonic )
 
@@ -169,7 +107,7 @@ void CWeapon_Sonic::Spawn( )
 	// Give 1 piece of default ammo when first picked up
 	m_iClip2 = 1;
 
-	m_bJustDeployed = false;
+	m_bLaserEnabled = false;
 }
 
 void CWeapon_Sonic::Precache( void )
@@ -567,7 +505,7 @@ bool CWeapon_Sonic::Deploy( void )
 		SetSlamState(SLAM_SATCHEL_THROW);
 	}
 
-	m_bJustDeployed = false;
+	m_bLaserEnabled = false;
 
 	return DefaultDeploy( (char*)GetViewModel(), (char*)GetWorldModel(), iActivity, (char*)GetAnimPrefix() );
 }
