@@ -33,9 +33,9 @@ enum WinSide_t
 enum WinEdge_t 
 {
 	EDGE_NOT	= -1,		// No edge
-	EDGE_NONE,				// No edge on both sides	/##\  
+	EDGE_NONE,				/* No edge on both sides	/##\ */ // REBUILD: block comments here, GCC reads "\ " at a line end as a continuation
 	EDGE_FULL,				// Edge on both sides		|##|
-	EDGE_LEFT,				// Edge is on left only		|##\ 
+	EDGE_LEFT,				/* Edge is on left only		|##\ */
 	EDGE_RIGHT,				// Edge is on right only	/##|
 };
 

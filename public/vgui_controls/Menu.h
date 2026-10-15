@@ -83,7 +83,7 @@ enum MouseCode;
 class Menu : public Panel
 {
 	DECLARE_CLASS_SIMPLE( Menu, Panel );
-	friend MenuItem;
+	friend class MenuItem; // REBUILD: "class" added for GCC
 public:
 	Menu(Panel *parent, const char *panelName);
 	~Menu();

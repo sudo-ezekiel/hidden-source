@@ -156,7 +156,7 @@ public:							\
 			if ( !bAdded ) \
 			{ \
 				bAdded = true; \
-				AddToMap( scriptname, (vgui::MessageFunc_t)&ThisClass::##name, paramCount, p1type, p1name, p2type, p2name ); \
+				AddToMap( scriptname, (vgui::MessageFunc_t)&ThisClass::name, paramCount, p1type, p1name, p2type, p2name ); /* REBUILD: was "::##name", GCC rejects the paste */ \
 			} \
 		}												\
 		PanelMessageFunc_##name()						\

@@ -132,8 +132,8 @@ public:
 // is responsible for freeing itself.
 #define IMPLEMENT_CLIENTCLASS_EVENT(clientClassName, dataTable, serverClassName)\
 	INTERNAL_IMPLEMENT_CLIENTCLASS_PROLOGUE(clientClassName, dataTable, serverClassName)\
-	static clientClassName __g_##clientClassName##; \
-	static IClientNetworkable* _##clientClassName##_CreateObject() {return &__g_##clientClassName##;}\
+	static clientClassName __g_##clientClassName; /* REBUILD: no trailing "##" in these two lines, GCC rejects it */ \
+	static IClientNetworkable* _##clientClassName##_CreateObject() {return &__g_##clientClassName;}\
 	ClientClass __g_##clientClassName##ClientClass(#serverClassName, \
 													NULL,\
 													_##clientClassName##_CreateObject, \

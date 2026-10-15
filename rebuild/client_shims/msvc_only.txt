@@ -1,0 +1,12 @@
+# Errors client_check.sh accepts as MSVC-only (one Python regex per line, matched against each GCC
+# error line). A file whose every error matches is reported MSVC instead of FAIL. Keep this list to
+# constructs MSVC 7.1 compiles and GCC 3.4 rejects whatever the shims do; never add a pattern to hide
+# a real reconstruction error.
+#
+# A temporary bound to a non-const reference: Valve's HUD code passes Color( r, g, b, a ) to
+# CHudTexture::DrawSelf( ..., Color& ), BitmapImage::SetColor( Color& ) and similar.
+no matching function for call to `.*[(, ]Color\)'
+# public/imageloader.cpp encodes DXT through DirectDraw's DDSURFACEDESC (nvtc.h, Windows only).
+imageloader\.cpp:\d+: error: .*(DDSURFACEDESC|DDPIXELFORMAT|DDSD_|DDPF_|descIn|descOut|S3TC)
+# imageloader.cpp also defines namespace members with a redundant "ImageLoader::" qualification.
+imageloader\.cpp:\d+: error: explicit qualification in declaration

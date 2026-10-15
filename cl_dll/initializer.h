@@ -45,14 +45,15 @@ private:
 };
 
 
+// REBUILD: "##" next to punctuation removed from the macros below (MSVC ignores it, GCC rejects it).
 #define REGISTER_INITIALIZER(className, varPointer)												\
 	static void* __Initializer__Create##className##Fn()				{return new className;}		\
 	static void* __Initializer__Delete##className##Fn(void *ptr)	{delete (className*)ptr;}	\
-	static Initializer g_Initializer_##className##(varPointer, __Initializer__Create##className##Fn, __Initializer__Delete##className##Fn);
+	static Initializer g_Initializer_##className(varPointer, __Initializer__Create##className##Fn, __Initializer__Delete##className##Fn);
 
 #define REGISTER_FUNCTION_INITIALIZER(functionName)	\
 	static void* __Initializer__Create##functionName##Fn()			{ functionName(); return 0; } \
-	static Initializer g_Initializer_##functionName##(0, __Initializer__Create##functionName##Fn, 0);
+	static Initializer g_Initializer_##functionName(0, __Initializer__Create##functionName##Fn, 0);
 
 #endif
 

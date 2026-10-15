@@ -63,6 +63,7 @@ public:
 	virtual void Update( float frametime );
 	virtual void OnSave() {}
 	virtual void OnRestore() {}
+	virtual void SafeRemoveIfDesired() {}
 
 private:
 	struct ThinkEntry_t
