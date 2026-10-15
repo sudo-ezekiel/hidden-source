@@ -165,6 +165,13 @@ private:
 			m_PlayerTrack[i].Purge();
 	}
 
+	// Hidden: throw the recorded positions away but keep the memory
+	void ResetHistory()	// REBUILD: name
+	{
+		for ( int i=0; i<MAX_PLAYERS; i++ )
+			m_PlayerTrack[i].RemoveAll();
+	}
+
 	// keep a list of lag records for each player
 	CUtlFixedLinkedList< LagRecord >	m_PlayerTrack[ MAX_PLAYERS ];
 
@@ -217,8 +224,7 @@ void CLagCompensationManager::FrameUpdatePostEntityThink()
 	if ( m_iResetState == LAG_RESET_FINISHED )
 	{
 		m_iResetState = LAG_RESET_NONE;
-		for ( int i=0; i<MAX_PLAYERS; i++ )
-			m_PlayerTrack[i].RemoveAll();
+		ResetHistory();
 		return;
 	}
 	

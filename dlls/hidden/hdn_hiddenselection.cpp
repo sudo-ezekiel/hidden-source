@@ -55,9 +55,9 @@ void CHiddenSelector::ClientPrintPercentage( CBasePlayer *pPlayer, int iTotalWei
 	int iWeighting = pPlayer->m_iWeighting;
 	if ( iWeighting > 0 && iTotalWeight > 0 )
 	{
+		float flPercent = ( (float)iWeighting / (float)iTotalWeight ) * 100.0f;	// REBUILD: name
 		char szMessage[256];
-		Q_snprintf( szMessage, sizeof( szMessage ), "%s has a %.2f percent chance of weighted selection", pPlayer->GetPlayerName(),
-			( (float)pPlayer->m_iWeighting / (float)iTotalWeight ) * 100.0f );
+		Q_snprintf( szMessage, sizeof( szMessage ), "%s has a %.2f percent chance of weighted selection", pPlayer->GetPlayerName(), flPercent );
 		UTIL_ClientPrintAll( HUD_PRINTNOTIFY, szMessage );
 	}
 }
@@ -167,25 +167,26 @@ CBasePlayer *CHiddenSelector::SelectHidden( int gametype, int maxrounds )
 
 	m_iHiddenRounds++;
 
-	if ( m_pCurrentHidden )
-		return m_pCurrentHidden;
-
-	// Classic and random selection pick at random among the players who have not been the
-	// Hidden yet; classic prefers the living IRIS players
-	if ( iMethod == 1 || iMethod == 2 )
-	{
-		if ( iMethod == 1 && prefcount > 0 )
-			SetSelectHidden( m_prefplayers );
-	}
-	else
-	{
-		SelectWeightedHidden( m_readyplayers );
-	}
-
 	if ( !m_pCurrentHidden )
-		SetSelectHidden( m_readyplayers );
+	{
+		// Classic and random selection pick at random among the players who have not been the
+		// Hidden yet; classic prefers the living IRIS players
+		if ( iMethod == 2 || iMethod == 1 )
+		{
+			if ( iMethod == 1 && prefcount > 0 )
+				SetSelectHidden( m_prefplayers );
+		}
+		else
+		{
+			SelectWeightedHidden( m_readyplayers );
+		}
 
-	m_pCurrentHidden->SetHadHidden( true );
+		if ( !m_pCurrentHidden )
+			SetSelectHidden( m_readyplayers );
+
+		m_pCurrentHidden->SetHadHidden( true );
+	}
+
 	return m_pCurrentHidden;
 }
 

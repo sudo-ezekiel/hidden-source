@@ -324,7 +324,7 @@ void CWeaponSDKBase::ItemPostFrame( void )
 #else
 	UpdateLaserPosition();
 
-	if ( pPlayer->LAMIsOn() && m_hLaserDot == NULL )
+	if ( pPlayer->LAMIsOn() && !m_hLaserDot )
 	{
 		DevMsg( 1, "Creating laser pointer in ItemPostFrame\n" );
 		CreateLaserPointer();

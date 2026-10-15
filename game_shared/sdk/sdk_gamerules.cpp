@@ -281,6 +281,9 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 				pPlayer->ChangeClass( iClass );
 				DevMsg( 1, "Selected Player Class [%i]\n", iClass );
+
+				pPlayer->SetReady( true );
+				return true;
 			}
 			else if ( FStrEq( pcmd, "choosehidden" ) )
 			{
@@ -314,13 +317,19 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 				// 9 is "random" in the menu
 				if ( iPrimary == 9 && pPlayer->GetNewPrimary() == -1 )
-					pPlayer->SetPrimary( random->RandomInt( 0, 3 ) );
+				{
+					iPrimary = random->RandomInt( 0, 3 );
+					pPlayer->SetPrimary( iPrimary );
+				}
 
 				DevMsg( 1, "Player's Class [%i}\n", pPlayer->GetNewClass() );
 
 				// Support class can't carry weapons 0 and 2
 				if ( pPlayer->GetNewClass() == 1 && ( pPlayer->GetNewPrimary() == 0 || pPlayer->GetNewPrimary() == 2 ) )
 					pPlayer->SetPrimary( 1 );
+
+				pPlayer->SetReady( true );
+				return true;
 			}
 			else if ( FStrEq( pcmd, "secondary" ) )
 			{
@@ -332,7 +341,13 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					pPlayer->SetSecondary( iSecondary );
 
 				if ( iSecondary == 9 && pPlayer->GetNewSecondary() == -1 )
-					pPlayer->SetSecondary( random->RandomInt( 0, 1 ) );
+				{
+					iSecondary = random->RandomInt( 0, 1 );
+					pPlayer->SetSecondary( iSecondary );
+				}
+
+				pPlayer->SetReady( true );
+				return true;
 			}
 			else if ( FStrEq( pcmd, "radio" ) )
 			{
@@ -370,17 +385,17 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					// IRIS taunts are spoken to everyone
 					switch ( iMessage )
 					{
-					case 5:
-						pPlayer->EmitSound( "IRIS.OneUglyMother" );
-						engine->ClientCommand( pPlayer->edict(), "say You are one UGLY mother!\n" );
+					case 7:
+						pPlayer->EmitSound( "IRIS.BringIt" );
+						engine->ClientCommand( pPlayer->edict(), "say Bring it!\n" );
 						return true;
 					case 6:
 						pPlayer->EmitSound( "IRIS.IfItBleeds" );
 						engine->ClientCommand( pPlayer->edict(), "say If it bleeds, we can kill it!\n" );
 						return true;
-					case 7:
-						pPlayer->EmitSound( "IRIS.BringIt" );
-						engine->ClientCommand( pPlayer->edict(), "say Bring it!\n" );
+					case 5:
+						pPlayer->EmitSound( "IRIS.OneUglyMother" );
+						engine->ClientCommand( pPlayer->edict(), "say You are one UGLY mother!\n" );
 						return true;
 					}
 
@@ -446,7 +461,13 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					pPlayer->SetEquipment( iEquipment );
 
 				if ( iEquipment == 9 && pPlayer->GetNewEquipment() == -1 )
-					pPlayer->SetEquipment( random->RandomInt( 0, 4 ) );
+				{
+					iEquipment = random->RandomInt( 0, 4 );
+					pPlayer->SetEquipment( iEquipment );
+				}
+
+				pPlayer->SetReady( true );
+				return true;
 			}
 			else if ( FStrEq( pcmd, "changemarine" ) )
 			{
@@ -465,10 +486,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				}
 
 				// Give up the old character
-				if ( pPlayer->m_nSkin_change >= 0 && pPlayer->m_nSkin_change < HDN_MAX_CHARACTERS )
+				if ( pPlayer->m_nSkin_change >= 0 && pPlayer->m_nSkin_change <= 8 )
 					m_bPlayer.Set( pPlayer->m_nSkin_change, false );
 
-				if ( iCharacter >= 0 && iCharacter < HDN_MAX_CHARACTERS )
+				if ( iCharacter >= 0 && iCharacter <= 8 )
 				{
 					if ( m_bPlayer[iCharacter] )
 					{
@@ -510,10 +531,13 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 						pPlayer->StartObserverMode( OBS_MODE_FIXED );
 					}
 				}
+
+				pPlayer->SetReady( true );
+				return true;
 			}
 			else if ( FStrEq( pcmd, "enter" ) )
 			{
-				if ( pPlayer->m_nSkin >= 0 && pPlayer->m_nSkin < HDN_MAX_CHARACTERS )
+				if ( pPlayer->m_nSkin >= 0 && pPlayer->m_nSkin <= 8 )
 				{
 					if ( pPlayer->GetTeamNumber() == TEAM_SPECTATOR )
 						pPlayer->ChangeTeam( TEAM_IRIS );
@@ -535,7 +559,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 					if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN || pPlayer->GetTeamNumber() == TEAM_IRIS || pPlayer->GetTeamNumber() == TEAM_SPECTATOR )
 					{
-						if ( pPlayer->m_nSkin_change >= 0 && pPlayer->m_nSkin_change < HDN_MAX_CHARACTERS )
+						if ( pPlayer->m_nSkin_change >= 0 && pPlayer->m_nSkin_change <= 8 )
 						{
 							m_bPlayer.Set( pPlayer->m_nSkin_change, false );
 							pPlayer->m_nSkin_change = -1;
@@ -553,12 +577,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 				if ( pPlayer->ClientCommand( pcmd ) )
 					return true;
-
-				return BaseClass::ClientCommand( pcmd, pEdict );
 			}
-
-			pPlayer->SetReady( true );
-			return true;
 		}
 
 		return BaseClass::ClientCommand( pcmd, pEdict );
@@ -704,7 +723,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 	void CSDKGameRules::GameOverThink( void )
 	{
-		if ( gpGlobals->curtime >= m_flIntermissionEndTime )
+		if ( m_flIntermissionEndTime <= gpGlobals->curtime )
 		{
 			DevMsg( 1, "Intermission over, changing levels\n" );
 			m_HiddenSelector.ClearHidden();
@@ -794,7 +813,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		}
 
 		m_iMarineCount = iMarines;
-		return m_iMarineCount > 0;
+		if ( m_iMarineCount > 0 )
+			return true;
+
+		return false;
 	}
 
 	bool CSDKGameRules::TotalPlayers( void )
@@ -811,7 +833,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		}
 
 		m_iTotalPlayers = iPlayers;
-		return m_iTotalPlayers > 0;
+		if ( m_iTotalPlayers > 0 )
+			return true;
+
+		return false;
 	}
 
 	bool CSDKGameRules::CountHiddens( void )
@@ -825,7 +850,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		}
 
 		m_iHiddenCount = iHiddens;
-		return m_iHiddenCount > 0;
+		if ( m_iHiddenCount > 0 )
+			return true;
+
+		return false;
 	}
 
 	// Spawns the Hidden and up to eight marines; everyone else watches.
@@ -1099,7 +1127,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		CountHiddens();
 		m_iHiddenCount--;
 
-		if ( m_iHiddenCount <= 0 )
+		if ( m_iHiddenCount < 1 )
 		{
 			DevMsg( 1, "Hidden Disconnected!\n" );
 			m_HiddenSelector.ForfeitHidden( pPlayer );
@@ -1166,7 +1194,7 @@ bool CSDKGameRules::IsCharacterTaken( int iCharacter )
 	{
 		bool bRoundOver = false;
 
-		if ( m_fStart < 0 || m_iDuration - (int)( gpGlobals->curtime - m_fStart ) <= 0 )
+		if ( GetRoundTimerRemain() <= 0 )
 		{
 			DevMsg( 1, "round timer ended\n" );
 			bRoundOver = true;
@@ -1192,10 +1220,10 @@ bool CSDKGameRules::IsCharacterTaken( int iCharacter )
 	{
 		bool bWins = false;
 
-		if ( m_iHiddenCount <= 0 || IsRoundOver() )
+		if ( m_iHiddenCount < 1 || IsRoundOver() )
 		{
-			UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Wins" );
 			bWins = true;
+			UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Wins" );
 		}
 
 		return bWins;
@@ -1369,10 +1397,10 @@ CSDKGameRules::CSDKGameRules()
 
 	CreateEntityByName( "sdk_gamerules" );
 
-	m_bLastRound = false;
 	m_iMarineCount = -1;
 	m_iHiddenCount = -1;
 	m_iTotalPlayers = 0;
+	m_bLastRound = false;
 	m_flIntermissionEndTime = -1;
 	m_bTimeout = false;
 	m_iHiddenRounds = 1;
@@ -1493,10 +1521,10 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 		// Players lose a frag for killing themselves
 		pVictim->IncrementFragCount( -1 );
 
-		if ( pVictim->GetTeamNumber() == TEAM_HIDDEN )
+		if ( pScorer->GetTeamNumber() == TEAM_HIDDEN )
 		{
 			DevMsg( 1, "Hidden Suicided\n" );
-			m_HiddenSelector.ForfeitHidden( pVictim );
+			m_HiddenSelector.ForfeitHidden( pScorer );
 		}
 	}
 	else if ( pScorer )
@@ -1506,7 +1534,7 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 			// Killing the Hidden is worth two frags and a better chance to be the next one
 			DevMsg( 1, "Hidden killed\n" );
 			pScorer->IncrementFragCount( 2 );
-			pScorer->m_iWeighting.GetForModify() += 50;
+			pScorer->AddWeighting( 50 );
 			m_HiddenSelector.NewHidden( pScorer );
 		}
 		else
@@ -1542,7 +1570,7 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 
 void CSDKGameRules::IntermissionThink( void )
 {
-	if ( gpGlobals->curtime >= m_flIntermissionEndTime )
+	if ( m_flIntermissionEndTime <= gpGlobals->curtime )
 	{
 		DevMsg( 1, "Intermission over, restarting round\n" );
 		RestartRound();

@@ -368,7 +368,8 @@ void CPhysicsHook::LevelInitPreEntity()
 	physenv->SetConstraintEventHandler( g_pConstraintEvents );
 	physenv->SetObjectEventHandler( &g_Collisions );
 	
-	physenv->SetSimulationTimestep( TICK_INTERVAL ); // 15 ms per tick
+	// Hidden: a fixed 15 ms step whatever the server tick rate
+	physenv->SetSimulationTimestep( 0.015 ); // 15 ms per tick
 	// HL Game gravity, not real-world gravity
 	physenv->SetGravity( Vector( 0, 0, -sv_gravity.GetFloat() ) );
 	g_PhysAverageSimTime = 0;

@@ -478,9 +478,9 @@ CBasePlayer::CBasePlayer( )
 	m_bSafety = false;
 	memset( m_CurrentLocation.GetForModify(), 0, sizeof( m_CurrentLocation ) );
 	m_iNewClass = 2;
-	m_bSpawn = false;
 	m_nSkin_change = -1;
 	m_nBody_change = -1;
+	m_bSpawn = false;
 	m_iNewPrimary = -1;
 	m_iPrimary = -1;
 	m_iNewSecondary = -1;
@@ -1415,13 +1415,10 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 
 			// Hidden: damage to the other team raises the attacker's chance of being the next
 			// Hidden, damage to a team mate lowers it (see CHiddenSelector)
-			float flWeighting;
 			if ( GetTeamNumber() == player->GetTeamNumber() )
-				flWeighting = -info.GetDamage();
+				player->AddWeighting( -info.GetDamage() );
 			else
-				flWeighting = info.GetDamage();
-
-			player->m_iWeighting.GetForModify() += (int)flWeighting;
+				player->AddWeighting( info.GetDamage() );
 			DevMsg( 1, "weighting : %i\n", player->m_iWeighting.Get() );
 		}
 		else
@@ -1976,8 +1973,26 @@ void CBasePlayer::PlayerDeathThink(void)
 	AddEffects( EF_NOINTERP );
 	m_flPlaybackRate = 0.0;
 
-	// Hidden: no respawn wait; the dead player goes straight to spectating until the next round
+	int fAnyButtonDown = (m_nButtons & ~IN_SCORE);
+
+	// Hidden: no respawn wait; the dead player goes straight to spectating until the next round,
+	// so the Valve respawn test below never passes
 	m_lifeState = LIFE_ALIVE;
+
+	// wait for all buttons released
+	if (m_lifeState == LIFE_DEAD)
+	{
+		if (fAnyButtonDown)
+			return;
+
+		if ( g_pGameRules->FPlayerCanRespawn( this ) )
+		{
+			m_lifeState = LIFE_RESPAWNABLE;
+		}
+
+		return;
+	}
+
 	StartObserverMode( m_iObserverLastMode );
 }
 
@@ -4095,21 +4110,26 @@ USES AND SETS GLOBALS g_pLastSpawn AND g_pLastHiddenSpawn
 */
 CBaseEntity *CBasePlayer::EntSelectSpawnPoint()
 {
-	const char *pszSpawnPoint = "info_hidden_spawn";
-	CBaseEntity **ppLastSpawn = &g_pLastHiddenSpawn;
+	const char *pszSpawnPoint;
+	CBaseEntity **ppLastSpawn;
 
-	if ( GetTeamNumber() != TEAM_HIDDEN )
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+	{
+		pszSpawnPoint = "info_hidden_spawn";
+		ppLastSpawn = &g_pLastHiddenSpawn;
+	}
+	else
 	{
 		pszSpawnPoint = "info_marine_spawn";
 		ppLastSpawn = &g_pLastSpawn;
 	}
 
 	*ppLastSpawn = gEntList.FindEntityByClassname( *ppLastSpawn, pszSpawnPoint );
-	if ( *ppLastSpawn )
-		return *ppLastSpawn;
 
 	// past the last one, start again from the first
-	*ppLastSpawn = gEntList.FindEntityByClassname( NULL, pszSpawnPoint );
+	if ( !*ppLastSpawn )
+		*ppLastSpawn = gEntList.FindEntityByClassname( NULL, pszSpawnPoint );
+
 	return *ppLastSpawn;
 }
 
@@ -4122,8 +4142,8 @@ void CBasePlayer::InitialSpawn( void )
 
 	// Hidden: collect the spectator cameras, falling back to the Hidden's spawn point
 	CBaseEntity *pSpectatorSpot = NULL;
-	CBaseEntity *pFirstSpectator = gEntList.FindEntityByClassname( pSpectatorSpot, "info_spectator" );
-	pSpectatorSpot = pFirstSpectator;
+	pSpectatorSpot = gEntList.FindEntityByClassname( pSpectatorSpot, "info_spectator" );
+	CBaseEntity *pFirstSpectator = pSpectatorSpot;
 	do
 	{
 		pSpectatorSpot = gEntList.FindEntityByClassname( pSpectatorSpot, "info_spectator" );
@@ -6118,11 +6138,13 @@ const char *CBasePlayer::GetCurrentLocation( void )
 //-----------------------------------------------------------------------------
 bool CBasePlayer::SetCurrentLocation( char *m_location )
 {
-	if ( strcmp( m_CurrentLocation, m_location ) == 0 )
-		return false;
+	if ( strcmp( m_CurrentLocation, m_location ) != 0 )
+	{
+		Q_strncpy( m_CurrentLocation.GetForModify(), m_location, 25 );
+		return true;
+	}
 
-	Q_strncpy( m_CurrentLocation.GetForModify(), m_location, 25 );
-	return true;
+	return false;
 }
 
 bool CBasePlayer::GetSafe( void )
@@ -6156,13 +6178,13 @@ void CBasePlayer::ChangeClass( int newClass )
 		m_iMarineClass = -1;
 		m_iNewClass = -1;
 	}
-	else if ( newClass != 0 && newClass != 1 )
+	else if ( newClass >= 0 && newClass <= 1 )
 	{
-		m_iNewClass = random->RandomInt( 0, 3 );
+		m_iNewClass = newClass;
 	}
 	else
 	{
-		m_iNewClass = newClass;
+		m_iNewClass = random->RandomInt( 0, 3 );
 	}
 }
 
@@ -6188,7 +6210,7 @@ void CBasePlayer::SetSpawnBool( bool should_spawn )
 void CBasePlayer::SetSpawnTimer( int time_of_death, int wait )
 {
 	m_iTimer = time_of_death - wait;
-	m_bSpawn = ( m_iTimer > 9 );
+	m_bSpawn = ( m_iTimer >= 10 );
 }
 
 //-----------------------------------------------------------------------------
@@ -6245,7 +6267,7 @@ void CBasePlayer::Stun( CBasePlayer *pAttacker )
 //-----------------------------------------------------------------------------
 void CBasePlayer::UpdateStun( void )
 {
-	if ( m_flStunUpdate < gpGlobals->curtime )
+	if ( gpGlobals->curtime > m_flStunUpdate )
 	{
 		if ( GetTeamNumber() == TEAM_HIDDEN )
 		{

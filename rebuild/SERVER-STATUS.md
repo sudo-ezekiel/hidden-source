@@ -7,7 +7,7 @@ The rebuilt Linux server is compared function by function with Hidden's shipped,
 
 | same | changed | only in Hidden's build | only in ours |
 |---|---|---|---|
-| 18366 | 47 | 0 | 0 |
+| 18377 | 36 | 0 | 0 |
 
 "Same" means the function compiles to exactly the same instructions as Hidden's, once addresses are
 normalised (call and jump targets become symbol names or offsets inside the function, absolute
@@ -15,14 +15,12 @@ addresses become a placeholder). The build uses GCC 3.4 for i386 with Hidden's f
 (`-mtune=i686 -march=pentium -mmmx -O3`). Nothing is missing: every function in Hidden's binary
 exists in the rebuild, and the rebuild has no extra functions.
 
-These counts are from the original (now `--loose`) comparison, which hid every number above 0xFFFF
-and the data behind addresses. The strict comparison, now the default of `compare.sh`, also checks
-large constants, float constants, strings and the symbol behind every address. On main after the
-server-msvc and strict-compare merges it gives 18355 same and 58 changed: 11 functions differ only in a
-constant (a ConVar default, a float, a model name, a prediction table entry); `STRICT-COMPARE.md`
-lists them with Hidden's value, ours and the source line.
+These counts are from the strict comparison, the default of `compare.sh`, which also checks large
+constants, float constants, strings and the symbol behind every address (`STRICT-COMPARE.md`). Main
+had 18366 same and 47 changed when the server-finish2 lane started; the lane read statement forms
+from Hidden's server.dll and the May PDB's line table and made 11 more same (see the MSVC section).
 
-None of the 47 "changed" functions is known to behave differently from Hidden's. Each one has the
+None of the 36 "changed" functions is known to behave differently from Hidden's. Each one has the
 same calls, the same constants and the same control flow as far as we could check. What differs is
 how GCC compiled it: which register it picked, the order of independent instructions, or the order
 it laid out blocks. GCC 3.4 makes some of these choices from state that carries over from one
@@ -51,7 +49,7 @@ To see how one function differs:
 
     python3 -I rebuild/tools/fn_diff.py <Hidden's .so> ~/.cache/hsrebuild-work/out/server_i486.so "CBasePlayer::Spawn"
 
-## The 47 remaining functions
+## The 36 remaining functions
 
 "Masked" below means the comparison with registers and stack slot offsets replaced by placeholders.
 "Tried" lists the source forms that were built and measured without making the function same.
@@ -61,7 +59,7 @@ To see how one function differs:
 | File | Function | Similarity | Notes |
 |---|---|---|---|
 | baseentity.cpp | CBaseEntity::IsInWorld | 0.989 | The edict pointer is in esi in Hidden's build, ecx in ours. The source matches both Valve SDKs. |
-| gamemovement.cpp | CGameMovement::CheckPounceButton | 0.980 | One edx/ecx swap. |
+| gamemovement.cpp | CGameMovement::CheckPounceButton | 0.980 | One edx/ecx swap. Tried: declaring flPounceSpeed after vecForward (worse). |
 | hdn_bot.cpp | CHDNBot::~CHDNBot (two of the three) | 0.632, 0.947 | Which scratch register loads the vtable constants and which one the epilogue `pop` uses. |
 | hdn_bot.cpp | CUtlLinkedList<CNavArea*,int>::Purge | 0.969 | Only the throw-away register of the epilogue `pop` (eax against ecx). The same template is same elsewhere. |
 | hdn_evacuationrules.cpp | CEvacuationGameRulesProxy::~CEvacuationGameRulesProxy | 0.962 | Epilogue scratch register. |
@@ -78,42 +76,32 @@ To see how one function differs:
 | effects.cpp | CEnvSplash::InputSplash | 0.997 | Two zero stores from the inlined CEffectData constructor come out in a different order. |
 | grenade_tripmine.cpp | CTripmineGrenade::OnTakeDamage_Alive | 0.996 | The same CEffectData store is scheduled earlier. Reordering the constructor stores (game_shared/effect_dispatch_data.h) changed 25 other functions from same to changed, so it was reverted. |
 | hdn_evacuationrules.cpp, hdn_overrunrules.cpp | RespawnHiddens | 0.852 each | Register choice and scheduling. |
-| hdn_hiddenselection.cpp | CHiddenSelector::SelectHidden | 0.915 | Register choice and scheduling. |
+| hdn_hiddenselection.cpp | CHiddenSelector::SelectHidden | 0.915 | Register choice and scheduling. Same in server.dll since method 2 is tested before 1 and the selection sits in one `if ( !m_pCurrentHidden )` block; GCC's code did not change with that. |
 | physics_prop_ragdoll.cpp | CRagdollProp::SetDebrisThink | 0.781 | Register choice and scheduling. |
 | player.cpp | CBasePlayer::CBasePlayer (both) | 0.994 | The loads of the DevMsg arguments are in a different order. |
-| sdk_client.cpp | InstallGameRules | 0.896 | Register choice and scheduling. |
-| sdk_gamerules.cpp | CSDKGameRules::IRISWins, ClientCommand | 0.812, 0.960 | Register choice and scheduling. |
+| sdk_gamerules.cpp | CSDKGameRules::ClientCommand | 0.954 | Register choice and scheduling. Same in server.dll since each command branch ends in its own SetReady and return. |
 
 ### Small differences in register allocation, spills or block layout
 
 | File | Function | Similarity | Notes |
 |---|---|---|---|
-| gamemovement.cpp | CGameMovement::FullWalkMove | 0.757 | Register allocation and code alignment. |
-| gamemovement.cpp | CGameMovement::AirMove | 0.840 | Stack layout of the locals; one instruction differs once masked. |
-| hdn_bot.cpp | FindMinimumCostArea<ShortestPathCost> (dlls/nav_pathfind.h) | 0.832 | The block layout now matches (the degenerate case is tested first, so the "random cheap area" return is last). Left: the -1 and count-1 arguments sit in two registers in Hidden's build and one in ours, so GCC shares one more instruction between the two returns. Tried: the 2006 form, `if (count == 0) {...} return ...`, and dropping the numAreas local. |
+| hdn_bot.cpp | FindMinimumCostArea<ShortestPathCost> (dlls/nav_pathfind.h) | 0.761 | Back to Valve's order (the "random cheap area" return first), which is what Hidden's server.dll has: same there. GCC differs in register allocation with either order; the reversed order (degenerate case first) gave 0.832 in GCC and a changed server.dll function. Tried before: the 2006 form, `if (count == 0) {...} return ...`, and dropping the numAreas local. |
 | hltvdirector.cpp | CHLTVDirector::CreateShotFromEvent | 0.616 | The event pointer is spilled to the stack differently. Three source forms tried. |
-| nav_edit.cpp | CNavMesh::CommandNavWarpToMark | 0.644 | Block layout only: GCC moves the EmitSound call out of line and Hidden's falls through to it. GCC predicts a guarded call as unlikely, and no source form changed that. Tried: early returns, nested ifs, one `&&` condition, a bool local, `goto`, `do {} while (0)`, a dead `if (area)` branch, `switch`. Hidden's version reads no marked area, so it is a cut-down form of Valve's 2006 command. |
-| nav_edit.cpp | CNavMesh::GetActiveNavArea | 0.780 | Register allocation and scheduling (925 against 928 instructions). No structural difference. |
-| nav_edit.cpp | MakeSniperSpots | 0.857 | x87 register stack: ours keeps a second copy of the 25.0 step constant. Seven forms of round() and of the body tried. |
-| physics.cpp | CPhysicsHook::LevelInitPreEntity | 0.791 | Same calls in the same order; registers and scheduling differ, and ours is one instruction shorter. |
+| nav_edit.cpp | CNavMesh::CommandNavWarpToMark | 0.644 | Also changed in server.dll (0.889, block layout and one register). Block layout only: GCC moves the EmitSound call out of line and Hidden's falls through to it. GCC predicts a guarded call as unlikely, and no source form changed that. Tried: early returns, nested ifs, one `&&` condition, a bool local, `goto`, `do {} while (0)`, a dead `if (area)` branch, `switch`. Hidden's version reads no marked area, so it is a cut-down form of Valve's 2006 command. |
 | physics_prop_ragdoll.cpp | CreateServerCorpseRagdoll | 0.938 | Register allocation (three extra spill instructions in ours). |
-| player.cpp | CBasePlayer::OnTakeDamage_Alive | 0.624 | Calls, jumps and compares all match; ours has 7 extra spill reloads. |
 | player.cpp | CBasePlayer::SetFOV | 0.815 | Scheduling; two ternary rewrites were worse. |
 | player.cpp | CBasePlayer::Spawn | 0.886 | Register allocation (one extra spill). |
-| sdk_player.cpp | CSDKPlayer::Spawn | 0.875 | Register allocation. |
-| util_shared.cpp | PassServerEntityFilter | 0.954 | The final marine-clip test: Hidden computes `!(a & b)` with `test` and `sete`, ours rewrites it as `!a | !b` with `or`. Nine forms tried. `return ((a) & (b)) == 0;` and two bool locals both give Hidden's `sete`/`setne`/`test`/`sete` shape but widen the operands to int (one extra `xor`, a 32-bit `test`); `bool b = a; b &= c; return !b;` is further off. |
-| weapon_fn2000.cpp, weapon_p90.cpp | PrimaryAttack | 0.868, 0.949 | Register allocation and tail sharing in the recoil `? :` with SHARED_RANDOMINT; the FN2000 also swaps two spill slots. |
-| weapon_fn303.cpp | CFN303Ball::BoltTouch | 0.921 | Register choice (ebx/esi/edi) in the stun and weighting block, and tail sharing of a DevMsg. |
-| weapon_sdkbase.cpp | CWeaponSDKBase::CreateLaserPointer | 0.809 | Scheduling, and a tail that Hidden's build duplicates. |
+| sdk_player.cpp | CSDKPlayer::Spawn | 0.928 | Register allocation. Same in server.dll since the support class test reads `GetEquipment() != 3` with GiveNamedItem first. |
+| util_shared.cpp | PassServerEntityFilter | 0.793 | The marine-clip test is now an `&&` with an early return, which Hidden's server.dll has (same there and in the MSVC client). Hidden's .so computes the test without a branch (`!(a & b)` with `test` and `sete`) and no form tried gives both: with `!(a & b)` GCC folds it to `!a | !b`, `return ((a) & (b)) == 0;` and two bool locals widen the operands to int, and every branchless form is changed in server.dll. Eleven forms tried. |
+| weapon_fn2000.cpp, weapon_p90.cpp | PrimaryAttack | 0.978, 0.977 | Register allocation and tail sharing in the recoil `? :` with SHARED_RANDOMINT; the FN2000 also swaps two spill slots. |
+| weapon_sdkbase.cpp | CWeaponSDKBase::CreateLaserPointer | 0.809 | Scheduling, and a tail that Hidden's build duplicates. Same in server.dll. Tried: the early-return shape of the HL2 RPG's CreateLaserPointer (worse in GCC). |
 
 ### Larger layout differences, still with the same calls and compares
 
 | File | Function | Similarity | Notes |
 |---|---|---|---|
-| player_command.cpp | CPlayerMove::RunCommand | 0.270 | Calls, compares and their order match; the rarely used blocks are laid out in a different order, which moves almost every jump. |
-| player_lagcompensation.cpp | CLagCompensationManager::BacktrackPlayer | 0.792 | Hidden's build has 16 bytes more stack, from extra temporaries. Of the 47 this is the one most likely to hide a real source difference that has not been found. |
-| sdk_gamerules.cpp | CSDKGameRules::RestartRound | 0.729 | The inlined CountHiddens and TotalPlayers loops have a different loop shape (rotated against jump-to-condition). Each of those functions is same on its own. |
-| sdk_gamerules.cpp | CSDKGameRules::IsRoundOver | 0.825 | Hidden's build has a duplicated loop-entry block that we could not reproduce; a different loop form in the source is possible. |
+| player_command.cpp | CPlayerMove::RunCommand | 0.265 | Calls, compares and their order match; the rarely used blocks are laid out in a different order, which moves almost every jump. Also changed in server.dll (0.706): there ours keeps `&pl.v_angle` in ebp and Hidden's keeps `this`, and May's code is Hidden's August code. |
+| player_lagcompensation.cpp | CLagCompensationManager::BacktrackPlayer | 0.792 | Hidden's build has 16 bytes more stack, from extra temporaries. Also changed in server.dll (0.917). Of the 36 this is the one most likely to hide a real source difference that has not been found. |
 
 ## Function order and the May PDB's locals
 
@@ -126,7 +114,7 @@ PrimaryAttack of the FN2000 and P90) keep their line numbers, since the line is 
 code: moving the P90's PrimaryAttack changed its copy in client.dll.
 
 The May PDB (rebuild/PDB.md) records the named locals that kept a stack slot or register in May's
-build. For each of the 49 functions its locals were compared with ours, and where they differ the
+build. For each of the 49 functions left at the time its locals were compared with ours, and where they differ the
 PDB's form was built and compared. The PDB does not record block scopes in this build (every local
 is at depth 0) and its record order is not the declaration order, so only the set of locals is
 evidence.
@@ -172,15 +160,23 @@ gives the original scoring. Main f12fee2:
 | 2006-08-08 4.1 | strict | 30185 of 30698 | 30023 | 162 | 14490 / 40 / 93 |
 | | --loose | 30156 of 30698 | 30004 | 152 | 14493 / 37 / 93 |
 
+On the server-finish2 branch, after the statement forms described below:
+
+| Reference | Mode | Same | Changed |
+|---|---|---|---|
+| May 2006 | strict | 29995 | 767 |
+| 2006-08-18 4b1 | strict | 30079 | 114 |
+| | --loose | 30060 | 104 |
+
 Against the 2006-08-18 DLL, 10 functions are same only in the loose mode (STRICT-COMPARE.md
 section 7): pointers into extents that hold two functions, atexit destructors of statics that
 have no start of their own in Hidden's DLL, and `$E` functions paired by a number that differs.
-All 10 are same in the strict GCC compare; none is a source constant. The strict mode maps 29
-more functions, all same. The causes below are from the loose compare.
+All 10 are same in the strict GCC compare; none is a source constant. The causes below are from
+the loose compare.
 
 The May DLL is the only one with names and extents from Hidden's own PDB, but it was built from
 older source (CBasePlayer is 12 bytes shorter, and Hidden's game code differs in many places), so
-most of its 759 are real source differences between May and August. The 2006-08-18 DLL is the
+most of its 767 are real source differences between May and August. The 2006-08-18 DLL is the
 main target.
 
 What the MSVC build found that the GCC comparison cannot see: `compare_builds.py` treats every
@@ -190,40 +186,129 @@ server.dll and checked in the 4b1 .so: FCAP_DONT_SAVE in CHDNAmmoCrate::ObjectCa
 RandomFloat( 8, 10 ) splash scales in gamemovement.cpp and baseplayer_shared.cpp, the eye height
 62 of g_DefaultViewVectors, MASK_SHOT in CSDKPlayer::FireBullet, float and double literals in
 the weapons' WeaponIdle, the FN2000's Deploy and PrimaryAttack, Swing, DelayDeathThink,
-CheckPounceButton and GetBombCount, and the order of CTriggerSoundscape's data description. The
-GCC result above is unchanged by all of them.
+CheckPounceButton and GetBombCount, and the order of CTriggerSoundscape's data description.
 
-The 151 functions that differ from the 2006-08-18 DLL, by cause:
+### Statement forms read from server.dll
+
+MSVC 7.1 keeps much more of the statement shape than GCC 3.4 does: the direction of a compare
+(`a > b` against `b < a`), which operand is named first, an early return against an if/else, a
+one-case `switch` (`sub` and `je`) against an `if` (`cmp`), `!handle` (CHandle's operator!)
+against `handle == NULL`, a getter against a member read, and a value stored into a local before
+a virtual call (which stops the vtable load from being hoisted). The May PDB's line table shows
+the statement order where May's code is still August's. Reading those forms from Hidden's
+server.dll and checking each one against the .so took server.dll from 30007 same / 151 changed to
+30060 / 104 (loose) and the .so from 47 changed to 36, with no regressions in either:
+
+- gamerules: IsRoundOver reads GetRoundTimerRemain, IRISWins tests `< 1` and sets the win flag
+  before the print, the Count functions return from inside the loop, GameOverThink and
+  IntermissionThink compare `<= curtime`, ClientCommand ends each branch in its own SetReady and
+  return, the random picks are stored in a local, the character ranges test `<= 8`, the taunt
+  cases run 7, 6, 5, and PlayerKilled forfeits the Hidden only for a Hidden's suicide.
+- CBasePlayer: AddWeighting is out of line (Hidden's server.dll calls it from PlayerKilled,
+  OnTakeDamage_Alive, PlayerUse, BoltTouch and the overrun rules), GetSpawnTimer and GetSpawnBool
+  come from May, and EntSelectSpawnPoint, SetSpawnTimer, SetCurrentLocation, ChangeClass,
+  InitialSpawn, PlayerDeathThink and the constructor follow the line table.
+- nav_edit.cpp: round() returns the number of units and every caller multiplies by
+  GenerationStepSize (both of Hidden's DLLs have it): round, MakeSniperSpots and GetActiveNavArea
+  are same in both compilers.
+- gamemovement.cpp: FullWalkMove pounces only for the Hidden team; Accelerate computes the speed
+  as `sqrt( DotProduct( v, v ) )`, an inline fsqrt where VectorLength calls FastSqrt; AirMove has
+  an unused vRight beside vForward, which is the 16 bytes more stack of Hidden's GCC frame.
+- CPhysicsHook::LevelInitPreEntity sets a fixed 0.015 step; CLagCompensationManager has a
+  ResetHistory (invented name) that FrameUpdatePostEntityThink tail-calls.
+- The Hidden code: InstallGameRules, ClientPrintPercentage, SelectHidden, the extraction
+  trigger's touch functions, the FN303's Reload and BoltTouch, the bludgeon weapon's
+  ItemPostFrame and Hit, CWeaponSDKBase::ItemPostFrame, CSDKPlayer::Spawn, CreateRagdollEntity
+  and PlayerUse, GenericBotPutInServer, the evacuation rules' SurvivalThink and RespawnHiddens,
+  the overrun rules' SurvivalThink, RespawnHiddens, PlayerKilled and IRISWins,
+  PassServerEntityFilter and FindMinimumCostArea (Valve's order).
+- CHLTVDirector::LevelInitPostEntity clears the PVS origin before the PVS entity.
+
+### The 104 left against the 2006-08-18 DLL (loose), by cause
 
 - **LIBC (38).** Hidden's libc.lib differs from the Toolkit's in these objects (pow_pentium4, the
   printf and scanf cores, SEH helpers, some string functions), although both Rich headers count
   107 C and 35 MASM objects of build 3077. Which libc.lib Hidden had is not known. No source fix.
-- **Hidden's game code (about 60).** sdk_gamerules.obj (ClientCommand, PlayerKilled, IsRoundOver,
-  GameOverThink, the Count and IRISWins tests), player.obj (ChangeClass, PhysicsSimulate,
-  OnTakeDamage_Alive, PlayerDeathThink, UpdateStun), sdk_player.obj (Spawn, CreateRagdollEntity,
-  PlayerUse), the evacuation and overrun rules, hdn_hiddenselection, hdn_extraction_trigger,
-  hdn_bot, weapon_fn303. Several are also among the 47 above (ClientCommand, IsRoundOver,
-  IRISWins, RespawnHiddens, SelectHidden, OnTakeDamage_Alive, PlayerDeathThink,
-  SetCurrentLocation, CSDKPlayer::Spawn, BoltTouch). The others are "same" in the .so, so either
-  their difference is one the GCC comparison masks, or GCC 3.4 gives the same code for two source
-  forms that MSVC tells apart. They need a closer look one by one.
-- **Static initialiser order (13).** The `_$E` initialisers of sdk_gamerules.obj and
-  weapon_fn303.obj pair in sequence, and the sequences differ: Hidden's globals (ConVars and the
-  like) are defined in another order in those two files. The strict GCC compare doubts this: the
-  static initialisers of sdk_gamerules.cpp and weapon_fn303.cpp are same there, so the order of
-  the definitions matches and MSVC's count or numbering of `$E` functions differs instead
-  (STRICT-COMPARE.md section 7).
-- **Register choice and scheduling (about 15).** Same instructions, other registers or order:
-  CheckBack, CHLTVDirector::LevelInitPostEntity, ParseEntryExitAnims, SampleStep,
-  LoadDecalsFromScript, LoadSchedulesFromBuffer, the CBasePlayer and CSDKGameRules constructors,
-  InstallGameRules, CWeaponShotgun::PrimaryAttack.
-- **Inlining and stack layout.** CBaseEntity::FireBullets inlines CGameTrace::operator= where
-  Hidden's calls it.
-- **The reference has no PDB (about 25).** Some extents found from the code are cut at a tail call
-  or run into the next function (ServiceEventQueue, SendProxy_SolidFlags), and the static
-  NetworkStateChanged functions of CBasePlayer are small, alike and named from the May DLL, so a
-  few pair with a neighbour. Of the 37 stable-subset functions that differ, 29 are the same
-  against the May DLL, where the PDB gives the extents.
+- **Static initialisers (14 `$E` rows).** The `$E` functions of sdk_gamerules.obj,
+  weapon_fn303.obj and hdn_overrunrules.obj are paired by the
+  `$E` number of the May PDB. Their bodies, compared in sequence with registers and addresses
+  masked, are identical to ours; the numbers differ because MSVC numbers `$E` functions per
+  object and Hidden's August objects have a different count before them. The static
+  initialisers of these files are same in the GCC compare. This is a pairing artefact; no
+  definitions were reordered. The same numbering shows in strict mode as a different `$E` name
+  pushed to atexit in GetAmmoDef and the ServerClassInit of DT_SDKGameRules,
+  DT_SDKGameRulesProxy, DT_OverRunGameRulesProxy and DT_WeaponFN303.
+- **Extents the reference has no PDB for (39).** The code is identical to ours over the whole
+  range (the reference function plus the unmapped chunks after it), but the extent found for
+  the 2006-08-18 DLL is cut at a tail call (`jmp` to CVProfile::ExitScope, Msg or UTIL_Remove),
+  at a jump table inside the function, or starts at a small function placed before it:
+  CAI_BaseNPC::RunAnimation, CAI_AssaultBehavior::CanSelectSchedule, the NetworkVar_m_Collision
+  constructor (a 4-instruction setter before it), CFuncRotating::SetTargetSpeed,
+  ServiceEventQueue, ConsoleKillTarget, SendProxy_SolidFlags (runs into the ICollideable
+  constructor), SendPropInt, CGlobalEntityList::CleanupDeleteList,
+  CEnvEffectsScript::IsRootCommand (a string getter before it), CBreakable::Precache and
+  CGameMovement::PlayerMove (jump tables), CServerGameClients::PostClientMessagesSent,
+  CGameRules::FrameUpdatePostEntityThink, SpawnAllEntities, CommandNavUpdateBlocked (a
+  26-instruction function before it), CNavMesh::CreateLadder and CNavLadder::OnSplit (jump
+  tables; both are same against the May DLL), CPhysicsHook::FrameUpdatePostEntityThink,
+  PhysicsNone, PhysicsPusher, the five static NetworkStateChanged functions of CBasePlayer
+  (m_iSecondary, m_flBlur, m_flConstraintRadius twice, m_flLaggedMovementValue: small, alike and
+  named from the May DLL, so they pair with a neighbour), CBasePlayer::PhysicsSimulate,
+  CLagCompensationManager::FrameUpdatePostEntityThink, UpdateAllClientData, the
+  m_flFadeScale `operator+=` of CBreakableProp (a float setter before it),
+  CBreakableProp::Spawn, the static CBaseEntity::EmitSound, report_soundpatch (the CMemoryPool
+  Alloc and Free wrappers before it), CSoundControllerImp::SystemUpdate, CTextStatInt::PrintFn (a
+  list unlink before it; the CTextStatInt constructor then pushes an unnamed address in strict
+  mode), CTimedEventMgr::FireEvents, NWCEdit::CreateAILink, GameStartFrame and
+  CHDNBot::FindRoute (its tail is the unmapped chunk at 222ab7cd). These are listed for the
+  compare tools; no source was changed for them.
+- **Register choice and scheduling in Valve code (6).** LoadSchedulesFromBuffer,
+  LoadDecalsFromScript, SendPropUtlVector and ParseEntryExitAnims reload two spilled registers
+  in the other order at a loop exit; CWeaponShotgun::PrimaryAttack swaps a `push` and a `mov`;
+  SampleStep swaps ebx and edi. LoadSchedulesFromBuffer and LoadDecalsFromScript are same against
+  the May DLL, so the August build changed them with no change to their own source: the order
+  comes from MSVC's internal numbering, which moves with the declarations a header adds. Nothing
+  in these functions' source to try.
+- **Hidden's code and shared code (7).**
+  - CGameMovement::CheckBack: Hidden's server.dll stores m_bSpeedCropped after the multiply.
+    Swapping the two statements makes it same in server.dll and changed in the .so, where it is
+    same now; `*= 0.8f`, `x = x * 0.8f` and `0.8f * x` were also tried. Left as it is, since it
+    would trade one compiler for the other.
+  - CBasePlayer::UpdateStun: Hidden's server.dll decays the blur as `( m_flBlur / m_flBlur ) *
+    0.2f`, its .so as `( 1.0f / m_flBlur ) * m_flBlur * 0.2f` (ours). The same conflict: the form
+    that fits one compiler breaks the other. Also tried: `m_flBlur * ( 1.0f / m_flBlur )`, a
+    double reciprocal.
+  - CBludgeonWeaponSDKBase::Hit: register choice. Hidden keeps hitActivity in ebp, so pPlayer is
+    spilled; ours compares hitActivity in memory. May's Hit is the August code.
+  - CPlayerMove::RunCommand: ours keeps `&pl.v_angle` in ebp, Hidden keeps `this`; also changed
+    in the .so (block layout).
+  - CLagCompensationManager::BacktrackPlayer: also changed in the .so (16 bytes more stack in
+    Hidden's build). The likeliest of all to hide a source difference.
+  - CNavMesh::CommandNavWarpToMark: block layout and one register; also changed in the .so.
+  - CBaseEntity::FireBullets inlines CGameTrace::operator= where Hidden's calls it. The May line
+    table has the same Tracer statements, the frame is the same size (0x2a8) and the two call
+    lists are the same apart from `??4CGameTrace` against `??4CBaseTrace`. Our DLL has 8 callers
+    of the out-of-line CGameTrace::operator= and Hidden's has 9. The header is the same, so this
+    is MSVC's inlining budget for this object, which moves with inline bodies elsewhere in the
+    headers (as with DataMapInit), not FireBullets' own source.
 
-543 reference functions are not mapped: small ones that no vftable, name, call or neighbour ties
-to one of ours.
+### Functions that only the strict mode finds (10)
+
+Strict mode adds 10 changed rows against the 2006-08-18 DLL: the `$E` names in GetAmmoDef and the
+ServerClassInit functions above, the CTextStatInt constructor (it pushes PrintFn, whose extent is
+wrong), and `$E` rows at other numbers (nav_area `$E19`, soundenvelope `$E13`, sdk_gamerules
+`$E26` and `$E50`). All are artefacts of the extents or of the `$E` pairing; none is a source
+constant.
+
+### Unmapped reference functions
+
+Of the reference functions the compare leaves unmapped, 343 in Hidden's objects are over 32
+bytes. 63 are libc, 50 pair at 0.9 or better with one of our unmapped functions, and 210 have an
+exact copy somewhere in our DLL (the same code under another extent). The rest are composite
+ranges whose pieces exist in ours, jump table data, or the tails of split extents. No unmapped
+function references a string that our DLL lacks.
+
+The one candidate for code we do not have is a 12-instruction thiscall function at 2229e300 in
+sdk_player.obj, between DetectChange for m_angEyeAngles and the CTEPlayerAnimEvent constructor. It
+sets CBasePlayer+0x7a4 (m_iWeighting) to zero through the network variable. Nothing in Hidden's
+DLL calls it or points to it, so it is dead code; its name is not known and it was not added.

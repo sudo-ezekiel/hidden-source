@@ -1341,7 +1341,7 @@ void CGameMovement::AirMove( void )
 	if ( player->GetMoveType() != MOVETYPE_CLING && player->GetTeamNumber() == TEAM_HIDDEN && ( mv->m_nButtons & IN_BULLRUSH ) )
 	{
 		Vector vStart = player->Weapon_ShootPosition();
-		Vector vForward;
+		Vector vForward, vRight;	// REBUILD: vRight is unused
 		player->EyeVectors( &vForward );
 
 		Vector vEnd = vStart + vForward * 24;
@@ -1426,7 +1426,7 @@ void CGameMovement::Accelerate( Vector& wishdir, float wishspeed, float accel )
 
 	// Hidden: compare against the full speed, not the speed along wishdir, so turning
 	// and strafing cannot build speed past wishspeed
-	currentspeed = sqrt( mv->m_vecVelocity.LengthSqr() );
+	currentspeed = sqrt( DotProduct( mv->m_vecVelocity, mv->m_vecVelocity ) );
 
 	// Reduce wishspeed by the amount of veer.
 	addspeed = wishspeed - currentspeed;
@@ -1647,7 +1647,7 @@ void CGameMovement::FullWalkMove( )
 		}
 
 		// Hidden: was pounce pressed?
-		if (mv->m_nButtons & IN_BULLRUSH)
+		if ( (mv->m_nButtons & IN_BULLRUSH) && player->GetTeamNumber() == TEAM_HIDDEN )
 		{
 			CheckPounceButton();
 		}

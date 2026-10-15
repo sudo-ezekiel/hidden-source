@@ -213,8 +213,8 @@ void CHLTVDirector::LevelInitPostEntity( void )
 		pCamera = gEntList.FindEntityByClassname( pCamera, "point_viewcontrol" );
 	}
 
+	m_vPVSOrigin.Init();	// REBUILD: Hidden's line table has the origin cleared first
 	m_iPVSEntity = 0;
-	m_vPVSOrigin.Init();
 	m_nNextShotTick = 0;
 	m_nNextAnalyzeTick = 0;
 

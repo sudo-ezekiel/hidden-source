@@ -183,13 +183,14 @@ void InstallGameRules()
 {
 	// Hidden: the map name prefix picks the game mode
 	const char *pszMapName = STRING( gpGlobals->mapname );
-	const char *pszGameRules = "CSDKGameRules";
-	int iGameType = HDN_GAMETYPE_HIDDEN;
 
 	char szMapName[256];
 	char szPrefix[256];
 	Q_FileBase( pszMapName, szMapName, sizeof( szMapName ) );
 	nexttoken( szPrefix, szMapName, '_' );
+
+	const char *pszGameRules = "CSDKGameRules";
+	int iGameType = HDN_GAMETYPE_HIDDEN;
 
 	if ( !Q_strcmp( szPrefix, "ovr" ) )
 	{
