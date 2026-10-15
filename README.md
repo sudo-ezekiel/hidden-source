@@ -35,6 +35,10 @@ our client.dll is paired with Hidden's client.dll of 14 June 2006 (beta 4b): 236
 functions are paired, 23263 of those are the same and 360 differ. `rebuild/CLIENT.md` section 5 has
 the breakdown.
 
+Both references are the official 2006 files: the server from `hidden-beta4b1-server.zip` and the
+client from `hsb4b-full.zip`, as published on hidden-source.com (checked by CRC-32 against archived
+copies). Later community changes, such as the GHSI "Enhanced Edition" fixes, are not in this source.
+
 "The same" means identical instructions with addresses masked: the two builds place code and data at
 different addresses, so calls and pointers may differ in their target address and in nothing else.
 
