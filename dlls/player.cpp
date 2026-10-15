@@ -79,6 +79,7 @@ static ConVar physicsshadowupdate_render( "physicsshadowupdate_render", "0" );
 ConVar	sv_noclipduringpause( "sv_noclipduringpause", "0", FCVAR_REPLICATED | FCVAR_CHEAT, "If cheats are enabled, then you can noclip with the game paused (for doing screenshots, etc.)." );
 
 extern ConVar sv_maxunlag;
+extern ConVar sv_turbophysics;		// props.cpp
 
 // TIME BASED DAMAGE AMOUNT
 // tweak these values based on gameplay feedback:
@@ -666,10 +667,10 @@ void CBasePlayer::DeathSound( const CTakeDamageInfo &info )
 		// Hidden: the knife kills have their own death sounds
 		if ( info.GetDamageType() == DMG_SLASH )
 		{
-			if ( info.GetDamage() <= 100 )
-				EmitSound( "Player.KnifeSlash.Death" );
-			else
+			if ( info.GetDamage() > 100 )
 				EmitSound( "Player.KnifePigstick.Death" );
+			else
+				EmitSound( "Player.KnifeSlash.Death" );
 		}
 		else
 		{
@@ -756,7 +757,8 @@ void CBasePlayer::TraceAttack( const CTakeDamageInfo &inputInfo, const Vector &v
 		case HITGROUP_GENERIC:
 			break;
 		case HITGROUP_HEAD:
-			info.ScaleDamage( sk_player_head.GetFloat() );
+			// Hidden: a fixed head shot multiplier; sk_player_head is not read
+			info.ScaleDamage( 1.2f );
 			break;
 		case HITGROUP_CHEST:
 			info.ScaleDamage( sk_player_chest.GetFloat() );
@@ -872,10 +874,15 @@ int CBasePlayer::OnTakeDamage( const CTakeDamageInfo &inputInfo )
 		info.ScaleDamage(pVehicle->DamageModifier(info));
 	}
 
+	// Hidden: no damage while m_bSafety is set
+	if ( GetSafe() )
+		return 0;
+
 	if ( GetFlags() & FL_GODMODE )
 		return 0;
 
 	if ( m_debugOverlays & OVERLAY_BUDDHA_MODE ) 
+
 	{
 		if ((m_iHealth - info.GetDamage()) <= 0)
 		{
@@ -3020,9 +3027,11 @@ void CBasePlayer::PlayerRunCommand(CUserCmd *ucmd, IMoveHelper *moveHelper)
 
 	if ( pl.fixangle == FIXANGLE_NONE)
 	{
-		// REBUILD: the original copies into a temporary here, so this has no effect;
-		// CPlayerMove::RunCommand sets the angles. Exact original line unknown.
-		VectorCopy ( ucmd->viewangles, (QAngle)pl.v_angle );
+		// REBUILD: the original copies into a temporary that is never read, so this has no
+		// effect; CPlayerMove::RunCommand sets the angles. Exact original line unknown.
+		QAngle viewangles;
+		VectorCopy ( ucmd->viewangles, viewangles );
+
 	}
 
 	// Handle FL_FROZEN.
@@ -4272,7 +4281,9 @@ void CBasePlayer::Precache( void )
 
 
 	PrecacheScriptSound( "Player.FallGib" );
-	PrecacheScriptSound( "Player.Death" );
+	PrecacheScriptSound( "IRIS.Death" );
+	PrecacheScriptSound( "Hidden.Death" );
+
 	PrecacheScriptSound( "Player.PlasmaDamage" );
 	PrecacheScriptSound( "Player.SonicDamage" );
 	PrecacheScriptSound( "Player.DrownStart" );
@@ -4354,8 +4365,9 @@ int CBasePlayer::Restore( IRestore &restore )
 		SetLocalAngles( pSpawnSpot->GetLocalAngles() );
 	}
 
-	QAngle newViewAngles = pl.v_angle;
+	QAngle newViewAngles = pl.v_angle.Get();
 	newViewAngles.z = 0;	// Clear out roll
+
 	SetLocalAngles( newViewAngles );
 	SnapEyeAngles( newViewAngles );
 
@@ -6724,7 +6736,12 @@ void CBasePlayer::VPhysicsUpdate( IPhysicsObject *pPhysics )
 //-----------------------------------------------------------------------------
 void CBasePlayer::VPhysicsShadowUpdate( IPhysicsObject *pPhysics )
 {
+	// Hidden: in turbo physics mode the player shadow does not drive the player
+	if ( sv_turbophysics.GetBool() )
+		return;
+
 	Vector newPosition;
+
 
 	bool physicsUpdated = m_pPhysicsController->GetShadowPosition( &newPosition, NULL ) > 0 ? true : false;
 
@@ -6902,8 +6919,12 @@ void CBasePlayer::InitVCollision( void )
 	// Cleanup any old vphysics stuff.
 	VPhysicsDestroyObject();
 
+	// in turbo physics players dont have a physics shadow
+	if ( sv_turbophysics.GetBool() )
+		return;
 	
-	CPhysCollide *pModel = PhysCreateBbox( WorldAlignMins(), WorldAlignMaxs() );
+	CPhysCollide *pModel
+ = PhysCreateBbox( WorldAlignMins(), WorldAlignMaxs() );
 	CPhysCollide *pCrouchModel = PhysCreateBbox( VEC_DUCK_HULL_MIN, VEC_DUCK_HULL_MAX );
 
 	SetupVPhysicsShadow( pModel, "player_stand", pCrouchModel, "player_crouch" );
