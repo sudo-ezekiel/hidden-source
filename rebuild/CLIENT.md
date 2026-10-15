@@ -177,7 +177,7 @@ every class that has derived classes: where they differ, GCC places the derived 
     NAME=<part of our name, or a reference address; several, comma separated> sh rebuild/msvc/compare_client.sh ~/.cache/hsrebuild-msvc-<lane>
     sh rebuild/msvc/compare_client.sh --loose ~/.cache/hsrebuild-msvc-<lane>    # or LOOSE=1: the original scoring
 
-The build (`msvc/MSVC.md`, "Building client.dll") compiles vgui_controls and the 415 client files
+The build (`msvc/MSVC.md`, "Building client.dll") compiles vgui_controls and the 416 client files
 with cl 13.10.3077 under Wine and links client.dll with /MAP, in about half a minute. The compare
 writes `<work>/cmp_client.tsv` and prints the totals and the objects with the most changed code;
 with NAME it prints the normalised diff of the matching functions instead.
@@ -217,32 +217,60 @@ similarity, ref size, our size, our name, demangled name, ref address, our addre
 names.tsv name. A call graph mapping makes the callee's name agree in the caller by construction;
 a wrong pairing then shows up as a changed callee.
 
-Result (main f12fee2):
+Result (client-finish 014ec2e; main f12fee2 had 23502 same and 336 changed strict, 23275 and 348
+loose):
 
 | | strict: functions | bytes | --loose: functions | bytes |
 |---|---|---|---|---|
 | client.dll functions | 24320 | 2,148,634 | 24320 | 2,148,634 |
-| mapped | 23838 (98.0%) | 2,110,342 | 23623 (97.1%) | 2,105,370 |
-| same | 23502 | 1,995,335 | 23275 | 1,991,494 |
-| changed | 336 | 115,007 | 348 | 113,876 |
-| unmapped, client.dll | 482 | 38,292 | 697 | 43,264 |
-| unmapped, ours | 358 | 13,398 | 573 | 18,362 |
+| mapped | 23907 (98.3%) | 2,115,949 | 23690 (97.4%) | 2,110,786 |
+| same | 23764 | 2,070,313 | 23534 | 2,065,121 |
+| changed | 143 | 45,636 | 156 | 45,665 |
+| unmapped, client.dll | 413 | 32,685 | 630 | 37,848 |
+| unmapped, ours | 322 | 11,552 | 539 | 16,707 |
 
-By origin of our function, strict: client objects 19941 same, 243 changed; vgui_controls 2965
-same, 38 changed; libc.lib 462 same, 54 changed; nvtc.lib 19 same, 1 changed; import thunks 115
-same. Mapped by vftable 5418, call graph 4510, order 12726, string 788, body 113, strict 282,
-table 1. Most unmapped functions are 32 bytes or less (303 of 482), copies of small inline
+By origin of our function, strict: client objects 20167 same, 84 changed; vgui_controls 3001
+same, 4 changed; libc.lib 462 same, 54 changed; nvtc.lib 19 same, 1 changed; import thunks 115
+same. Mapped by vftable 5418, call graph 4548, order 12775, string 787, body 110, strict 268,
+table 1. Most unmapped functions are 32 bytes or less (270 of 413), copies of small inline
 functions that nothing tells apart.
 
-Strict against loose: 9 functions are same only in the loose mode, 5 of them string literals that
-differ in our source (STRICT-COMPARE.md section 7); 20 loose "changed" rows were two functions
-paired the wrong way round and are same once the strict tokens re-pair them; 218 functions the
-loose mapping left unmapped are mapped and same.
+Strict against loose: 6 functions are same only in the loose mode, all pairs of functions with the
+same body that the strict tokens pair the other way (CMyPanel::GetPanelBaseClassName,
+ClientClassInit<DT_CFN303Ball>, the dynamic initializers $E5 and $E8 of c_func_lod and $E7 and $E8
+of weapon_pistol); 18 loose "changed" rows were two functions paired the wrong way round and are
+same once the strict tokens re-pair them; 218 functions the loose mapping left unmapped are mapped
+and same.
 
-What is left is mostly source: Hidden's code that differs from ours (CViewRender::RenderView,
-CClientScoreBoardDialog, CSpectatorGUI, CHudCrosshair::Paint, the weapons' WeaponIdle),
-vgui_controls files older than Hidden's (Label, ScrollBar, URLLabel, WizardPanel), and mapping
-limits in hand-written CRT code.
+The Rich header now agrees on the C++ objects: 426 Utc1310_CPP on both sides. The one ours lacked
+was game_shared/death_pose.cpp, which client.dll links between death.obj and decals.obj
+(GetRagdollCurSequenceWithDeathPose, which C_AI_BaseNPC::GetRagdollCurSequence calls). The rows that
+still differ are the linker and import library builds of the SDK's .lib files, not code.
+
+What is left falls into four groups. The first is mapping limits: client.dll functions that the
+decompile's function starts cut short or split, so our row carries code the reference row lacks
+(C_BaseAnimating::FireEvent, DrawTeslaSegs, CTempEnts::Sprite_Trail, C_BasePlayer::PhysicsSimulate,
+CPrediction::PostEntityPacketReceived, the VPROF exit at the end of VGui_PreRender and others), and
+jump tables that fall after such an end (Label::ComputeAlignment). The second is Hidden code where
+the instructions are right but the registers or their order are not, because the exact source shape
+is not known: CHudRadar::Paint, C_WeaponSDKBase::InitBeam, C_LaserDot::DrawModel,
+CHudCrosshair::Paint, HDNTeamMenu::OnCommand, ScrollBar::OnMousePressed,
+C_HLTVCamera::CalcChaseCamView, CHudDeathNotice::Paint, C_BaseCombatWeapon::ShadowCastType (where
+the class name literal is loaded) and SDK_EjectBrass (a null test client.dll makes around the
+shooter argument). The third is shared code that cannot match every binary at once:
+C_WeaponShotgun::PrimaryAttack (client.dll's if/else would move the __LINE__ that SHARED_RANDOMINT
+uses, which the server builds depend on) and CGameMovement::CheckBack (client.dll and server.dll
+want the forward move stored before m_bSpeedCropped, server_i486.so wants the bool stored between
+the load and the store; main keeps the GCC form). The fourth is hand-written CRT code in libc.lib
+and nvtc.lib, which the mapping cannot pair cleanly and which is left as it is.
+
+Missing code, from the unmapped client.dll functions over 32 bytes (143, of which 97 start at an
+address that is not 16-byte aligned and are the tails of reference functions cut short): the
+class image entity of ClientModeSDKNormal at 241e6440 (1633 bytes, a CS-style C_BaseAnimatingOverlay
+that plays "Idle_lower", with its helpers at 241e5ef0 to 241e63c0), an unreferenced C_BasePlayer
+helper at 24099df0 that hashes a lower-cased file name (CRC32_Init, strlwr), and two TGAWriter
+functions from a different SDK drop (24197430 and 241977e0). The rest are CUtlVector and CUtlMemory
+helpers, DECLARE map helpers and CRT pieces.
 
 ## Original build settings ("Release SDK|Win32", cl_dll/client_sdk.vcproj)
 
