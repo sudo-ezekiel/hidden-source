@@ -205,7 +205,7 @@ const QAngle &CBasePlayer::EyeAngles( )
 
 	// FIXME: Cache off the angles?
 	matrix3x4_t eyesToParent, eyesToWorld;
-	AngleMatrix( pl.v_angle, eyesToParent );
+	AngleMatrix( pl.v_angle.Get(), eyesToParent );
 	ConcatTransforms( pMoveParent->EntityToWorldTransform(), eyesToParent, eyesToWorld );
 
 	static QAngle angEyeWorld;
@@ -599,6 +599,10 @@ void CBasePlayer::Weapon_SetLast( CBaseCombatWeapon *pWeapon )
 bool CBasePlayer::Weapon_Switch( CBaseCombatWeapon *pWeapon, int viewmodelindex /*=0*/ ) 
 {
 	CBaseCombatWeapon *pLastWeapon = GetActiveWeapon();
+
+	// Hidden: no switching in the middle of a reload
+	if ( pLastWeapon && pLastWeapon->m_bInReload )
+		return false;
 
 	if ( BaseClass::Weapon_Switch( pWeapon, viewmodelindex ))
 	{
