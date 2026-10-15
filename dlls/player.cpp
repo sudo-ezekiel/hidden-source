@@ -1473,7 +1473,7 @@ void CBasePlayer::Event_Killed( const CTakeDamageInfo &info )
 
 	pl.deadflag = true;
 	AddSolidFlags( FSOLID_NOT_SOLID );
-	SetMoveType( MOVETYPE_FLYGRAVITY );
+	SetMoveType( MOVETYPE_NOCLIP );		// Hidden: was MOVETYPE_FLYGRAVITY
 	SetGroundEntity( NULL );
 
 	// clear out the suit message cache so we don't keep chattering
@@ -1487,7 +1487,20 @@ void CBasePlayer::Event_Killed( const CTakeDamageInfo &info )
 		 FlashlightTurnOff();
 	}
 
+	// Hidden: the laser sight goes off too
+	if ( LAMIsOn() )
+	{
+		LaserTurnOff();
+	}
+
 	m_flDeathTime = gpGlobals->curtime;
+
+	// only count alive players
+	if (m_lastNavArea)
+	{
+		m_lastNavArea->DecrementPlayerCount( GetTeamNumber() );
+		m_lastNavArea = NULL;
+	}
 
 	BaseClass::Event_Killed( info );
 }
@@ -3242,7 +3255,22 @@ void CBasePlayer::PreThink(void)
 	if (area && area != m_lastNavArea)
 	{
 		// player entered a new nav area
+		if (m_lastNavArea)
+		{
+			m_lastNavArea->DecrementPlayerCount( GetTeamNumber() );
+		}
+
+		area->IncrementPlayerCount( GetTeamNumber() );
+
 		m_lastNavArea = area;
+		if ( area->GetPlace() != UNDEFINED_PLACE )
+		{
+			const char *placeName = TheNavMesh->PlaceToName( area->GetPlace() );
+			if ( placeName && *placeName )
+			{
+				Q_strncpy( m_szLastPlaceName.GetForModify(), placeName, MAX_PLACE_NAME_LENGTH );
+			}
+		}
 
 		// generate event
 		//KeyValues *event = new KeyValues( "player_entered_area" );
@@ -4136,8 +4164,9 @@ void CBasePlayer::InitialSpawn( void )
 	m_iConnected = PlayerConnected;
 
 	// Hidden: collect the spectator cameras, falling back to the Hidden's spawn point
-	CBaseEntity *pFirstCamera = gEntList.FindEntityByClassname( NULL, "info_spectator" );
-	CBaseEntity *pCamera = pFirstCamera;
+	CBaseEntity *pCamera = NULL;
+	CBaseEntity *pFirstCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
+	pCamera = pFirstCamera;
 	do
 	{
 		pCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
@@ -4242,13 +4271,21 @@ void CBasePlayer::Spawn( void )
 	m_lastx = m_lasty = 0;
 
 	m_lastNavArea = NULL;
+
+	/// @todo Do this once per round instead of once per player
+	if (TheNavMesh)
+	{
+		TheNavMesh->ClearPlayerCounts();
+	}
+
+	Q_strncpy( m_szLastPlaceName.GetForModify(), "", MAX_PLACE_NAME_LENGTH );
 	
 	CSingleUserRecipientFilter user( this );
 	enginesound->SetPlayerDSP( user, 0, false );
 
 	CreateViewModel();
 
-	SetCollisionGroup( COLLISION_GROUP_PLAYER );
+	// Hidden: no SetCollisionGroup( COLLISION_GROUP_PLAYER ) here; CSDKPlayer::Spawn picks the group per team
 
 	// if the player is locked, make sure he stays locked
 	if ( m_iPlayerLocked )
