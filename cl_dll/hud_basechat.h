@@ -110,11 +110,14 @@ public:
 
 	void			MsgFunc_TextMsg(const char *pszName, int iSize, void *pbuf);
 	
-	void			Printf( const char *fmt, ... );
-	void			ChatPrintf( int iPlayerIndex, const char *fmt, ... );
+	virtual void	Printf( const char *fmt, ... );
+	virtual void	ChatPrintf( int iPlayerIndex, const char *fmt, ... );
+
+	virtual void	FireGameEvent( IGameEvent *event );
 	
 	void			StartMessageMode( int iMessageModeType );
 	void			StopMessageMode( void );
+	void			SendDeadText( void );	// REBUILD: name
 	void			Send( void );
 
 	virtual void	ApplySchemeSettings(vgui::IScheme *pScheme);
