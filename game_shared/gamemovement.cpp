@@ -17,6 +17,12 @@
 #include "hl_movedata.h"
 #endif
 
+#ifdef CLIENT_DLL
+	#include "c_te_effect_dispatch.h"
+#else
+	#include "te_effect_dispatch.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -854,6 +860,19 @@ void CGameMovement::CheckWaterJump( void )
 
 	Vector vecEnd;
 	VectorMA( vecStart, 24.0f, flatforward, vecEnd );
+
+	// Hidden: splash at the feet
+	Vector feet;
+	feet[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
+	feet[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
+	feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
+
+	CEffectData data;
+	data.m_vOrigin = feet;
+	data.m_vNormal.Init( 0, 0, 1 );
+	VectorAngles( data.m_vNormal, data.m_vAngles );
+	data.m_flScale = random->RandomFloat( 8, 12 );
+	DispatchEffect( "watersplash", data );
 	
 	trace_t tr;
 	TracePlayerBBox( vecStart, vecEnd, MASK_PLAYERSOLID, COLLISION_GROUP_PLAYER_MOVEMENT, tr );
@@ -1315,6 +1334,7 @@ void CGameMovement::AirMove( void )
 	Vector		wishdir;
 	float		wishspeed;
 	Vector forward, right, up;
+	trace_t tr;
 
 	// Hidden: holding +pounce in the air with a wall within 24 units of the eyes makes the Hidden cling to it
 	if ( player->GetMoveType() != MOVETYPE_CLING && player->GetTeamNumber() == TEAM_HIDDEN && ( mv->m_nButtons & IN_BULLRUSH ) )
@@ -1323,8 +1343,8 @@ void CGameMovement::AirMove( void )
 		Vector vecForward;
 		player->EyeVectors( &vecForward );
 
-		trace_t tr;
-		UTIL_TraceLine( vecSrc, vecSrc + vecForward * 24, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
+		Vector vecEnd = vecSrc + vecForward * 24;
+		UTIL_TraceLine( vecSrc, vecEnd, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
 		if ( tr.fraction < 1.0 )
 		{
 			m_flClingTime = gpGlobals->curtime + 4.0f;
@@ -1403,8 +1423,9 @@ void CGameMovement::Accelerate( Vector& wishdir, float wishspeed, float accel )
 	if ( !CanAccelerate() )
 		return;
 
-	// See if we are changing direction a bit
-	currentspeed = mv->m_vecVelocity.Dot(wishdir);
+	// Hidden: compare against the full speed, not the speed along wishdir, so turning
+	// and strafing cannot build speed past wishspeed
+	currentspeed = sqrt( mv->m_vecVelocity.LengthSqr() );
 
 	// Reduce wishspeed by the amount of veer.
 	addspeed = wishspeed - currentspeed;
@@ -1622,6 +1643,16 @@ void CGameMovement::FullWalkMove( )
 		else
 		{
 			mv->m_nOldButtons &= ~IN_JUMP;
+		}
+
+		// Hidden: was pounce pressed?
+		if (mv->m_nButtons & IN_BULLRUSH)
+		{
+			CheckPounceButton();
+		}
+		else
+		{
+			mv->m_nOldButtons &= ~IN_BULLRUSH;
 		}
 
 		// Fricion is handled before we add in any base velocity. That way, if we are on a conveyor, 
@@ -2384,6 +2415,14 @@ bool CGameMovement::LadderMove( void )
 	player->SetMoveCollide( MOVECOLLIDE_DEFAULT );
 
 	player->m_vecLadderNormal = pm.plane.normal;
+
+	// Hidden: marines put their weapon away on a ladder
+	if ( player->GetTeamNumber() == TEAM_IRIS )
+	{
+		CBaseCombatWeapon *pWeapon = player->GetActiveWeapon();
+		if ( pWeapon )
+			pWeapon->Holster( NULL );
+	}
 
 	// On ladder, convert movement to be relative to the ladder
 
@@ -3302,6 +3341,18 @@ void CGameMovement::CheckFalling( void )
 		if ( player->GetWaterLevel() > 0 )
 		{
 			// They landed in water.
+			// Hidden: splash at the feet
+			Vector feet;
+			feet[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
+			feet[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
+			feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
+
+			CEffectData data;
+			data.m_vOrigin = feet;
+			data.m_vNormal.Init( 0, 0, 1 );
+			VectorAngles( data.m_vNormal, data.m_vAngles );
+			data.m_flScale = random->RandomFloat( 8, 12 );
+			DispatchEffect( "watersplash", data );
 		}
 		else
 		{
