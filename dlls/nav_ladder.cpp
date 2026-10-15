@@ -334,22 +334,24 @@ void CNavLadder::DrawLadder( void ) const
 	absMax.x += max( left.x, right.x );
 	absMax.y += max( left.y, right.y );
 
-	Vector bottomLeft( absMin.x, absMin.y, m_bottom.z );
-	Vector bottomRight( absMax.x, absMax.y, m_bottom.z );
-
+	Vector bottomLeft, bottomRight;
 	switch ( m_dir )
 	{
 	case NORTH:
-		bottomRight.y = absMin.y;
+		bottomLeft = Vector( absMin.x, absMin.y, m_bottom.z );
+		bottomRight = Vector( absMax.x, absMin.y, m_bottom.z );
 		break;
 	case SOUTH:
-		bottomLeft.y = absMax.y;
+		bottomLeft = Vector( absMin.x, absMax.y, m_bottom.z );
+		bottomRight = Vector( absMax.x, absMax.y, m_bottom.z );
 		break;
 	case EAST:
-		bottomLeft.x = absMax.x;
+		bottomLeft = Vector( absMax.x, absMin.y, m_bottom.z );
+		bottomRight = Vector( absMax.x, absMax.y, m_bottom.z );
 		break;
 	case WEST:
-		bottomRight.x = absMin.x;
+		bottomLeft = Vector( absMin.x, absMin.y, m_bottom.z );
+		bottomRight = Vector( absMin.x, absMax.y, m_bottom.z );
 		break;
 	}
 

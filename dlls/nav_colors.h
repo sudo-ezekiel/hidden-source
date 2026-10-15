@@ -44,7 +44,6 @@ enum NavEditColor
 	NavCursorColor,
 	NavSplitLineColor,
 	NavCreationColor,
-	NavGridColor,
 
 	// Nav attribute colors
 	NavAttributeCrouchColor,

@@ -160,6 +160,7 @@ bool CNavMesh::GetActiveNavArea( void )
 				if ( e.Contains( m_editCursorPos ) )
 				{
 					m_selectedLadder = ladder;
+					break;
 				}
 
 				Vector p1 = (ladder->m_bottom + ladder->m_top)/2;
@@ -644,17 +645,14 @@ bool MakeSniperSpots( CNavArea *area )
 
 	const float minSplitSize = 2.0f; // ensure the first split is larger than this
 
-	float sizeX = area->GetSizeX();
-	float sizeY = area->GetSizeY();
-
-	if ( sizeX > GenerationStepSize && sizeX > sizeY )
+	if ( area->GetSizeX() > GenerationStepSize )
 	{
 		splitEdge = round( area->GetExtent().lo.x, GenerationStepSize );
 		if ( splitEdge < area->GetExtent().lo.x + minSplitSize )
 			splitEdge += GenerationStepSize;
 		splitAlongX = false;
 	}
-	else if ( sizeY > GenerationStepSize && sizeY > sizeX )
+	else if ( area->GetSizeY() > GenerationStepSize )
 	{
 		splitEdge = round( area->GetExtent().lo.y, GenerationStepSize );
 		if ( splitEdge < area->GetExtent().lo.y + minSplitSize )
@@ -1249,6 +1247,7 @@ void CNavMesh::CommandNavMarkUnnamed( void )
 				if ( area->GetPlace() == 0 )
 				{
 					SetMarkedArea( area );
+					break;
 				}
 			}
 			if ( !GetMarkedArea() )
@@ -1407,10 +1406,10 @@ void CNavMesh::CommandNavWarpToMark( void )
 	if (player == NULL)
 		return;
 
-	if ( m_isCreatingNavArea || m_isCreatingLadder || m_isPlaceMode )
-		return;
-
-	player->EmitSound( "EDIT_WARP_TO_MARK" );
+	if ( !m_isCreatingNavArea && !m_isCreatingLadder && !m_isPlaceMode )
+	{
+		player->EmitSound( "EDIT_WARP_TO_MARK" );
+	}
 }
 
 

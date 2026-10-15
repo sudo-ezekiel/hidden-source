@@ -571,8 +571,6 @@ void CNavMesh::LoadPlaceDatabase( void )
 		strcpy( m_placeName[ i ], buffer );
 		++i;
 	}
-
-	filesystem->Close( file );
 }
 
 //--------------------------------------------------------------------------------------------------------------

@@ -571,7 +571,7 @@ bool CNavArea::SplitEdit( bool splitAlongX, float splitEdge, CNavArea **outAlpha
 		FinishSplitEdit( beta, WEST );
 	}
 
-	if ( !TheNavMesh->IsGenerating() && nav_split_place_on_ground.GetBool() )
+	if ( nav_split_place_on_ground.GetBool() )
 	{
 		alpha->PlaceOnGround( NUM_CORNERS );
 		beta->PlaceOnGround( NUM_CORNERS );
@@ -2919,7 +2919,6 @@ static void CommandNavUpdateBlocked( void )
 	else
 	{
 		float start = engine->Time();
-		CNavArea *blockedArea = NULL;
 		FOR_EACH_LL( TheNavAreaList, nit )
 		{
 			CNavArea *area = TheNavAreaList[ nit ];
@@ -2927,29 +2926,12 @@ static void CommandNavUpdateBlocked( void )
 			if ( area->IsBlocked() )
 			{
 				DevMsg( "Area #%d %s is blocked\n", area->GetID(), VecToString( area->GetCenter() + Vector( 0, 0, HalfHumanHeight ) ) );
-				if ( !blockedArea )
-				{
-					blockedArea = area;
-				}
 			}
 		}
 
 		float end = engine->Time();
 		float time = (end - start) * 1000.0f;
 		DevMsg( "nav_update_blocked took %2.2f ms\n", time );
-
-		if ( blockedArea )
-		{
-			CBasePlayer *player = UTIL_GetListenServerHost();
-			if ( player )
-			{
-				if ( ( player->IsDead() || player->IsObserver() ) && player->GetObserverMode() == OBS_MODE_ROAMING )
-				{
-					Vector origin = blockedArea->GetCenter() + Vector( 0, 0, 0.75f * HumanHeight );
-					UTIL_SetOrigin( player, origin );
-				}
-			}
-		}
 	}
 }
 static ConCommand nav_update_blocked( "nav_update_blocked", CommandNavUpdateBlocked, "Updates the blocked/unblocked status for every nav area.", FCVAR_GAMEDLL );
@@ -3092,6 +3074,7 @@ void CNavArea::UpdateBlocked( void )
 			blocker = blockers[0];
 		}
 
+		trace_t blockerTrace;
 		UTIL_TraceHull(
 			origin,
 			origin,
@@ -3100,9 +3083,9 @@ void CNavArea::UpdateBlocked( void )
 			MASK_PLAYERSOLID,
 			blocker,
 			COLLISION_GROUP_PLAYER_MOVEMENT,
-			&tr );
+			&blockerTrace );
 
-		m_isBlocked = tr.startsolid;
+		m_isBlocked = blockerTrace.startsolid;
 	}
 
 	if ( wasBlocked != m_isBlocked )
