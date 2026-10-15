@@ -67,6 +67,15 @@ CBludgeonWeaponSDKBase::CBludgeonWeaponSDKBase()
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: Precache the weapon
+//-----------------------------------------------------------------------------
+void CBludgeonWeaponSDKBase::Precache( void )
+{
+	//Call base class first
+	BaseClass::Precache();
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Spawn the weapon
 //-----------------------------------------------------------------------------
 void CBludgeonWeaponSDKBase::Spawn( void )
@@ -76,15 +85,6 @@ void CBludgeonWeaponSDKBase::Spawn( void )
 
 	AddEffects( EF_NOSHADOW );
 	m_nBody = 1;
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: Precache the weapon
-//-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::Precache( void )
-{
-	//Call base class first
-	BaseClass::Precache();
 }
 
 //-----------------------------------------------------------------------------
@@ -109,6 +109,52 @@ bool CBludgeonWeaponSDKBase::Holster( CBaseCombatWeapon *pSwitchingTo )
 //-----------------------------------------------------------------------------
 // Purpose:
 //-----------------------------------------------------------------------------
+void CBludgeonWeaponSDKBase::PrimaryAttack( void )
+{
+	if ( m_bHitDelayed )
+		return;
+
+	Swing( false );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Start the pigstick; the swing itself lands later in ItemPostFrame
+//-----------------------------------------------------------------------------
+void CBludgeonWeaponSDKBase::SecondaryAttack( void )
+{
+	if ( !sv_pigstick.GetBool() )
+		return;
+
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	if ( !pPlayer )
+		return;
+
+	if ( m_bHitDelayed )
+		return;
+
+	if ( pPlayer->GetSafe() )
+	{
+		m_flNextPrimaryAttack = gpGlobals->curtime + 0.2;
+		m_flNextSecondaryAttack = gpGlobals->curtime + 0.2;
+		return;
+	}
+
+	Activity nActivity = GetSecondaryAttackActivity();
+
+	m_flDelayedHit = gpGlobals->curtime + 1.3f;
+	m_flNextSecondaryAttack = gpGlobals->curtime + 3.0f;
+	m_flNextPrimaryAttack = gpGlobals->curtime + 2.55f;
+	m_bHitDelayed = true;
+
+	SendWeaponAnim( nActivity );
+	WeaponSound( SPECIAL1 );
+
+	DevMsg( 1, "Sequence Duration : %.2f\n", SequenceDuration() );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:
+//-----------------------------------------------------------------------------
 void CBludgeonWeaponSDKBase::AddViewKick( void )
 {
 	CSDKPlayer *pPlayer = GetPlayerOwner();
@@ -116,6 +162,38 @@ void CBludgeonWeaponSDKBase::AddViewKick( void )
 		return;
 
 	pPlayer->ViewPunch( QAngle( random->RandomFloat( -1.0f, 1.0f ), random->RandomFloat( -1.0f, 1.0f ), 0.0f ) );
+}
+
+//------------------------------------------------------------------------------
+// Purpose : Update weapon
+//------------------------------------------------------------------------------
+void CBludgeonWeaponSDKBase::ItemPostFrame( void )
+{
+	CSDKPlayer *pOwner = GetPlayerOwner();
+	if ( pOwner == NULL )
+		return;
+
+	// Land a pigstick that is due
+	if ( m_bHitDelayed && m_flDelayedHit < gpGlobals->curtime )
+	{
+		Swing( true );
+		return;
+	}
+
+	if ( (pOwner->m_nButtons & IN_ATTACK2) && (m_flNextSecondaryAttack <= gpGlobals->curtime) && !m_bHitDelayed )
+	{
+		SecondaryAttack();
+	}
+
+	if ( (pOwner->m_nButtons & IN_ATTACK) && (m_flNextPrimaryAttack <= gpGlobals->curtime) && !m_bHitDelayed )
+	{
+		PrimaryAttack();
+	}
+
+	if ( !(pOwner->m_nButtons & IN_ATTACK) && !(pOwner->m_nButtons & IN_ATTACK2) )
+	{
+		WeaponIdle();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -159,6 +237,99 @@ float CBludgeonWeaponSDKBase::GetRange( void )
 float CBludgeonWeaponSDKBase::GetDamageForActivity( Activity hitActivity )
 {
 	return 1.0f;
+}
+
+//------------------------------------------------------------------------------
+// Purpose : Starts the swing of the weapon and determines the animation
+// Input   : bIsSecondary - is this a secondary attack?
+//------------------------------------------------------------------------------
+void CBludgeonWeaponSDKBase::Swing( int bIsSecondary )
+{
+	// Try a ray
+	CSDKPlayer *pOwner = GetPlayerOwner();
+	if ( !pOwner )
+		return;
+
+	if ( pOwner->GetSafe() )
+	{
+		m_flNextPrimaryAttack = gpGlobals->curtime + 0.2;
+		return;
+	}
+
+	Vector vSwingStart = pOwner->Weapon_ShootPosition( );
+	Vector vForward;
+
+	pOwner->EyeVectors( &vForward, NULL, NULL );
+
+	Vector vSwingEnd = vSwingStart + vForward * GetRange();
+
+	trace_t tr;
+	UTIL_TraceLine( vSwingStart, vSwingEnd, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tr );
+	Activity nHitActivity = bIsSecondary ? GetSecondaryAttackActivity() : GetPrimaryAttackActivity();
+
+#ifndef CLIENT_DLL
+	// Like bullets, bludgeon traces have to trace against triggers.
+	CTakeDamageInfo triggerInfo( GetOwner(), GetOwner(), 25.0f, DMG_CLUB );
+	TraceAttackToTriggers( triggerInfo, tr.startpos, tr.endpos, vec3_origin );
+#endif
+
+	if ( tr.fraction == 1.0 )
+	{
+		float bludgeonHullRadius = 1.732f * BLUDGEON_HULL_DIM;  // hull is +/- 16, so use cuberoot of 2 to determine how big the hull is from center to the corner point
+
+		// Back off by hull "radius"
+		vSwingEnd -= vForward * bludgeonHullRadius;
+
+		UTIL_TraceHull( vSwingStart, vSwingEnd, g_bludgeonMins, g_bludgeonMaxs, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tr );
+		if ( tr.fraction < 1.0 && tr.m_pEnt )
+		{
+			Vector vToTarget = tr.m_pEnt->GetAbsOrigin() - vSwingStart;
+			VectorNormalize( vToTarget );
+
+			float dot = vToTarget.Dot( vForward );
+
+			// YWB:  Make sure they are sort of facing the guy at least...
+			if ( dot < 0.70721f )
+			{
+				// Force amiss
+				tr.fraction = 1.0f;
+			}
+			else
+			{
+				ChooseIntersectionPointAndActivity( tr, g_bludgeonMins, g_bludgeonMaxs, pOwner );
+			}
+		}
+	}
+
+	// See if we happened to hit water
+	ImpactWater( vSwingStart, tr.endpos );
+
+	// -------------------------
+	//	Miss
+	// -------------------------
+	if ( tr.fraction == 1.0f )
+	{
+		nHitActivity = GetPrimaryMissActivity();
+	}
+	else
+	{
+		Hit( tr, nHitActivity );
+	}
+
+	WeaponSound( SINGLE );
+
+	// The pigstick animation was already sent when it started
+	if ( !bIsSecondary )
+	{
+		// Send the anim
+		SendWeaponAnim( nHitActivity );
+
+		//Setup our next attack times
+		m_flNextPrimaryAttack = m_flNextSecondaryAttack = gpGlobals->curtime + SequenceDuration();
+	}
+
+	m_flTimeWeaponIdle = gpGlobals->curtime + GetTime2Idle();
+	m_bHitDelayed = false;
 }
 
 //-----------------------------------------------------------------------------
@@ -208,46 +379,6 @@ void CBludgeonWeaponSDKBase::ChooseIntersectionPointAndActivity( trace_t &tr, co
 	{
 		tr = tmptr;
 	}
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: Splash when the swing goes into water
-//-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::ImpactWater( const Vector &vStart, const Vector &vEnd )
-{
-	// We must start outside the water
-	if ( UTIL_PointContents( vStart ) & (CONTENTS_WATER|CONTENTS_SLIME))
-		return;
-
-	trace_t	tr;
-
-	UTIL_TraceLine( vStart, vEnd, (CONTENTS_WATER|CONTENTS_SLIME), GetOwner(), COLLISION_GROUP_NONE, &tr );
-
-	if ( tr.fraction < 1.0f )
-	{
-		CEffectData	effectData;
-
-		effectData.m_fFlags  = 0;
-		effectData.m_vOrigin = tr.endpos;
-		effectData.m_vNormal = tr.plane.normal;
-		effectData.m_flScale = 8.0f;
-
-		// See if we hit slime
-		if ( tr.contents & CONTENTS_SLIME )
-		{
-			effectData.m_fFlags |= FX_WATER_IN_SLIME;
-		}
-
-		DispatchEffect( "watersplash", effectData );
-	}
-}
-
-//-----------------------------------------------------------------------------
-// Purpose:
-//-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::ImpactEffect( trace_t &tr )
-{
-	UTIL_ImpactTrace( &tr, DMG_SLASH );
 }
 
 //------------------------------------------------------------------------------
@@ -351,172 +482,41 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &tr, Activity hitActivity )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: Splash when the swing goes into water
+//-----------------------------------------------------------------------------
+void CBludgeonWeaponSDKBase::ImpactWater( const Vector &vStart, const Vector &vEnd )
+{
+	// We must start outside the water
+	if ( UTIL_PointContents( vStart ) & (CONTENTS_WATER|CONTENTS_SLIME))
+		return;
+
+	trace_t	tr;
+
+	UTIL_TraceLine( vStart, vEnd, (CONTENTS_WATER|CONTENTS_SLIME), GetOwner(), COLLISION_GROUP_NONE, &tr );
+
+	if ( tr.fraction < 1.0f )
+	{
+		CEffectData	effectData;
+
+		effectData.m_fFlags  = 0;
+		effectData.m_vOrigin = tr.endpos;
+		effectData.m_vNormal = tr.plane.normal;
+		effectData.m_flScale = 8.0f;
+
+		// See if we hit slime
+		if ( tr.contents & CONTENTS_SLIME )
+		{
+			effectData.m_fFlags |= FX_WATER_IN_SLIME;
+		}
+
+		DispatchEffect( "watersplash", effectData );
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose:
 //-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::PrimaryAttack( void )
+void CBludgeonWeaponSDKBase::ImpactEffect( trace_t &tr )
 {
-	if ( m_bHitDelayed )
-		return;
-
-	Swing( false );
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: Start the pigstick; the swing itself lands later in ItemPostFrame
-//-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::SecondaryAttack( void )
-{
-	if ( !sv_pigstick.GetBool() )
-		return;
-
-	CSDKPlayer *pPlayer = GetPlayerOwner();
-	if ( !pPlayer )
-		return;
-
-	if ( m_bHitDelayed )
-		return;
-
-	if ( pPlayer->GetSafe() )
-	{
-		m_flNextPrimaryAttack = gpGlobals->curtime + 0.2;
-		m_flNextSecondaryAttack = gpGlobals->curtime + 0.2;
-		return;
-	}
-
-	Activity nActivity = GetSecondaryAttackActivity();
-
-	m_flDelayedHit = gpGlobals->curtime + 1.3f;
-	m_flNextSecondaryAttack = gpGlobals->curtime + 3.0f;
-	m_flNextPrimaryAttack = gpGlobals->curtime + 2.55f;
-	m_bHitDelayed = true;
-
-	SendWeaponAnim( nActivity );
-	WeaponSound( SPECIAL1 );
-
-	DevMsg( 1, "Sequence Duration : %.2f\n", SequenceDuration() );
-}
-
-//------------------------------------------------------------------------------
-// Purpose : Starts the swing of the weapon and determines the animation
-// Input   : bIsSecondary - is this a secondary attack?
-//------------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::Swing( int bIsSecondary )
-{
-	// Try a ray
-	CSDKPlayer *pOwner = GetPlayerOwner();
-	if ( !pOwner )
-		return;
-
-	if ( pOwner->GetSafe() )
-	{
-		m_flNextPrimaryAttack = gpGlobals->curtime + 0.2;
-		return;
-	}
-
-	Vector vSwingStart = pOwner->Weapon_ShootPosition( );
-	Vector vForward;
-
-	pOwner->EyeVectors( &vForward, NULL, NULL );
-
-	Vector vSwingEnd = vSwingStart + vForward * GetRange();
-
-	trace_t tr;
-	UTIL_TraceLine( vSwingStart, vSwingEnd, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tr );
-	Activity nHitActivity = bIsSecondary ? GetSecondaryAttackActivity() : GetPrimaryAttackActivity();
-
-#ifndef CLIENT_DLL
-	// Like bullets, bludgeon traces have to trace against triggers.
-	CTakeDamageInfo triggerInfo( GetOwner(), GetOwner(), 25.0f, DMG_CLUB );
-	TraceAttackToTriggers( triggerInfo, tr.startpos, tr.endpos, vec3_origin );
-#endif
-
-	if ( tr.fraction == 1.0 )
-	{
-		float bludgeonHullRadius = 1.732f * BLUDGEON_HULL_DIM;  // hull is +/- 16, so use cuberoot of 2 to determine how big the hull is from center to the corner point
-
-		// Back off by hull "radius"
-		vSwingEnd -= vForward * bludgeonHullRadius;
-
-		UTIL_TraceHull( vSwingStart, vSwingEnd, g_bludgeonMins, g_bludgeonMaxs, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tr );
-		if ( tr.fraction < 1.0 && tr.m_pEnt )
-		{
-			Vector vToTarget = tr.m_pEnt->GetAbsOrigin() - vSwingStart;
-			VectorNormalize( vToTarget );
-
-			float dot = vToTarget.Dot( vForward );
-
-			// YWB:  Make sure they are sort of facing the guy at least...
-			if ( dot < 0.70721f )
-			{
-				// Force amiss
-				tr.fraction = 1.0f;
-			}
-			else
-			{
-				ChooseIntersectionPointAndActivity( tr, g_bludgeonMins, g_bludgeonMaxs, pOwner );
-			}
-		}
-	}
-
-	// See if we happened to hit water
-	ImpactWater( vSwingStart, tr.endpos );
-
-	// -------------------------
-	//	Miss
-	// -------------------------
-	if ( tr.fraction == 1.0f )
-	{
-		nHitActivity = GetPrimaryMissActivity();
-	}
-	else
-	{
-		Hit( tr, nHitActivity );
-	}
-
-	WeaponSound( SINGLE );
-
-	// The pigstick animation was already sent when it started
-	if ( !bIsSecondary )
-	{
-		// Send the anim
-		SendWeaponAnim( nHitActivity );
-
-		//Setup our next attack times
-		m_flNextPrimaryAttack = m_flNextSecondaryAttack = gpGlobals->curtime + SequenceDuration();
-	}
-
-	m_flTimeWeaponIdle = gpGlobals->curtime + GetTime2Idle();
-	m_bHitDelayed = false;
-}
-
-//------------------------------------------------------------------------------
-// Purpose : Update weapon
-//------------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::ItemPostFrame( void )
-{
-	CSDKPlayer *pOwner = GetPlayerOwner();
-	if ( pOwner == NULL )
-		return;
-
-	// Land a pigstick that is due
-	if ( m_bHitDelayed && m_flDelayedHit < gpGlobals->curtime )
-	{
-		Swing( true );
-		return;
-	}
-
-	if ( (pOwner->m_nButtons & IN_ATTACK2) && (m_flNextSecondaryAttack <= gpGlobals->curtime) && !m_bHitDelayed )
-	{
-		SecondaryAttack();
-	}
-
-	if ( (pOwner->m_nButtons & IN_ATTACK) && (m_flNextPrimaryAttack <= gpGlobals->curtime) && !m_bHitDelayed )
-	{
-		PrimaryAttack();
-	}
-
-	if ( !(pOwner->m_nButtons & IN_ATTACK) && !(pOwner->m_nButtons & IN_ATTACK2) )
-	{
-		WeaponIdle();
-	}
+	UTIL_ImpactTrace( &tr, DMG_SLASH );
 }

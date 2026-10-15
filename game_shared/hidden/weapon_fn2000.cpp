@@ -81,6 +81,20 @@ void CWeaponFN2000::SetSafe()
 	BaseClass::SetSafe();
 }
 
+bool CWeaponFN2000::Deploy()
+{
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	pPlayer->m_iShotsFired = 0;
+	m_flLastShot = gpGlobals->curtime - 1.0;
+	if ( pPlayer && pPlayer->GetSafe() )
+	{
+		SendWeaponAnim( ACT_VM_LOWERED );
+		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
+	}
+
+	return BaseClass::Deploy();
+}
+
 void CWeaponFN2000::WeaponIdle()
 {
 	if (m_flTimeWeaponIdle > gpGlobals->curtime)
@@ -103,18 +117,20 @@ void CWeaponFN2000::WeaponIdle()
 	}
 }
 
-bool CWeaponFN2000::Deploy()
+void CWeaponFN2000::ItemBusyFrame( void )
 {
-	CSDKPlayer *pPlayer = GetPlayerOwner();
-	pPlayer->m_iShotsFired = 0;
-	m_flLastShot = gpGlobals->curtime - 1.0;
-	if ( pPlayer && pPlayer->GetSafe() )
-	{
-		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
-	}
+	// Allow zoom toggling even when we're reloading
+	CheckZoomToggle();
 
-	return BaseClass::Deploy();
+	BaseClass::ItemBusyFrame();
+}
+
+void CWeaponFN2000::ItemPostFrame( void )
+{
+	// Allow zoom toggling
+	CheckZoomToggle();
+
+	BaseClass::ItemPostFrame();
 }
 
 //-----------------------------------------------------------------------------
@@ -153,22 +169,6 @@ void CWeaponFN2000::CheckZoomToggle( void )
 	{
 		ToggleZoom();
 	}
-}
-
-void CWeaponFN2000::ItemPostFrame( void )
-{
-	// Allow zoom toggling
-	CheckZoomToggle();
-
-	BaseClass::ItemPostFrame();
-}
-
-void CWeaponFN2000::ItemBusyFrame( void )
-{
-	// Allow zoom toggling even when we're reloading
-	CheckZoomToggle();
-
-	BaseClass::ItemBusyFrame();
 }
 
 void CWeaponFN2000::PrimaryAttack( void )
@@ -248,6 +248,27 @@ void CWeaponFN2000::PrimaryAttack( void )
 	m_flLastShot = gpGlobals->curtime;
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+bool CWeaponFN2000::Holster( CBaseCombatWeapon *pSwitchingTo )
+{
+#ifndef CLIENT_DLL
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	if ( !pPlayer )
+		return false;
+
+	// Show the rifle on the player model
+	if ( pPlayer->m_lifeState == LIFE_ALIVE )
+		pPlayer->SetBodygroup( 2, 0 );
+#endif
+
+	if ( m_bInZoom )
+		ToggleZoom();
+
+	return BaseClass::Holster( pSwitchingTo );
+}
+
 bool CWeaponFN2000::Reload()
 {
 	CSDKPlayer *pPlayer = GetPlayerOwner();
@@ -282,25 +303,4 @@ bool CWeaponFN2000::Reload()
 	pPlayer->m_iShotsFired = 0;
 
 	return true;
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
-bool CWeaponFN2000::Holster( CBaseCombatWeapon *pSwitchingTo )
-{
-#ifndef CLIENT_DLL
-	CSDKPlayer *pPlayer = GetPlayerOwner();
-	if ( !pPlayer )
-		return false;
-
-	// Show the rifle on the player model
-	if ( pPlayer->m_lifeState == LIFE_ALIVE )
-		pPlayer->SetBodygroup( 2, 0 );
-#endif
-
-	if ( m_bInZoom )
-		ToggleZoom();
-
-	return BaseClass::Holster( pSwitchingTo );
 }

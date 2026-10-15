@@ -448,6 +448,26 @@ void CFN303Ball::BoltTouch( CBaseEntity *pOther )
 
 #endif
 
+void CWeaponFN303::PrimaryAttack( void )
+{
+#ifndef CLIENT_DLL
+	// REBUILD: client.dll (two months older than the server) has neither of these checks here
+	if ( !m_bDeployed )
+		return;
+
+	// No firing while safe
+	if ( GetPlayerOwner()->GetSafe() )
+	{
+		m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
+		return;
+	}
+#endif
+
+	FireBolt();
+
+	SetWeaponIdleTime( gpGlobals->curtime + SequenceDuration( ACT_VM_PRIMARYATTACK ) );
+}
+
 void CWeaponFN303::FireBolt( void )
 {
 	if ( m_iClip1 <= 0 )
@@ -505,24 +525,4 @@ void CWeaponFN303::FireBolt( void )
 	}
 
 	m_flNextPrimaryAttack = m_flNextSecondaryAttack	= gpGlobals->curtime + 0.4;
-}
-
-void CWeaponFN303::PrimaryAttack( void )
-{
-#ifndef CLIENT_DLL
-	// REBUILD: client.dll (two months older than the server) has neither of these checks here
-	if ( !m_bDeployed )
-		return;
-
-	// No firing while safe
-	if ( GetPlayerOwner()->GetSafe() )
-	{
-		m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
-		return;
-	}
-#endif
-
-	FireBolt();
-
-	SetWeaponIdleTime( gpGlobals->curtime + SequenceDuration( ACT_VM_PRIMARYATTACK ) );
 }

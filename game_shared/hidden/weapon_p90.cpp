@@ -63,6 +63,20 @@ void CWeaponP90::SetSafe()
 	BaseClass::SetSafe();
 }
 
+bool CWeaponP90::Deploy()
+{
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	pPlayer->m_iShotsFired = 0;
+
+	if ( pPlayer && pPlayer->GetSafe() )
+	{
+		SendWeaponAnim( ACT_VM_LOWERED );
+		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
+	}
+
+	return BaseClass::Deploy();
+}
+
 bool CWeaponP90::Holster( CBaseCombatWeapon *pSwitchingTo )
 {
 #ifndef CLIENT_DLL
@@ -76,28 +90,6 @@ bool CWeaponP90::Holster( CBaseCombatWeapon *pSwitchingTo )
 #endif
 
 	return BaseClass::Holster( pSwitchingTo );
-}
-
-void CWeaponP90::WeaponIdle()
-{
-	if (m_flTimeWeaponIdle > gpGlobals->curtime)
-		return;
-
-	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
-	if ( !pPlayer )
-		return;
-
-	if ( pPlayer->GetSafe() )
-	{
-		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
-	}
-	// only idle if the slid isn't back
-	else if ( m_iClip1 != 0 )
-	{
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
-		SendWeaponAnim( ACT_VM_IDLE );
-	}
 }
 
 bool CWeaponP90::Reload()
@@ -133,18 +125,26 @@ bool CWeaponP90::Reload()
 	return true;
 }
 
-bool CWeaponP90::Deploy()
+void CWeaponP90::WeaponIdle()
 {
-	CSDKPlayer *pPlayer = GetPlayerOwner();
-	pPlayer->m_iShotsFired = 0;
+	if (m_flTimeWeaponIdle > gpGlobals->curtime)
+		return;
 
-	if ( pPlayer && pPlayer->GetSafe() )
+	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( !pPlayer )
+		return;
+
+	if ( pPlayer->GetSafe() )
 	{
 		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
 	}
-
-	return BaseClass::Deploy();
+	// only idle if the slid isn't back
+	else if ( m_iClip1 != 0 )
+	{
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
+		SendWeaponAnim( ACT_VM_IDLE );
+	}
 }
 
 void CWeaponP90::PrimaryAttack( void )
