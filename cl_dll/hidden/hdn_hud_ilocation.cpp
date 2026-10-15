@@ -61,9 +61,10 @@ void CHudILocation::Paint( void )
 	if ( !pPlayer )
 		return;
 
-	if ( pPlayer->GetTeamNumber() == TEAM_IRIS && m_pIcon )
+	if ( pPlayer->GetTeamNumber() == TEAM_IRIS )
 	{
 		Color clr = gHUD.m_clrNormal;
-		m_pIcon->DrawSelf( 0, 0, GetWide(), GetTall(), clr );
+		if ( m_pIcon )
+			m_pIcon->DrawSelf( 0, 0, GetWide(), GetTall(), clr );
 	}
 }
