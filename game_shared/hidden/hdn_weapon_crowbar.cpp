@@ -36,6 +36,10 @@ public:
 
 	virtual void	SetSafe( void ) {}
 
+#ifdef CLIENT_DLL
+	virtual int		DrawModel( int flags );
+#endif
+
 private:
 	CWeaponCrowbar( const CWeaponCrowbar & );
 };
@@ -50,3 +54,17 @@ END_PREDICTION_DATA()
 
 LINK_ENTITY_TO_CLASS( weapon_knife, CWeaponCrowbar );
 PRECACHE_WEAPON_REGISTER( weapon_knife );
+
+#ifdef CLIENT_DLL
+//-----------------------------------------------------------------------------
+// Purpose: The world model is not drawn while a living player carries the knife
+//-----------------------------------------------------------------------------
+int CWeaponCrowbar::DrawModel( int flags )
+{
+	C_BasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( pPlayer && pPlayer->IsAlive() )
+		return 1;
+
+	return BaseClass::DrawModel( flags );
+}
+#endif
