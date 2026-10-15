@@ -12,6 +12,7 @@
 #include "IEffects.h"
 #include "vphysics/object_hash.h"
 #include "IceKey.H"
+#include "sdk_shareddefs.h"
 
 #ifdef CLIENT_DLL
 	#include "c_te_effect_dispatch.h"
@@ -141,8 +142,9 @@ bool PassServerEntityFilter( const IHandleEntity *pTouch, const IHandleEntity *p
 	if ( pEntPass->GetOwnerEntity() == pEntTouch )
 		return false;	
 
-
-	return true;
+	// Hidden: marine clip brushes only stop player movement. REBUILD: Hidden tests both groups
+	// without a branch, hence the '&'.
+	return !( ( pEntTouch->GetCollisionGroup() == COLLISION_GROUP_MARINE_CLIP ) & ( pEntPass->GetCollisionGroup() != COLLISION_GROUP_PLAYER_MOVEMENT ) );
 }
 
 
@@ -448,6 +450,40 @@ void UTIL_TraceEntity( CBaseEntity *pEntity, const Vector &vecAbsStart, const Ve
 	Assert( pCollision->GetCollisionAngles() == vec3_angle );
 
 	enginetrace->SweepCollideable( pCollision, vecAbsStart, vecAbsEnd, pCollision->GetCollisionAngles(), mask, pFilter, ptr );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: shortens a trace to the first player hitbox near the ray (mid-2005 form,
+//			ignoring one player instead of taking a trace filter)
+//-----------------------------------------------------------------------------
+void UTIL_ClipTraceToPlayers( const CBasePlayer *pIgnorePlayer, const Vector& vecAbsStart, const Vector& vecAbsEnd, unsigned int mask, trace_t *tr )
+{
+	trace_t playerTrace;
+	Ray_t ray;
+	float smallestFraction = tr->fraction;
+	const float maxRange = 60.0f;
+
+	ray.Init( vecAbsStart, vecAbsEnd );
+
+	for ( int k = 1; k <= gpGlobals->maxClients; ++k )
+	{
+		CBasePlayer *player = UTIL_PlayerByIndex( k );
+
+		if ( !player || player == pIgnorePlayer || !player->IsAlive() )
+			continue;
+
+		float range = DistanceToRay( player->WorldSpaceCenter(), vecAbsStart, vecAbsEnd );
+		if ( range < 0.0f || range > maxRange )
+			continue;
+
+		enginetrace->ClipRayToEntity( ray, mask|CONTENTS_HITBOX, player, &playerTrace );
+		if ( playerTrace.fraction < smallestFraction )
+		{
+			// we shortened the ray - save off the trace
+			*tr = playerTrace;
+			smallestFraction = playerTrace.fraction;
+		}
+	}
 }
 
 

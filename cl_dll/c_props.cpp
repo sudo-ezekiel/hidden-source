@@ -98,13 +98,26 @@ public:
 		return m_iPhysicsMode;
 	}
 
+	virtual float GetMass()
+	{
+		return m_fMass;
+	}
+
+	virtual bool IsAsleep()
+	{
+		Assert ( 0 );
+		return true;
+	}
+
 	CNetworkVar( int, m_iPhysicsMode );	// One of the PHYSICS_MULTIPLAYER_ defines.	
+	CNetworkVar( float, m_fMass );
 
 	DECLARE_CLIENTCLASS();
 };
 
 IMPLEMENT_CLIENTCLASS_DT( CPhysBoxMultiplayer, DT_PhysBoxMultiplayer, CPhysBoxMultiplayer )
-	RecvPropInt( RECVINFO( m_iPhysicsMode ) )
+	RecvPropInt( RECVINFO( m_iPhysicsMode ) ),
+	RecvPropFloat( RECVINFO( m_fMass ) ),
 END_RECV_TABLE()
 
 
@@ -119,11 +132,23 @@ class CPhysicsPropMultiplayer : public CPhysicsProp, public IMultiplayerPhysics
 		return m_iPhysicsMode;
 	}
 
+	virtual float GetMass()
+	{
+		return m_fMass;
+	}
+
+	virtual bool IsAsleep()
+	{
+		return !m_bAwake;
+	}
+
 	CNetworkVar( int, m_iPhysicsMode );	// One of the PHYSICS_MULTIPLAYER_ defines.	
+	CNetworkVar( float, m_fMass );
 
 	DECLARE_CLIENTCLASS();
 };
 
 IMPLEMENT_CLIENTCLASS_DT( CPhysicsPropMultiplayer, DT_PhysicsPropMultiplayer, CPhysicsPropMultiplayer )
-	RecvPropInt( RECVINFO( m_iPhysicsMode ) )
+	RecvPropInt( RECVINFO( m_iPhysicsMode ) ),
+	RecvPropFloat( RECVINFO( m_fMass ) ),
 END_RECV_TABLE()

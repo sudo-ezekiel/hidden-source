@@ -43,6 +43,7 @@ public:
 	void DisableAutoFade();
 
 	int ObjectCaps();
+	virtual void Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
 
 	DECLARE_SERVERCLASS();
 	// Don't treat as a live target
@@ -135,7 +136,9 @@ private:
 
 	string_t			m_strSourceClassName;
 	bool				m_bHasBeenPhysgunned;
-	int					m_iRagdollHealth;	// REBUILD: name. Read by GetHealth, changed by SetHealth.
+	// Hidden: the corpse's own health. It hides CBaseEntity::m_iHealth, so Valve's code in this class
+	// (HandleFirstCollisionInteractions) reads it too, as in the binary.
+	int					m_iHealth;
 
 	// If not 1, then allow underlying sequence to blend in with simulated bone positions
 	CNetworkVar( float, m_flBlendWeight );
@@ -150,7 +153,7 @@ private:
 };
 
 CBaseEntity *CreateServerRagdoll( CBaseAnimating *pAnimating, int forceBone, const CTakeDamageInfo &info, int collisionGroup, bool bUseLRURetirement = false );
-// Hidden: the ragdoll a dead player leaves behind (CSDKPlayer::CreateRagdollEntity)
+// Hidden: a player's corpse ("corpse_ragdoll"); big hits gib it
 CBaseEntity *CreateServerCorpseRagdoll( CBaseAnimating *pAnimating, int forceBone, const CTakeDamageInfo &info, int collisionGroup, bool bUseLRURetirement = false );
 CRagdollProp *CreateServerRagdollAttached( CBaseAnimating *pAnimating, const Vector &vecForce, int forceBone, int collisionGroup, IPhysicsObject *pAttached, CBaseAnimating *pParentEntity, int boneAttach, const Vector &originAttached, int parentBoneAttach, const Vector &boneOrigin );
 void DetachAttachedRagdoll( CBaseEntity *pRagdollIn );

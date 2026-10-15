@@ -414,19 +414,7 @@ float CalculatePhysicsImpactDamage( int index, gamevcollisionevent_t *pEvent, co
 		// prop, so recompute:
 		invMass = 1.0f / pEvent->pObjects[index]->GetMass();
 	}
-	else if ( pEvent->pObjects[index]->GetGameFlags() & FVPHYSICS_PLAYER_HELD )
-	{
-		// if the player is holding the object, use it's real mass (player holding reduced the mass)
-		CBasePlayer *pPlayer = UTIL_GetLocalPlayer();
-		if ( pPlayer )
-		{
-			float mass = pPlayer->GetHeldObjectMass( pEvent->pObjects[index] );
-			if ( mass > 0 )
-			{
-				invMass = 1.0f / mass;
-			}
-		}
-	}
+	// Hidden drops Valve's held-object mass correction here (it read the single-player local player)
 
 	eliminatedEnergy *= invMass * energyScale;
 	

@@ -141,6 +141,8 @@ public:
 
 	// Copy fade from another breakable prop
 	void CopyFadeFrom( CBreakableProp *pSource );
+	// Hidden: set the fade distances (used by gibs with fademindist/fademaxdist)
+	void SetFadeDistance( float minFadeDist, float maxFadeDist );
 
 protected:
 

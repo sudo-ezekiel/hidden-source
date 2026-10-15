@@ -67,9 +67,15 @@ public:
 	virtual int		PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget );
 	virtual bool	IsTeamplay( void ) { return false;	}
 
+	// Seconds left in the round (0 before the first round); the round timer shows it
+	int				GetRoundTimerRemain( void );
+
 #ifdef CLIENT_DLL
 
 	DECLARE_CLIENTCLASS_NOBASE(); // This makes datatables able to access our private vars.
+
+	// The team menu disables the IRIS characters other players have taken
+	bool			IsCharacterTaken( int iCharacter );	// REBUILD: name
 
 #else
 
@@ -124,7 +130,6 @@ public:
 	void			CleanUpMap( void );
 	void			SetSpawns( void );
 	bool			IsRoundOver( void );
-	int				GetRoundTimerRemain( void );
 
 	// Count the players left; each also stores the count in its member
 	bool			CountMarines( void );
