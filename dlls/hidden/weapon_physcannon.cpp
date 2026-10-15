@@ -250,7 +250,7 @@ private:
 	void ComputeMaxSpeed( CBaseEntity *pEntity, IPhysicsObject *pPhysics );
 
 	// Hidden: the held object's collision group, restored when it is dropped (not saved)
-	int				m_iOldCollisionGroup;	// REBUILD: name not in the binary
+	int				m_iObjectCollisionGroup;
 	game_shadowcontrol_params_t	m_shadow;
 	float			m_timeToArrive;
 	float			m_errorTime;
@@ -721,7 +721,7 @@ void CPlayerPickupController::Init( CBasePlayer *pPlayer, CBaseEntity *pObject )
 	}
 
 	// Hidden: carried objects are debris until they are dropped, so they do not block players
-	m_grabController.m_iOldCollisionGroup = pObject->GetCollisionGroup();
+	m_grabController.m_iObjectCollisionGroup = pObject->GetCollisionGroup();
 	pObject->SetCollisionGroup( COLLISION_GROUP_DEBRIS );
 
 	// done so I'll go across level transitions with the player
@@ -749,7 +749,7 @@ void CPlayerPickupController::Shutdown( bool bThrown )
 
 	if ( pObject )
 	{
-		pObject->SetCollisionGroup( m_grabController.m_iOldCollisionGroup );
+		pObject->SetCollisionGroup( m_grabController.m_iObjectCollisionGroup );
 	}
 
 	bool bClearVelocity = false;

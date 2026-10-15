@@ -50,11 +50,10 @@ private:
 	void			SelectWeightedHidden( CUtlVector<CBasePlayer *> &players );
 	void			SetSelectHidden( CUtlVector<CBasePlayer *> &players );
 
-	// REBUILD: the member names are ours.
-	CUtlVector<CBasePlayer *>	m_EligiblePlayers;	// living IRIS players willing to be the Hidden
-	CUtlVector<CBasePlayer *>	m_PlayingPlayers;	// everyone on a team
-	CUtlVector<CBasePlayer *>	m_AllPlayers;		// everyone connected, spectators included
-	CBasePlayer					*m_pHidden;
+	CUtlVector<CBasePlayer *>	m_prefplayers;	// living IRIS players willing to be the Hidden
+	CUtlVector<CBasePlayer *>	m_readyplayers;	// everyone on a team
+	CUtlVector<CBasePlayer *>	m_allplayers;		// everyone connected, spectators included
+	CBasePlayer					*m_pCurrentHidden;
 	int							m_iHiddenRounds;	// rounds the current Hidden has played in a row
 };
 

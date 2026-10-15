@@ -169,7 +169,7 @@ CGameMovement::CGameMovement( void )
 
 	mv					= NULL;
 
-	m_flClingTime		= 0;
+	m_fPounceTime		= 0;
 
 	memset( m_flStuckCheckTime, 0, sizeof(m_flStuckCheckTime) );
 }
@@ -1348,7 +1348,7 @@ void CGameMovement::AirMove( void )
 		UTIL_TraceLine( vecSrc, vecEnd, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
 		if ( tr.fraction < 1.0 )
 		{
-			m_flClingTime = gpGlobals->curtime + 4.0f;
+			m_fPounceTime = gpGlobals->curtime + 4.0f;
 			player->SetMoveType( MOVETYPE_CLING );
 			return;
 		}

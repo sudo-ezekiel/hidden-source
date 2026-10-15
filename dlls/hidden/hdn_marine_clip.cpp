@@ -1,7 +1,7 @@
 //========= Hidden: Source ============//
 //
 // Purpose: marine_clip, an invisible player clip brush. Its collision group lets
-//			ordinary objects through (see COLLISION_GROUP_MARINE_CLIP in
+//			ordinary objects through (see COLLISION_GROUP_MARINECLIP in
 //			CSDKGameRules::ShouldCollide).
 //
 //=====================================//
@@ -38,7 +38,7 @@ void CMarineClip::Spawn( void )
 	SetMoveType( MOVETYPE_NONE );
 	SetSolid( SOLID_BSP );
 	AddEffects( EF_NODRAW );
-	SetCollisionGroup( COLLISION_GROUP_MARINE_CLIP );
+	SetCollisionGroup( COLLISION_GROUP_MARINECLIP );
 
 	SetModel( STRING( GetModelName() ) );
 }

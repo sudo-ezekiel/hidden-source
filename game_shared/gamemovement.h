@@ -55,7 +55,7 @@ protected:
 	Vector			m_vecRight;
 	Vector			m_vecUp;
 
-	float			m_flClingTime;		// REBUILD: name; AirMove sets it to curtime + 4 when the Hidden grabs a wall, nothing reads it
+	float			m_fPounceTime;		// AirMove sets it to curtime + 4 when the Hidden grabs a wall, nothing reads it
 
 
 	// Does most of the player movement logic.

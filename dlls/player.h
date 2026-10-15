@@ -187,8 +187,8 @@ private:
 // Hidden: one entry per sonic grenade or shockwave that stunned this player
 struct StunTracker
 {
-	CBasePlayer				*pAttacker;
-	float					flExpireTime;
+	CBasePlayer				*pStunner;
+	float					m_flStunTimer;
 };
 
 
@@ -336,9 +336,9 @@ public:
 	virtual void			SetZoom( bool bZoom ) { m_bZoom = bZoom; }
 
 	// Loadout chosen in the menus (the "new" values) and the one in use this round
-	virtual void			SetEquipment( int iEquipment ) { m_iNewEquipment = iEquipment; }
+	virtual void			SetEquipment( int iEquipment ) { m_iNewEquip = iEquipment; }
 	virtual int				GetEquipment( void ) { return ( GetTeamNumber() == 3 ) ? -2 : m_iEquipment; }	// REBUILD: 3 is the Hidden's team
-	virtual int				GetNewEquipment( void ) { return m_iNewEquipment; }
+	virtual int				GetNewEquipment( void ) { return m_iNewEquip; }
 	virtual void			SetPrimary( int iPrimary ) { m_iNewPrimary = iPrimary; }
 	virtual int				GetPrimary( void ) { return m_iPrimary; }
 	virtual int				GetNewPrimary( void ) { return m_iNewPrimary; }
@@ -347,12 +347,12 @@ public:
 	virtual int				GetNewSecondary( void ) { return m_iNewSecondary; }
 	virtual void			SetReady( bool bReady ) { m_bReady = bReady; }
 	virtual bool			IsReady( void ) { return m_bReady; }
-	virtual void			SetPrimaryBool( bool bHas ) { m_bHasPrimary = bHas; }
-	virtual bool			HasPrimary( void ) { return m_bHasPrimary; }
-	virtual void			SetSecondaryBool( bool bHas ) { m_bHasSecondary = bHas; }
-	virtual bool			HasSecondary( void ) { return m_bHasSecondary; }
-	virtual void			SetEquipmentBool( bool bHas ) { m_bHasEquipment = bHas; }
-	virtual bool			HasEquipment( void ) { return m_bHasEquipment; }
+	virtual void			SetPrimaryBool( bool bHas ) { m_bPrimary = bHas; }
+	virtual bool			HasPrimary( void ) { return m_bPrimary; }
+	virtual void			SetSecondaryBool( bool bHas ) { m_bSecondary = bHas; }
+	virtual bool			HasSecondary( void ) { return m_bSecondary; }
+	virtual void			SetEquipmentBool( bool bHas ) { m_bEquipment = bHas; }
+	virtual bool			HasEquipment( void ) { return m_bEquipment; }
 
 	// Opting out of being picked as the Hidden
 	virtual void			SetNoHidden( bool bNoHidden ) { m_bNoHidden = bNoHidden; }
@@ -371,8 +371,8 @@ public:
 	virtual float			GetStamina( void ) { return m_flStamina; }
 	virtual void			SetStamina( float flAmount );
 
-	virtual void			SetRadio( float flDelay ) { m_flRadioTime = gpGlobals->curtime + flDelay; }
-	virtual float			GetRadio( void ) { return m_flRadioTime; }
+	virtual void			SetRadio( float flDelay ) { m_flRadioTimer = gpGlobals->curtime + flDelay; }
+	virtual float			GetRadio( void ) { return m_flRadioTimer; }
 
 	virtual bool			RequestedAmmo( void ) { return m_bRequestAmmo; }
 	virtual void			SetAmmoRequest( bool bRequest ) { m_bRequestAmmo = bRequest; }
@@ -388,9 +388,9 @@ public:
 
 	virtual bool			IsBoosted( void ) { return m_bBoosted; }
 	virtual void			SetBoosted( bool bBoosted ) { m_bBoosted = bBoosted; }
-	virtual void			SetBoost( int iBoost ) { if ( iBoost == 0 ) m_iBoost = 0; else m_iBoost += iBoost; }
-	virtual int				GetBoost( void ) { return m_iBoost; }
-	virtual float			GetBoostTimer( void ) { return m_flBoostTime; }
+	virtual void			SetBoost( int iBoost ) { if ( iBoost == 0 ) m_iBoostCount = 0; else m_iBoostCount += iBoost; }
+	virtual int				GetBoost( void ) { return m_iBoostCount; }
+	virtual float			GetBoostTimer( void ) { return m_flBoostTimer; }
 	virtual void			Boost( void );
 
 	// The Hidden's aura vision
@@ -687,8 +687,8 @@ private:
 
 public:
 	
-	// Hidden: player state data. Names of networked members come from the send tables;
-	// REBUILD marks names that are not in the binary.
+	// Hidden: player state data. The names are those of Hidden's May 2006 server PDB
+	// (rebuild/PDB.md); REBUILD marks the members that came later and are not in it.
 	CNetworkVar( bool, m_bSafety );
 	CNetworkVar( float, m_flStamina );
 	CNetworkVar( bool, m_bZoom );
@@ -696,40 +696,40 @@ public:
 	CNetworkVar( int, m_iWeighting );			// chance of being picked as the Hidden
 	int						m_iWeightMax;		// REBUILD: name; top of this player's range in CHiddenSelector::SelectWeightedHidden
 	int						m_iWeightMin;		// REBUILD: name; bottom of the range, -1 when not eligible
-	int						m_iClass;			// REBUILD: name
-	int						m_iNewEquipment;	// REBUILD: name
+	int						m_iMarineClass;
+	int						m_iNewEquip;
 	CNetworkVar( bool, m_bNoHidden );
 	CNetworkVar( int, m_iPrimary );
-	int						m_iNewPrimary;		// REBUILD: name
+	int						m_iNewPrimary;
 	CNetworkVar( int, m_iSecondary );
-	int						m_iNewSecondary;	// REBUILD: name
+	int						m_iNewSecondary;
 	CNetworkVar( int, m_iEquipment );
-	int						m_iUnknown7e4;		// REBUILD: 4 bytes at 0x7e4, no use found
-	bool					m_bHadHidden;		// REBUILD: name
-	bool					m_bHasPrimary;		// REBUILD: name
-	bool					m_bHasSecondary;	// REBUILD: name
-	bool					m_bHasEquipment;	// REBUILD: name
-	bool					m_bReady;			// REBUILD: name
-	int						m_iCharacterBody;	// REBUILD: name; copied to m_nBody on spawn
-	int						m_iCharacterSkin;	// REBUILD: name; IRIS character slot (0-8), copied to m_nSkin on spawn
+	int						m_iEquipmentCurrent;	// REBUILD: no use found in the August build
+	bool					m_bHadHidden;
+	bool					m_bPrimary;
+	bool					m_bSecondary;
+	bool					m_bEquipment;
+	bool					m_bReady;
+	int						m_nBody_change;		// copied to m_nBody on spawn
+	int						m_nSkin_change;		// IRIS character slot (0-8), copied to m_nSkin on spawn
 	CNetworkVar( bool, m_bStunned );
 	CNetworkVar( bool, m_bAura );
-	float					m_flShockwaveEnd;	// REBUILD: name
-	float					m_flNextStunThink;	// REBUILD: name
+	float					m_flStunTimer;
+	float					m_flStunUpdate;
 	CNetworkVar( float, m_flBlur );
-	int						m_iUnknown808;		// REBUILD: 4 bytes at 0x808, no use found
+	CBasePlayer				*pStunner;			// REBUILD: no use found in the August build
 	CNetworkVar( bool, m_bNightVision );
 	CNetworkVar( bool, m_bLAM );
 	CNetworkVar( bool, m_bRequestAmmo );
-	CUtlVector<StunTracker>	m_StunTrackers;		// REBUILD: name; who stunned us, until when
-	float					m_flBoostTime;		// REBUILD: name
-	int						m_iBoost;			// REBUILD: name
-	float					m_flRadioTime;		// REBUILD: name
-	bool					m_bBoosted;			// REBUILD: name
-	bool					m_bAmmoRecieved;	// REBUILD: name
-	CUtlVector<CBaseEntity *>	m_ObserverTargets;	// REBUILD: name; used by FindNextObserverTarget and InitialSpawn
-	int						m_iSpawnTimer;		// REBUILD: name
-	bool					m_bSpawn;			// REBUILD: name
+	CUtlVector<StunTracker>	StunnerList;		// who stunned us, until when
+	float					m_flBoostTimer;
+	int						m_iBoostCount;
+	float					m_flRadioTimer;
+	bool					m_bBoosted;
+	bool					m_bAmmoRecieved;
+	CUtlVector<CBaseEntity *>	m_SpectorSpawns;	// used by FindNextObserverTarget and InitialSpawn
+	int						m_iTimer;
+	bool					m_bSpawn;
 	CNetworkString( m_CurrentLocation, 25 );
 
 	// Used by gamemovement to check if the entity is stuck.

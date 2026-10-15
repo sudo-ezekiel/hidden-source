@@ -162,7 +162,7 @@ bool CWeaponSDKBase::Deploy()
 		CreateLaserPointer();
 #endif
 
-	m_bJustDeployed = true;
+	m_bLaserEnabled = true;
 
 	return BaseClass::Deploy();
 }

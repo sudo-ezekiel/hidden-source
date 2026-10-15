@@ -439,8 +439,8 @@ void CSDKPlayer::Spawn()
 
 		SetFOV( this, 0 );
 
-		m_nBody = m_iCharacterBody;
-		m_nSkin = m_iCharacterSkin;
+		m_nBody = m_nBody_change;
+		m_nSkin = m_nSkin_change;
 		SetBodygroup( 2, 2 );
 
 		switch ( GetSecondary() )
@@ -719,8 +719,8 @@ void CSDKPlayer::FlashlightTurnOff( void )
 
 	RemoveEffects( EF_DIMLIGHT );
 
-	if ( m_pFlashlightBeam )
-		m_pFlashlightBeam->TurnOn();
+	if ( m_hFlashlight )
+		m_hFlashlight->TurnOn();
 }
 
 //-----------------------------------------------------------------------------
@@ -733,7 +733,7 @@ void CSDKPlayer::StartWalking( void )
 	else
 		SetMaxSpeed( 160 );
 
-	m_bIsWalking = true;
+	m_fIsWalking = true;
 }
 
 void CSDKPlayer::StopWalking( void )
@@ -743,7 +743,7 @@ void CSDKPlayer::StopWalking( void )
 	else
 		SetMaxSpeed( 220 );
 
-	m_bIsWalking = false;
+	m_fIsWalking = false;
 }
 
 //-----------------------------------------------------------------------------

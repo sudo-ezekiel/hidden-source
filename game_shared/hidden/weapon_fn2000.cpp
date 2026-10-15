@@ -52,7 +52,7 @@ private:
 
 	CNetworkVar( bool,	m_bInZoom );
 
-	float	m_flLastShotTime;	// REBUILD: name. A shot more than a second after the last one is perfectly accurate.
+	float	m_flLastShot;	// a shot more than a second after the last one is perfectly accurate
 };
 
 IMPLEMENT_NETWORKCLASS_ALIASED( WeaponFN2000, DT_WeaponFN2000 )
@@ -107,7 +107,7 @@ bool CWeaponFN2000::Deploy()
 {
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	pPlayer->m_iShotsFired = 0;
-	m_flLastShotTime = gpGlobals->curtime - 1.0;
+	m_flLastShot = gpGlobals->curtime - 1.0;
 	if ( pPlayer && pPlayer->GetSafe() )
 	{
 		SendWeaponAnim( ACT_VM_LOWERED );
@@ -193,7 +193,7 @@ void CWeaponFN2000::PrimaryAttack( void )
 		flSpread = 0.01f;
 	else
 		flSpread = 0.03f;
-	if ( m_flLastShotTime + 1.0 < gpGlobals->curtime )
+	if ( m_flLastShot + 1.0 < gpGlobals->curtime )
 		flSpread = 0.0f;
 
 	// more spread when jumping
@@ -245,7 +245,7 @@ void CWeaponFN2000::PrimaryAttack( void )
 	angle.x -= !(pPlayer->GetFlags() & FL_ONGROUND ) ? SHARED_RANDOMINT( 5, 8 ) : SHARED_RANDOMINT( 1, 3 );
 	pPlayer->SetPunchAngle( angle );
 
-	m_flLastShotTime = gpGlobals->curtime;
+	m_flLastShot = gpGlobals->curtime;
 }
 
 bool CWeaponFN2000::Reload()

@@ -100,7 +100,7 @@ bool CBludgeonWeaponSDKBase::Deploy( void )
 //-----------------------------------------------------------------------------
 bool CBludgeonWeaponSDKBase::Holster( CBaseCombatWeapon *pSwitchingTo )
 {
-	if ( m_bPigsticking )
+	if ( m_bHitDelayed )
 		return false;
 
 	return BaseClass::Holster( pSwitchingTo );
@@ -355,7 +355,7 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
 //-----------------------------------------------------------------------------
 void CBludgeonWeaponSDKBase::PrimaryAttack( void )
 {
-	if ( m_bPigsticking )
+	if ( m_bHitDelayed )
 		return;
 
 	Swing( false );
@@ -373,7 +373,7 @@ void CBludgeonWeaponSDKBase::SecondaryAttack( void )
 	if ( !pPlayer )
 		return;
 
-	if ( m_bPigsticking )
+	if ( m_bHitDelayed )
 		return;
 
 	if ( pPlayer->GetSafe() )
@@ -385,10 +385,10 @@ void CBludgeonWeaponSDKBase::SecondaryAttack( void )
 
 	Activity nActivity = GetSecondaryAttackActivity();
 
-	m_flPigstickTime = gpGlobals->curtime + 1.3f;
+	m_flDelayedHit = gpGlobals->curtime + 1.3f;
 	m_flNextSecondaryAttack = gpGlobals->curtime + 3.0f;
 	m_flNextPrimaryAttack = gpGlobals->curtime + 2.55f;
-	m_bPigsticking = true;
+	m_bHitDelayed = true;
 
 	SendWeaponAnim( nActivity );
 	WeaponSound( SPECIAL1 );
@@ -486,7 +486,7 @@ void CBludgeonWeaponSDKBase::Swing( int bIsSecondary )
 	}
 
 	m_flTimeWeaponIdle = gpGlobals->curtime + GetTime2Idle();
-	m_bPigsticking = false;
+	m_bHitDelayed = false;
 }
 
 //------------------------------------------------------------------------------
@@ -499,18 +499,18 @@ void CBludgeonWeaponSDKBase::ItemPostFrame( void )
 		return;
 
 	// Land a pigstick that is due
-	if ( m_bPigsticking && m_flPigstickTime < gpGlobals->curtime )
+	if ( m_bHitDelayed && m_flDelayedHit < gpGlobals->curtime )
 	{
 		Swing( true );
 		return;
 	}
 
-	if ( (pOwner->m_nButtons & IN_ATTACK2) && (m_flNextSecondaryAttack <= gpGlobals->curtime) && !m_bPigsticking )
+	if ( (pOwner->m_nButtons & IN_ATTACK2) && (m_flNextSecondaryAttack <= gpGlobals->curtime) && !m_bHitDelayed )
 	{
 		SecondaryAttack();
 	}
 
-	if ( (pOwner->m_nButtons & IN_ATTACK) && (m_flNextPrimaryAttack <= gpGlobals->curtime) && !m_bPigsticking )
+	if ( (pOwner->m_nButtons & IN_ATTACK) && (m_flNextPrimaryAttack <= gpGlobals->curtime) && !m_bHitDelayed )
 	{
 		PrimaryAttack();
 	}

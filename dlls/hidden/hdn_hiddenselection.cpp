@@ -17,12 +17,12 @@ ConVar hdn_selectmethod( "hdn_selectmethod", "0", FCVAR_REPLICATED | FCVAR_NOTIF
 void CHiddenSelector::ClearHidden( void )
 {
 	m_iHiddenRounds = 0;
-	m_pHidden = NULL;
+	m_pCurrentHidden = NULL;
 }
 
 void CHiddenSelector::ForfeitHidden( CBasePlayer *pPlayer )
 {
-	if ( m_pHidden == pPlayer )
+	if ( m_pCurrentHidden == pPlayer )
 		ClearHidden();
 }
 
@@ -32,12 +32,12 @@ void CHiddenSelector::NewHidden( CBasePlayer *pPlayer )
 
 	// In classic selection the player who killed the Hidden takes his place
 	if ( hdn_selectmethod.GetInt() == 1 && !pPlayer->GetNoHidden() )
-		m_pHidden = pPlayer;
+		m_pCurrentHidden = pPlayer;
 }
 
 CBasePlayer *CHiddenSelector::GetCurrentHidden( void )
 {
-	return m_pHidden;
+	return m_pCurrentHidden;
 }
 
 void CHiddenSelector::ClientPrintPercentage( CBasePlayer *pPlayer, int iTotalWeight )
@@ -91,10 +91,10 @@ void CHiddenSelector::SelectWeightedHidden( CUtlVector<CBasePlayer *> &players )
 		ClientPrintPercentage( pPlayer, iTotalWeight );
 
 		if ( iMin <= iPick && iMax >= iPick )
-			m_pHidden = pPlayer;
+			m_pCurrentHidden = pPlayer;
 	}
 
-	if ( !m_pHidden )
+	if ( !m_pCurrentHidden )
 		UTIL_ClientPrintAll( HUD_PRINTNOTIFY, "No player is eligible for weighted selection." );
 }
 
@@ -123,7 +123,7 @@ void CHiddenSelector::NotEnoughPlayers( CUtlVector<CBasePlayer *> &players, char
 
 CHiddenSelector::CHiddenSelector()
 {
-	m_pHidden = NULL;
+	m_pCurrentHidden = NULL;
 	m_iHiddenRounds = 0;
 }
 
@@ -156,7 +156,7 @@ void CHiddenSelector::SelectRandomHidden( CUtlVector<CBasePlayer *> &players )
 	CheckSelectFlags( players, selectable, false );
 
 	int iRandom = random->RandomInt( 0, selectable.Count() - 1 );
-	m_pHidden = selectable[iRandom];
+	m_pCurrentHidden = selectable[iRandom];
 }
 
 void CHiddenSelector::SetSelectHidden( CUtlVector<CBasePlayer *> &players )
@@ -187,9 +187,9 @@ void CHiddenSelector::SetSelectHidden( CUtlVector<CBasePlayer *> &players )
 
 void CHiddenSelector::FillPlayerVectors( void )
 {
-	m_EligiblePlayers.Purge();
-	m_PlayingPlayers.Purge();
-	m_AllPlayers.Purge();
+	m_prefplayers.Purge();
+	m_readyplayers.Purge();
+	m_allplayers.Purge();
 
 	for ( int i = 0; i <= gpGlobals->maxClients; i++ )
 	{
@@ -201,12 +201,12 @@ void CHiddenSelector::FillPlayerVectors( void )
 		if ( iTeam != TEAM_SPECTATOR )
 		{
 			if ( iTeam == TEAM_IRIS && pPlayer->IsAlive() && !pPlayer->GetNoHidden() )
-				m_EligiblePlayers.AddToTail( pPlayer );
+				m_prefplayers.AddToTail( pPlayer );
 
-			m_PlayingPlayers.AddToTail( pPlayer );
+			m_readyplayers.AddToTail( pPlayer );
 		}
 
-		m_AllPlayers.AddToTail( pPlayer );
+		m_allplayers.AddToTail( pPlayer );
 	}
 }
 
@@ -233,30 +233,30 @@ CBasePlayer *CHiddenSelector::SelectHidden( int iGameType, int iMaxRounds )
 
 	FillPlayerVectors();
 
-	int iConnected = m_AllPlayers.Count();
-	int iEligible = m_EligiblePlayers.Count();
-	int iPlaying = m_PlayingPlayers.Count();
+	int iConnected = m_allplayers.Count();
+	int iEligible = m_prefplayers.Count();
+	int iPlaying = m_readyplayers.Count();
 
 	if ( iPlaying < iNeeded )
 	{
 		ClearHidden();
-		NotEnoughPlayers( m_AllPlayers, pszGameName, iConnected, iPlaying, iNeeded );
-		return m_pHidden;
+		NotEnoughPlayers( m_allplayers, pszGameName, iConnected, iPlaying, iNeeded );
+		return m_pCurrentHidden;
 	}
 
 	int iMethod = hdn_selectmethod.GetInt();
 
-	if ( iGameType == 3 && !m_pHidden )
+	if ( iGameType == 3 && !m_pCurrentHidden )
 	{
 		// The marine tutorial plays against a bot
-		m_pHidden = TutorialBotPutInServer();
+		m_pCurrentHidden = TutorialBotPutInServer();
 	}
 	else if ( iMethod == 2 )
 	{
 		UTIL_ClientPrintAll( HUD_PRINTNOTIFY, "Hidden Selected Randomly" );
 		ClearHidden();
 	}
-	else if ( m_pHidden && m_pHidden->GetNoHidden() )
+	else if ( m_pCurrentHidden && m_pCurrentHidden->GetNoHidden() )
 	{
 		UTIL_ClientPrintAll( HUD_PRINTNOTIFY, "Hidden Forfeited Selection" );
 		ClearHidden();
@@ -269,24 +269,24 @@ CBasePlayer *CHiddenSelector::SelectHidden( int iGameType, int iMaxRounds )
 
 	m_iHiddenRounds++;
 
-	if ( m_pHidden )
-		return m_pHidden;
+	if ( m_pCurrentHidden )
+		return m_pCurrentHidden;
 
 	// Classic and random selection pick at random among the players who have not been the
 	// Hidden yet; classic prefers the living IRIS players
 	if ( iMethod == 1 || iMethod == 2 )
 	{
 		if ( iMethod == 1 && iEligible > 0 )
-			SetSelectHidden( m_EligiblePlayers );
+			SetSelectHidden( m_prefplayers );
 	}
 	else
 	{
-		SelectWeightedHidden( m_PlayingPlayers );
+		SelectWeightedHidden( m_readyplayers );
 	}
 
-	if ( !m_pHidden )
-		SetSelectHidden( m_PlayingPlayers );
+	if ( !m_pCurrentHidden )
+		SetSelectHidden( m_readyplayers );
 
-	m_pHidden->SetHadHidden( true );
-	return m_pHidden;
+	m_pCurrentHidden->SetHadHidden( true );
+	return m_pCurrentHidden;
 }

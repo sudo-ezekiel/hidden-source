@@ -107,7 +107,7 @@ void CWeapon_Sonic::Spawn( )
 	// Give 1 piece of default ammo when first picked up
 	m_iClip2 = 1;
 
-	m_bJustDeployed = false;
+	m_bLaserEnabled = false;
 }
 
 void CWeapon_Sonic::Precache( void )
@@ -505,7 +505,7 @@ bool CWeapon_Sonic::Deploy( void )
 		SetSlamState(SLAM_SATCHEL_THROW);
 	}
 
-	m_bJustDeployed = false;
+	m_bLaserEnabled = false;
 
 	return DefaultDeploy( (char*)GetViewModel(), (char*)GetWorldModel(), iActivity, (char*)GetAnimPrefix() );
 }

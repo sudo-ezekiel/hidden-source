@@ -458,15 +458,15 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				// -2: pick one for a player who has none
 				if ( iCharacter == -2 )
 				{
-					if ( pPlayer->m_iCharacterSkin < 0 )
+					if ( pPlayer->m_nSkin_change < 0 )
 						iCharacter = HDN_MAX_CHARACTERS;
 					else
 						return false;
 				}
 
 				// Give up the old character
-				if ( pPlayer->m_iCharacterSkin >= 0 && pPlayer->m_iCharacterSkin < HDN_MAX_CHARACTERS )
-					m_bPlayer.Set( pPlayer->m_iCharacterSkin, false );
+				if ( pPlayer->m_nSkin_change >= 0 && pPlayer->m_nSkin_change < HDN_MAX_CHARACTERS )
+					m_bPlayer.Set( pPlayer->m_nSkin_change, false );
 
 				if ( iCharacter >= 0 && iCharacter < HDN_MAX_CHARACTERS )
 				{
@@ -477,8 +477,8 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					}
 					else
 					{
-						pPlayer->m_iCharacterSkin = iCharacter;
-						pPlayer->m_iCharacterBody = iCharacter;
+						pPlayer->m_nSkin_change = iCharacter;
+						pPlayer->m_nBody_change = iCharacter;
 						m_bPlayer.Set( iCharacter, true );
 					}
 				}
@@ -500,8 +500,8 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 					if ( bFound == true )
 					{
-						pPlayer->m_iCharacterSkin = iFree;
-						pPlayer->m_iCharacterBody = iFree;
+						pPlayer->m_nSkin_change = iFree;
+						pPlayer->m_nBody_change = iFree;
 						m_bPlayer.Set( iFree, true );
 					}
 					else
@@ -535,10 +535,10 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 					if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN || pPlayer->GetTeamNumber() == TEAM_IRIS || pPlayer->GetTeamNumber() == TEAM_SPECTATOR )
 					{
-						if ( pPlayer->m_iCharacterSkin >= 0 && pPlayer->m_iCharacterSkin < HDN_MAX_CHARACTERS )
+						if ( pPlayer->m_nSkin_change >= 0 && pPlayer->m_nSkin_change < HDN_MAX_CHARACTERS )
 						{
-							m_bPlayer.Set( pPlayer->m_iCharacterSkin, false );
-							pPlayer->m_iCharacterSkin = -1;
+							m_bPlayer.Set( pPlayer->m_nSkin_change, false );
+							pPlayer->m_nSkin_change = -1;
 						}
 					}
 				}
@@ -704,7 +704,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 	void CSDKGameRules::GameOverThink( void )
 	{
-		if ( gpGlobals->curtime >= m_flIntermissionEnd )
+		if ( gpGlobals->curtime >= m_flIntermissionEndTime )
 		{
 			DevMsg( 1, "Intermission over, changing levels\n" );
 			m_HiddenSelector.ClearHidden();
@@ -745,8 +745,8 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		IGameEvent *event = gameeventmanager->CreateEvent( "material_check" );
 		if ( event )
 		{
-			event->SetInt( "vmt_CRC", m_VmtCRC );
-			event->SetInt( "bump_CRC", m_BumpCRC );
+			event->SetInt( "vmt_CRC", m_vmtCRC );
+			event->SetInt( "bump_CRC", m_bumpCRC );
 			gameeventmanager->FireEvent( event );
 		}
 
@@ -771,7 +771,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 	{
 		bool bWins = false;
 
-		if ( m_iMarines <= 0 )
+		if ( m_iMarineCount <= 0 )
 		{
 			UTIL_ClientPrintAll( HUD_PRINTCENTER, "Hidden Wins" );
 			bWins = true;
@@ -793,8 +793,8 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				iMarines++;
 		}
 
-		m_iMarines = iMarines;
-		return m_iMarines > 0;
+		m_iMarineCount = iMarines;
+		return m_iMarineCount > 0;
 	}
 
 	bool CSDKGameRules::TotalPlayers( void )
@@ -824,8 +824,8 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				iHiddens++;
 		}
 
-		m_iHiddens = iHiddens;
-		return m_iHiddens > 0;
+		m_iHiddenCount = iHiddens;
+		return m_iHiddenCount > 0;
 	}
 
 	// Spawns the Hidden and up to eight marines; everyone else watches.
@@ -948,7 +948,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 	{
 		lagcompensation->StartCompensationReset();
 
-		m_flIntermissionEnd = gpGlobals->curtime + mp_chattime.GetInt();
+		m_flIntermissionEndTime = gpGlobals->curtime + mp_chattime.GetInt();
 
 		// Nobody can be hurt between rounds
 		for ( int i = 0; i <= MAX_PLAYERS; i++ )
@@ -1097,9 +1097,9 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 	void CSDKGameRules::HiddenDisconnected( CBasePlayer *pPlayer )
 	{
 		CountHiddens();
-		m_iHiddens--;
+		m_iHiddenCount--;
 
-		if ( m_iHiddens <= 0 )
+		if ( m_iHiddenCount <= 0 )
 		{
 			DevMsg( 1, "Hidden Disconnected!\n" );
 			m_HiddenSelector.ForfeitHidden( pPlayer );
@@ -1109,7 +1109,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 	void CSDKGameRules::MarineDisconnected( CBasePlayer *pPlayer )
 	{
 		if ( pPlayer->IsAlive() )
-			m_iMarines--;
+			m_iMarineCount--;
 	}
 
 	void CSDKGameRules::ClientDisconnected( edict_t *pClient )
@@ -1130,8 +1130,8 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 				}
 
 				// Free the player's character
-				if ( pPlayer->m_iCharacterBody >= 0 && pPlayer->m_iCharacterBody < HDN_MAX_CHARACTERS )
-					m_bPlayer.Set( pPlayer->m_iCharacterBody, false );
+				if ( pPlayer->m_nBody_change >= 0 && pPlayer->m_nBody_change < HDN_MAX_CHARACTERS )
+					m_bPlayer.Set( pPlayer->m_nBody_change, false );
 			}
 		}
 
@@ -1192,7 +1192,7 @@ bool CSDKGameRules::IsCharacterTaken( int iCharacter )
 	{
 		bool bWins = false;
 
-		if ( m_iHiddens <= 0 || IsRoundOver() )
+		if ( m_iHiddenCount <= 0 || IsRoundOver() )
 		{
 			UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Wins" );
 			bWins = true;
@@ -1228,7 +1228,7 @@ bool CSDKGameRules::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 
 	// Marine clips only block players
 	if ( collisionGroup0 == COLLISION_GROUP_NONE &&
-		collisionGroup1 == COLLISION_GROUP_MARINE_CLIP )
+		collisionGroup1 == COLLISION_GROUP_MARINECLIP )
 	{
 		return false;
 	}
@@ -1366,9 +1366,9 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 	FireTargets( "game_playerdie", pVictim, pVictim, USE_TOGGLE, 0 );
 
 	if ( pVictim->GetTeamNumber() == TEAM_IRIS )
-		m_iMarines--;
+		m_iMarineCount--;
 	else
-		m_iHiddens--;
+		m_iHiddenCount--;
 
 	// Did the player kill himself?
 	if ( pVictim == pScorer )
@@ -1418,14 +1418,14 @@ void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &i
 		}
 	}
 
-	DevMsg( 1, "Marines Left:%i\n", m_iMarines );
-	DevMsg( 1, "Hiddens Left:%i\n", m_iHiddens );
+	DevMsg( 1, "Marines Left:%i\n", m_iMarineCount );
+	DevMsg( 1, "Hiddens Left:%i\n", m_iHiddenCount );
 	DevMsg( 1, "Total Players Left:%i\n", m_iTotalPlayers );
 }
 
 void CSDKGameRules::IntermissionThink( void )
 {
-	if ( gpGlobals->curtime >= m_flIntermissionEnd )
+	if ( gpGlobals->curtime >= m_flIntermissionEndTime )
 	{
 		DevMsg( 1, "Intermission over, restarting round\n" );
 		RestartRound();
@@ -1434,7 +1434,7 @@ void CSDKGameRules::IntermissionThink( void )
 
 void CSDKGameRules::RestartRound( void )
 {
-	m_iMarines = 0;
+	m_iMarineCount = 0;
 
 	CBaseEntity *pEntity = gEntList.FirstEnt();	// REBUILD: unused, but the call is in the binary
 
@@ -1540,23 +1540,23 @@ CSDKGameRules::CSDKGameRules()
 	CreateEntityByName( "sdk_gamerules" );
 
 	m_bLastRound = false;
-	m_iMarines = -1;
-	m_iHiddens = -1;
+	m_iMarineCount = -1;
+	m_iHiddenCount = -1;
 	m_iTotalPlayers = 0;
-	m_flIntermissionEnd = -1;
-	m_bUnknown290 = false;
-	m_iUnknown284 = 1;
+	m_flIntermissionEndTime = -1;
+	m_bTimeout = false;
+	m_iHiddenRounds = 1;
 
 	for ( int i = 0; i < HDN_MAX_CHARACTERS; i++ )
 		m_bPlayer.Set( i, false );
 
-	m_VmtCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry.vmt" );
-	m_BumpCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry_dx7.vmt" );
+	m_vmtCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry.vmt" );
+	m_bumpCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry_dx7.vmt" );
 
 	// Wait for players before the first round
 	RestartThinkSet( &CSDKGameRules::RoundStartThink );
 	GoToIntermission();
-	m_flIntermissionEnd = gpGlobals->curtime + hdn_jointime.GetInt();
+	m_flIntermissionEndTime = gpGlobals->curtime + hdn_jointime.GetInt();
 }
 
 #endif
