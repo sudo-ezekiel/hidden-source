@@ -1109,6 +1109,7 @@ struct virtualmodel_t
 	void AppendTransitions( int group, const studiohdr_t *pStudioHdr );
 	void AppendIKLocks( int group, const studiohdr_t *pStudioHdr );
 	void AppendModels( int group, const studiohdr_t *pStudioHdr );
+	void UpdateAutoplaySequences( const studiohdr_t *pStudioHdr );
 
 	virtualgroup_t *pAnimGroup( int animation ) { return &m_group[ m_anim[ animation ].group ]; };
 	virtualgroup_t *pSeqGroup( int sequence ) { return &m_group[ m_seq[ sequence ].group ]; };
@@ -1121,6 +1122,7 @@ struct virtualmodel_t
 	CUtlVector< virtualgeneric_t > m_node;
 	CUtlVector< CUtlVector< byte > > m_transition;
 	CUtlVector< virtualgeneric_t > m_iklock;
+	CUtlVector< unsigned short > m_autoplaySequences;
 };
 
 // ----------------------------------------------------------
@@ -1378,6 +1380,8 @@ struct studiohdr_t
 
 	int					GetNumIKAutoplayLocks( void ) const;
 	const mstudioiklock_t &pIKAutoplayLock( int i ) const;
+	int					CountAutoplaySequences() const;
+	int					CopyAutoplaySequences( unsigned short *pOut, int outCount ) const;
 
 	// The collision model mass that jay wanted
 	float				mass;
