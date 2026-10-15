@@ -11,6 +11,8 @@
 
 #include "cbase.h"
 #include "nav_node.h"
+#include "nav_colors.h"
+#include "nav_mesh.h"
 
 NavDirType Opposite[ NUM_DIRECTIONS ] = { SOUTH, WEST, NORTH, EAST };
 
@@ -22,10 +24,10 @@ unsigned int CNavNode::m_listLength = 0;
 /**
  * Constructor
  */
-CNavNode::CNavNode( const Vector *pos, const Vector *normal, CNavNode *parent )
+CNavNode::CNavNode( const Vector &pos, const Vector &normal, CNavNode *parent )
 {
-	m_pos = *pos;
-	m_normal = *normal;
+	m_pos = pos;
+	m_normal = normal;
 
 	static unsigned int nextID = 1;
 	m_id = nextID++;
@@ -48,6 +50,61 @@ CNavNode::CNavNode( const Vector *pos, const Vector *normal, CNavNode *parent )
 
 
 //--------------------------------------------------------------------------------------------------------------
+#if DEBUG_NAV_NODES
+ConVar nav_show_nodes( "nav_show_nodes", "0" );
+ConVar nav_show_node_id( "nav_show_node_id", "0" );
+ConVar nav_test_node( "nav_test_node", "0" );
+#endif // DEBUG_NAV_NODES
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CNavNode::Draw( void )
+{
+#if DEBUG_NAV_NODES
+	if ( !nav_show_nodes.GetBool() )
+		return;
+
+	int r = 0, g = 0, b = 0;
+
+	if ( m_isCovered )
+	{
+		if ( GetAttributes() & NAV_MESH_CROUCH )
+		{
+			b = 255;
+		}
+		else
+		{
+			r = 255;
+		}
+	}
+	else
+	{
+		if ( GetAttributes() & NAV_MESH_CROUCH )
+		{
+			b = 255;
+		}
+		g = 255;
+	}
+
+	NDebugOverlay::Cross3D( m_pos, 2, r, g, b, true, 0.1f );
+
+	if ( (!m_isCovered && nav_show_node_id.GetBool()) || (m_isCovered && nav_show_node_id.GetInt() < 0) )
+	{
+		char text[16];
+		Q_snprintf( text, sizeof( text ), "%d", m_id );
+		NDebugOverlay::Text( m_pos, text, true, 0.1f );
+	}
+
+	if ( (unsigned int)(nav_test_node.GetInt()) == m_id )
+	{
+		TheNavMesh->TestArea( this, 1, 1 );
+		nav_test_node.SetValue( 0 );
+	}
+#endif // DEBUG_NAV_NODES
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
 /**
  * Create a connection FROM this node TO the given node, in the given direction
  */
@@ -61,15 +118,15 @@ void CNavNode::ConnectTo( CNavNode *node, NavDirType dir )
  * Return node at given position.
  * @todo Need a hash table to make this lookup fast
  */
-CNavNode *CNavNode::GetNode( const Vector *pos )
+CNavNode *CNavNode::GetNode( const Vector &pos )
 {
 	const float tolerance = 0.45f * GenerationStepSize;			// 1.0f
 
 	for( CNavNode *node = m_list; node; node = node->m_next )
 	{
-		float dx = fabs( node->m_pos.x - pos->x );
-		float dy = fabs( node->m_pos.y - pos->y );
-		float dz = fabs( node->m_pos.z - pos->z );
+		float dx = fabs( node->m_pos.x - pos.x );
+		float dy = fabs( node->m_pos.y - pos.y );
+		float dz = fabs( node->m_pos.z - pos.z );
 
 		if (dx < tolerance && dy < tolerance && dz < tolerance)
 			return node;
