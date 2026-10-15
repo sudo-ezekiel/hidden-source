@@ -872,7 +872,7 @@ void CGameMovement::CheckWaterJump( void )
 	data.m_vOrigin = feet;
 	data.m_vNormal.Init( 0, 0, 1 );
 	VectorAngles( data.m_vNormal, data.m_vAngles );
-	data.m_flScale = random->RandomFloat( 8, 12 );
+	data.m_flScale = random->RandomFloat( 8, 10 );
 	DispatchEffect( "watersplash", data );
 	
 	trace_t tr;
@@ -3360,7 +3360,7 @@ void CGameMovement::CheckFalling( void )
 			data.m_vOrigin = feet;
 			data.m_vNormal.Init( 0, 0, 1 );
 			VectorAngles( data.m_vNormal, data.m_vAngles );
-			data.m_flScale = random->RandomFloat( 8, 12 );
+			data.m_flScale = random->RandomFloat( 8, 10 );
 			DispatchEffect( "watersplash", data );
 		}
 		else
