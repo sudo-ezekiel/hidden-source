@@ -1207,9 +1207,9 @@ bool CSDKGameRules::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 		return false;
 	}
 
-	// Players don't bump into weapons
+	// The Hidden doesn't bump into weapons
 	if ( collisionGroup0 == COLLISION_GROUP_WEAPON &&
-		collisionGroup1 == COLLISION_GROUP_HDN_PLAYER )
+		collisionGroup1 == COLLISION_GROUP_HIDDEN )
 	{
 		return false;
 	}

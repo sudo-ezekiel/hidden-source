@@ -150,6 +150,8 @@ private:
 };
 
 CBaseEntity *CreateServerRagdoll( CBaseAnimating *pAnimating, int forceBone, const CTakeDamageInfo &info, int collisionGroup, bool bUseLRURetirement = false );
+// Hidden: the ragdoll a dead player leaves behind (CSDKPlayer::CreateRagdollEntity)
+CBaseEntity *CreateServerCorpseRagdoll( CBaseAnimating *pAnimating, int forceBone, const CTakeDamageInfo &info, int collisionGroup, bool bUseLRURetirement = false );
 CRagdollProp *CreateServerRagdollAttached( CBaseAnimating *pAnimating, const Vector &vecForce, int forceBone, int collisionGroup, IPhysicsObject *pAttached, CBaseAnimating *pParentEntity, int boneAttach, const Vector &originAttached, int parentBoneAttach, const Vector &boneOrigin );
 void DetachAttachedRagdoll( CBaseEntity *pRagdollIn );
 void DetachAttachedRagdollsForEntity( CBaseEntity *pRagdollParent );

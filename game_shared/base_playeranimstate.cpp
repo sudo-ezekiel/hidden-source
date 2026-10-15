@@ -50,7 +50,8 @@ ConVar mp_facefronttime(
 ConVar mp_ik( "mp_ik", "1", FCVAR_REPLICATED, "Use IK on in-place turns." );
 
 // Pose parameters stored for debugging.
-static float g_flLastBodyPitch, g_flLastBodyYaw, m_flLastMoveYaw;
+float g_flLastBodyPitch, g_flLastBodyYaw, m_flLastMoveYaw;
+
 
 
 // ------------------------------------------------------------------------------------------------ //
@@ -214,13 +215,16 @@ void CBasePlayerAnimState::ComputeMainSequence()
 
 	// Have our class or the mod-specific class determine what the current activity is.
 	Activity idealActivity = CalcMainActivity();
+
+#ifdef CLIENT_DLL
 	Activity oldActivity = m_eCurrentMainSequenceActivity;
+#endif
 	
 	// Store our current activity so the aim and fire layers know what to do.
 	m_eCurrentMainSequenceActivity = idealActivity;
 
 	// Export to our outer class..
-	int animDesired = pPlayer->SelectWeightedSequence( idealActivity );
+	int animDesired = pPlayer->SelectWeightedSequence( TranslateActivity( idealActivity ) );
 	if ( pPlayer->GetSequenceActivity( pPlayer->GetSequence() ) == pPlayer->GetSequenceActivity( animDesired ) )
 		return;
 
@@ -229,18 +233,19 @@ void CBasePlayerAnimState::ComputeMainSequence()
 
 	pPlayer->ResetSequence( animDesired );
 
+#ifdef CLIENT_DLL
 	// If we went from idle to walk, reset the interpolation history.
 	// Kind of hacky putting this here.. it might belong outside the base class.
 	if ( (oldActivity == ACT_CROUCHIDLE || oldActivity == ACT_IDLE) && 
 		 (idealActivity == ACT_WALK || idealActivity == ACT_RUN_CROUCH) )
 	{
-#ifdef CLIENT_DLL
 		m_flMaxGroundSpeed = GetCurrentMaxGroundSpeed();
 		m_iv_flMaxGroundSpeed.Reset();
 		m_iv_flMaxGroundSpeed.NoteChanged( gpGlobals->curtime, 0 );
-#endif
 	}
+#endif
 }
+
 
 
 #ifdef CLIENT_DLL
@@ -529,6 +534,15 @@ void CBasePlayerAnimState::EstimateYaw()
 //-----------------------------------------------------------------------------
 void CBasePlayerAnimState::ComputePoseParam_MoveYaw()
 {
+	//Matt: Goldsrc style animations need to not rotate the model
+	if ( m_AnimConfig.m_LegAnimType == LEGANIM_GOLDSRC )
+	{
+#ifndef CLIENT_DLL
+		//Adrian: Make the model's angle match the legs so the hitboxes match on both sides.
+		GetOuter()->SetLocalAngles( QAngle( 0, m_flCurrentFeetYaw, 0 ) );
+#endif
+	}
+
 	// If using goldsrc-style animations where he's moving in the direction that his feet are facing,
 	// we don't use move yaw.
 	if ( m_AnimConfig.m_LegAnimType != LEGANIM_9WAY && m_AnimConfig.m_LegAnimType != LEGANIM_8WAY )

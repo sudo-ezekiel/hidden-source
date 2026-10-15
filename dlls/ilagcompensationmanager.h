@@ -24,10 +24,9 @@ public:
 	virtual void	StartLagCompensation( CBasePlayer *player, CUserCmd *cmd ) = 0;
 	virtual void	FinishLagCompensation( CBasePlayer *player ) = 0;
 
-	// Hidden: the game rules bracket a round restart with these.
-	// REBUILD: pure virtual in the original; empty here until CLagCompensationManager implements them.
-	virtual void	StartCompensationReset( void ) {}
-	virtual void	FinishCompensationReset( void ) {}
+	// Hidden: a round restart pauses lag compensation, then throws the history away
+	virtual void	StartCompensationReset( void ) = 0;
+	virtual void	FinishCompensationReset( void ) = 0;
 };
 
 extern ILagCompensationManager *lagcompensation;
