@@ -3,6 +3,8 @@
 #
 #   rebuild/build.sh [work dir]
 #
+# JOBS=<n> limits parallel compiles (default: all cores); use it when several builds run at once.
+#
 # The repo is mirrored into the work dir first (Docker Desktop only shares $HOME), the makefile
 # is generated from dlls/hl_sdk.vcproj ("Release SDK|Win32"), and the result is
 # <work dir>/server_i486.so. Needs the hsrebuild-gcc34 image (rebuild/docker/README.md).
@@ -19,7 +21,7 @@ fi
 python3 -I "$REPO/rebuild/tools/vcproj_to_make.py" "$WORK/src/dlls/hl_sdk.vcproj" "Release SDK|Win32" /src \
     "$WORK/out/Makefile" --host-root "$WORK/src"
 docker run --rm --platform linux/386 -u "$(id -u):$(id -g)" -v "$WORK/src":/src:ro -v "$WORK/out":/out -w /out \
-    hsrebuild-gcc34 make -k -j"$(nproc)" -f /out/Makefile OBJ=/out/obj \
+    hsrebuild-gcc34 make -k -j"${JOBS:-$(nproc)}" -f /out/Makefile OBJ=/out/obj \
     'LDFLAGS=-lm -ldl /src/rebuild/lib/tier0_i486.so /src/rebuild/lib/vstdlib_i486.so' > "$WORK/out/build.log" 2>&1 \
     || { grep -E "error|Error" "$WORK/out/build.log" | head -40; exit 1; }
 ls -la "$WORK/out/server_i486.so"
