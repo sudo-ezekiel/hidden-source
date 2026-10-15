@@ -104,7 +104,7 @@ void CMessage::InputShowMessage( inputdata_t &inputdata )
 		}
 		else
 		{
-			pPlayer = UTIL_GetLocalPlayer();
+			pPlayer = (gpGlobals->maxClients > 1) ? NULL : UTIL_GetLocalPlayer();
 		}
 
 		if ( pPlayer && pPlayer->IsPlayer() )
