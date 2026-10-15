@@ -30,7 +30,7 @@ public:
 
 	virtual int	ObjectCaps( void ) { return ( BaseClass::ObjectCaps() & ~FCAP_ACROSS_TRANSITION ) | FCAP_IMPULSE_USE | FCAP_WCEDIT_POSITION; }
 
-	float	m_flCloseTime;		// REBUILD: name ours. The lid stays open until then
+	float	m_flAmmoCrateCloseTime;	// the lid stays open until then
 };
 
 LINK_ENTITY_TO_CLASS( hdn_ammocrate, CHDNAmmoCrate );

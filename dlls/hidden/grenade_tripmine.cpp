@@ -264,15 +264,15 @@ int CTripmineGrenade::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 		VectorNormalize( data.m_vNormal );
 		DispatchEffect( "ManhackSparks", data );
 
-		Vector vecVelocity;
-		AngularImpulse angVelocity;
-		vecVelocity = m_vecEnd * -150;
-		angVelocity.x = random->RandomFloat( -500, 500 );
-		angVelocity.y = random->RandomFloat( -500, 500 );
-		angVelocity.z = random->RandomFloat( -500, 500 );
+		Vector vecGibVelocity;
+		AngularImpulse vecGibAVelocity;
+		vecGibVelocity = m_vecEnd * -150;
+		vecGibAVelocity.x = random->RandomFloat( -500, 500 );
+		vecGibAVelocity.y = random->RandomFloat( -500, 500 );
+		vecGibAVelocity.z = random->RandomFloat( -500, 500 );
 
 		DevMsg( 1, "Spawning sonic gibs\n" );
-		PropBreakableCreateAll( GetModelIndex(), NULL, GetAbsOrigin(), GetAbsAngles(), vecVelocity, angVelocity, 1.0, 60.0, COLLISION_GROUP_DEBRIS, this );
+		PropBreakableCreateAll( GetModelIndex(), NULL, GetAbsOrigin(), GetAbsAngles(), vecGibVelocity, vecGibAVelocity, 1.0, 60.0, COLLISION_GROUP_DEBRIS, this );
 
 		StopSound( "Weapon_Sonic.Alarm" );
 		KillBeam();

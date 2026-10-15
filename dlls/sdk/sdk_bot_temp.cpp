@@ -82,7 +82,7 @@ public:
 // Purpose: Create a new Bot and put it in the game.
 // Output : Pointer to the new Bot, or NULL if there's no free clients.
 //-----------------------------------------------------------------------------
-CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int iTeam )
+CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int team )
 {
 	// This trick lets us create a CSDKBot for this client instead of the CSDKPlayer
 	// that we would normally get when ClientPutInServer is called.
@@ -112,7 +112,7 @@ CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int iTeam
 		pPlayer->AddEFlags( EFL_BOT_FROZEN );
 
 	pPlayer->ChangeClass( 5 );
-	pPlayer->ChangeTeam( iTeam );
+	pPlayer->ChangeTeam( team );
 	pPlayer->RemoveAllItems( true );
 	pPlayer->UpdatePlayerInfo();
 

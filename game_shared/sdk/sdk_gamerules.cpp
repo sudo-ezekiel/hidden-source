@@ -219,21 +219,21 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 
 	// CRC of a file the clients must not modify; clients report theirs through the
 	// "material_check" event and are kicked (materialCRC command) when they differ.
-	CRC32_t GetMaterialCRC( const char *pszFileName )
+	CRC32_t GetMaterialCRC( const char *filename )
 	{
 		CRC32_t crc;
 		CRC32_Init( &crc );
 
-		char szFileName[256];
-		Q_strncpy( szFileName, pszFileName, sizeof( szFileName ) );
-		Q_strlower( szFileName );
+		char lowercase[256];
+		Q_strncpy( lowercase, filename, sizeof( lowercase ) );
+		Q_strlower( lowercase );
 
-		int iLength;
-		byte *pBuffer = UTIL_LoadFileForMe( szFileName, &iLength );
-		if ( !iLength )
+		int fileSize;
+		byte *pBuffer = UTIL_LoadFileForMe( lowercase, &fileSize );
+		if ( !fileSize )
 			return 0;
 
-		CRC32_ProcessBuffer( &crc, pBuffer, iLength );
+		CRC32_ProcessBuffer( &crc, pBuffer, fileSize );
 		CRC32_Final( &crc );
 		UTIL_FreeFile( pBuffer );
 		return crc;
@@ -846,12 +846,12 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		}
 	}
 
-	bool FindInList( const char **pStrings, const char *pToFind )
+	bool FindInList( const char **s_List, const char *compare )
 	{
 		int i = 0;
-		while ( pStrings[i] )
+		while ( s_List[i] )
 		{
-			if ( Q_strcmp( pStrings[i], pToFind ) == 0 )
+			if ( Q_strcmp( s_List[i], compare ) == 0 )
 				return true;
 
 			i++;

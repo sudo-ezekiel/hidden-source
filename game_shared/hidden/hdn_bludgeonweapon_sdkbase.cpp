@@ -164,21 +164,21 @@ float CBludgeonWeaponSDKBase::GetDamageForActivity( Activity hitActivity )
 //-----------------------------------------------------------------------------
 // Purpose: Find the closest point of a hull hit, as Valve's bludgeon does
 //-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::ChooseIntersectionPointAndActivity( trace_t &hitTrace, const Vector &mins, const Vector &maxs, CSDKPlayer *pOwner )
+void CBludgeonWeaponSDKBase::ChooseIntersectionPointAndActivity( trace_t &tr, const Vector &mins, const Vector &maxs, CSDKPlayer *pPlayer )
 {
 	int			i, j, k;
-	float		distance;
+	float		lowerDistance;
 	const float	*minmaxs[2] = {mins.Base(), maxs.Base()};
-	trace_t		tmpTrace;
-	Vector		vecHullEnd = hitTrace.endpos;
+	trace_t		tmptr;
+	Vector		vecHullEnd = tr.endpos;
 	Vector		vecEnd;
 
-	distance = MAX_TRACE_LENGTH;
-	Vector vecSrc = hitTrace.startpos;
+	lowerDistance = MAX_TRACE_LENGTH;
+	Vector vecSrc = tr.startpos;
 
 	vecHullEnd = vecSrc + ((vecHullEnd - vecSrc)*2);
-	UTIL_TraceLine( vecSrc, vecHullEnd, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tmpTrace );
-	if ( tmpTrace.fraction == 1.0 )
+	UTIL_TraceLine( vecSrc, vecHullEnd, MASK_SHOT_HULL, pPlayer, COLLISION_GROUP_NONE, &tmptr );
+	if ( tmptr.fraction == 1.0 )
 	{
 		for ( i = 0; i < 2; i++ )
 		{
@@ -190,14 +190,14 @@ void CBludgeonWeaponSDKBase::ChooseIntersectionPointAndActivity( trace_t &hitTra
 					vecEnd.y = vecHullEnd.y + minmaxs[j][1];
 					vecEnd.z = vecHullEnd.z + minmaxs[k][2];
 
-					UTIL_TraceLine( vecSrc, vecEnd, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tmpTrace );
-					if ( tmpTrace.fraction < 1.0 )
+					UTIL_TraceLine( vecSrc, vecEnd, MASK_SHOT_HULL, pPlayer, COLLISION_GROUP_NONE, &tmptr );
+					if ( tmptr.fraction < 1.0 )
 					{
-						float thisDistance = (tmpTrace.endpos - vecSrc).Length();
-						if ( thisDistance < distance )
+						float thisDistance = (tmptr.endpos - vecSrc).Length();
+						if ( thisDistance < lowerDistance )
 						{
-							hitTrace = tmpTrace;
-							distance = thisDistance;
+							tr = tmptr;
+							lowerDistance = thisDistance;
 						}
 					}
 				}
@@ -206,57 +206,57 @@ void CBludgeonWeaponSDKBase::ChooseIntersectionPointAndActivity( trace_t &hitTra
 	}
 	else
 	{
-		hitTrace = tmpTrace;
+		tr = tmptr;
 	}
 }
 
 //-----------------------------------------------------------------------------
 // Purpose: Splash when the swing goes into water
 //-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::ImpactWater( const Vector &start, const Vector &end )
+void CBludgeonWeaponSDKBase::ImpactWater( const Vector &vStart, const Vector &vEnd )
 {
 	// We must start outside the water
-	if ( UTIL_PointContents( start ) & (CONTENTS_WATER|CONTENTS_SLIME))
+	if ( UTIL_PointContents( vStart ) & (CONTENTS_WATER|CONTENTS_SLIME))
 		return;
 
-	trace_t	waterTrace;
+	trace_t	tr;
 
-	UTIL_TraceLine( start, end, (CONTENTS_WATER|CONTENTS_SLIME), GetOwner(), COLLISION_GROUP_NONE, &waterTrace );
+	UTIL_TraceLine( vStart, vEnd, (CONTENTS_WATER|CONTENTS_SLIME), GetOwner(), COLLISION_GROUP_NONE, &tr );
 
-	if ( waterTrace.fraction < 1.0f )
+	if ( tr.fraction < 1.0f )
 	{
-		CEffectData	data;
+		CEffectData	effectData;
 
-		data.m_fFlags  = 0;
-		data.m_vOrigin = waterTrace.endpos;
-		data.m_vNormal = waterTrace.plane.normal;
-		data.m_flScale = 8.0f;
+		effectData.m_fFlags  = 0;
+		effectData.m_vOrigin = tr.endpos;
+		effectData.m_vNormal = tr.plane.normal;
+		effectData.m_flScale = 8.0f;
 
 		// See if we hit slime
-		if ( waterTrace.contents & CONTENTS_SLIME )
+		if ( tr.contents & CONTENTS_SLIME )
 		{
-			data.m_fFlags |= FX_WATER_IN_SLIME;
+			effectData.m_fFlags |= FX_WATER_IN_SLIME;
 		}
 
-		DispatchEffect( "watersplash", data );
+		DispatchEffect( "watersplash", effectData );
 	}
 }
 
 //-----------------------------------------------------------------------------
 // Purpose:
 //-----------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::ImpactEffect( trace_t &traceHit )
+void CBludgeonWeaponSDKBase::ImpactEffect( trace_t &tr )
 {
-	UTIL_ImpactTrace( &traceHit, DMG_SLASH );
+	UTIL_ImpactTrace( &tr, DMG_SLASH );
 }
 
 //------------------------------------------------------------------------------
 // Purpose: Implement impact function. A pigstick gibs an IRIS corpse; a slash
 //			on a corpse that still has health in it heals the Hidden.
 //------------------------------------------------------------------------------
-void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
+void CBludgeonWeaponSDKBase::Hit( trace_t &tr, Activity hitActivity )
 {
-	float flDamage = 37.0f;
+	float dmgScale = 37.0f;
 
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	if ( !pPlayer )
@@ -266,28 +266,28 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
 	AddViewKick();
 
 	//Apply damage to a hit target
-	if ( traceHit.m_pEnt != NULL )
+	if ( tr.m_pEnt != NULL )
 	{
-		Vector hitDirection;
-		pPlayer->EyeVectors( &hitDirection, NULL, NULL );
-		VectorNormalize( hitDirection );
+		Vector vForward;
+		pPlayer->EyeVectors( &vForward, NULL, NULL );
+		VectorNormalize( vForward );
 
-		if ( nHitActivity == ACT_VM_HITCENTER2 )
-			flDamage = 925.0f;
+		if ( hitActivity == ACT_VM_HITCENTER2 )
+			dmgScale = 925.0f;
 
-		CTakeDamageInfo info( GetOwner(), GetOwner(), flDamage, DMG_SLASH );
+		CTakeDamageInfo dmgInfo( GetOwner(), GetOwner(), dmgScale, DMG_SLASH );
 
-		CalculateMeleeDamageForce( &info, hitDirection, traceHit.endpos );
+		CalculateMeleeDamageForce( &dmgInfo, vForward, tr.endpos );
 
-		traceHit.m_pEnt->DispatchTraceAttack( info, hitDirection, &traceHit );
+		tr.m_pEnt->DispatchTraceAttack( dmgInfo, vForward, &tr );
 		ApplyMultiDamage();
 
-		if ( !Q_stricmp( traceHit.m_pEnt->GetClassname(), "corpse_ragdoll" ) )
+		if ( !Q_stricmp( tr.m_pEnt->GetClassname(), "corpse_ragdoll" ) )
 		{
 #ifndef CLIENT_DLL
-			CRagdollProp *pRagdoll = static_cast<CRagdollProp *>( traceHit.m_pEnt );
+			CRagdollProp *pRagdoll = static_cast<CRagdollProp *>( tr.m_pEnt );
 
-			if ( nHitActivity != ACT_VM_HITCENTER2 )
+			if ( hitActivity != ACT_VM_HITCENTER2 )
 			{
 				// Feed on the corpse while it has health left
 				if ( pRagdoll->GetHealth() > 0 )
@@ -302,8 +302,8 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
 
 				CEffectData	data;
 
-				data.m_vOrigin = traceHit.m_pEnt->GetAbsOrigin();
-				data.m_vNormal = -hitDirection;
+				data.m_vOrigin = tr.m_pEnt->GetAbsOrigin();
+				data.m_vNormal = -vForward;
 				data.m_flScale = RandomInt( 4, 8 );
 				data.m_fFlags = FX_BLOODSPRAY_ALL;
 				data.m_nColor = BLOOD_COLOR_RED;
@@ -318,36 +318,36 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &traceHit, Activity nHitActivity )
 			else
 			{
 				// Pigstick: tear the corpse apart
-				CreateRagGib( "models/gibs/iris_raggibs_leg.mdl", pRagdoll->GetAbsOrigin(), pRagdoll->GetAbsAngles(), info.GetDamageForce(), 10.0f );
+				CreateRagGib( "models/gibs/iris_raggibs_leg.mdl", pRagdoll->GetAbsOrigin(), pRagdoll->GetAbsAngles(), dmgInfo.GetDamageForce(), 10.0f );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs2.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs2.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs3.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs3.mdl", 10 );
-				CreateRagGib( "models/gibs/iris_raggibs_arm.mdl", pRagdoll->GetAbsOrigin(), pRagdoll->GetAbsAngles(), info.GetDamageForce(), 10.0f );
+				CreateRagGib( "models/gibs/iris_raggibs_arm.mdl", pRagdoll->GetAbsOrigin(), pRagdoll->GetAbsAngles(), dmgInfo.GetDamageForce(), 10.0f );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs4.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs6.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs7.mdl", 10 );
 				CGib::SpawnSpecificGibs( pRagdoll, 1, 750, 1500, "models/gibs/iris_gibs7.mdl", 10 );
-				CreateRagGib( "models/gibs/iris_raggibs_leg.mdl", pRagdoll->GetAbsOrigin(), pRagdoll->GetAbsAngles(), info.GetDamageForce(), 10.0f );
+				CreateRagGib( "models/gibs/iris_raggibs_leg.mdl", pRagdoll->GetAbsOrigin(), pRagdoll->GetAbsAngles(), dmgInfo.GetDamageForce(), 10.0f );
 
 				UTIL_Remove( pRagdoll );
 
-				UTIL_BloodImpact( traceHit.m_pEnt->GetAbsOrigin(), hitDirection, BLOOD_COLOR_RED, 5 );
-				UTIL_BloodSpray( traceHit.m_pEnt->GetAbsOrigin(), -hitDirection, BLOOD_COLOR_RED, 10, FX_BLOODSPRAY_ALL );
+				UTIL_BloodImpact( tr.m_pEnt->GetAbsOrigin(), vForward, BLOOD_COLOR_RED, 5 );
+				UTIL_BloodSpray( tr.m_pEnt->GetAbsOrigin(), -vForward, BLOOD_COLOR_RED, 10, FX_BLOODSPRAY_ALL );
 			}
 #endif
 		}
 
 #ifndef CLIENT_DLL
 		// Now hit all triggers along the ray that...
-		TraceAttackToTriggers( info, traceHit.startpos, traceHit.endpos, hitDirection );
+		TraceAttackToTriggers( dmgInfo, tr.startpos, tr.endpos, vForward );
 #endif
 	}
 
 	// Apply an impact effect
-	ImpactEffect( traceHit );
+	ImpactEffect( tr );
 }
 
 //-----------------------------------------------------------------------------
@@ -413,64 +413,64 @@ void CBludgeonWeaponSDKBase::Swing( int bIsSecondary )
 		return;
 	}
 
-	Vector swingStart = pOwner->Weapon_ShootPosition( );
-	Vector forward;
+	Vector vSwingStart = pOwner->Weapon_ShootPosition( );
+	Vector vForward;
 
-	pOwner->EyeVectors( &forward, NULL, NULL );
+	pOwner->EyeVectors( &vForward, NULL, NULL );
 
-	Vector swingEnd = swingStart + forward * GetRange();
+	Vector vSwingEnd = vSwingStart + vForward * GetRange();
 
-	trace_t traceHit;
-	UTIL_TraceLine( swingStart, swingEnd, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &traceHit );
+	trace_t tr;
+	UTIL_TraceLine( vSwingStart, vSwingEnd, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tr );
 	Activity nHitActivity = bIsSecondary ? GetSecondaryAttackActivity() : GetPrimaryAttackActivity();
 
 #ifndef CLIENT_DLL
 	// Like bullets, bludgeon traces have to trace against triggers.
 	CTakeDamageInfo triggerInfo( GetOwner(), GetOwner(), 25.0f, DMG_CLUB );
-	TraceAttackToTriggers( triggerInfo, traceHit.startpos, traceHit.endpos, vec3_origin );
+	TraceAttackToTriggers( triggerInfo, tr.startpos, tr.endpos, vec3_origin );
 #endif
 
-	if ( traceHit.fraction == 1.0 )
+	if ( tr.fraction == 1.0 )
 	{
 		float bludgeonHullRadius = 1.732f * BLUDGEON_HULL_DIM;  // hull is +/- 16, so use cuberoot of 2 to determine how big the hull is from center to the corner point
 
 		// Back off by hull "radius"
-		swingEnd -= forward * bludgeonHullRadius;
+		vSwingEnd -= vForward * bludgeonHullRadius;
 
-		UTIL_TraceHull( swingStart, swingEnd, g_bludgeonMins, g_bludgeonMaxs, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &traceHit );
-		if ( traceHit.fraction < 1.0 && traceHit.m_pEnt )
+		UTIL_TraceHull( vSwingStart, vSwingEnd, g_bludgeonMins, g_bludgeonMaxs, MASK_SHOT_HULL, pOwner, COLLISION_GROUP_NONE, &tr );
+		if ( tr.fraction < 1.0 && tr.m_pEnt )
 		{
-			Vector vecToTarget = traceHit.m_pEnt->GetAbsOrigin() - swingStart;
-			VectorNormalize( vecToTarget );
+			Vector vToTarget = tr.m_pEnt->GetAbsOrigin() - vSwingStart;
+			VectorNormalize( vToTarget );
 
-			float dot = vecToTarget.Dot( forward );
+			float dot = vToTarget.Dot( vForward );
 
 			// YWB:  Make sure they are sort of facing the guy at least...
 			if ( dot < 0.70721f )
 			{
 				// Force amiss
-				traceHit.fraction = 1.0f;
+				tr.fraction = 1.0f;
 			}
 			else
 			{
-				ChooseIntersectionPointAndActivity( traceHit, g_bludgeonMins, g_bludgeonMaxs, pOwner );
+				ChooseIntersectionPointAndActivity( tr, g_bludgeonMins, g_bludgeonMaxs, pOwner );
 			}
 		}
 	}
 
 	// See if we happened to hit water
-	ImpactWater( swingStart, traceHit.endpos );
+	ImpactWater( vSwingStart, tr.endpos );
 
 	// -------------------------
 	//	Miss
 	// -------------------------
-	if ( traceHit.fraction == 1.0f )
+	if ( tr.fraction == 1.0f )
 	{
 		nHitActivity = GetPrimaryMissActivity();
 	}
 	else
 	{
-		Hit( traceHit, nHitActivity );
+		Hit( tr, nHitActivity );
 	}
 
 	WeaponSound( SINGLE );

@@ -801,21 +801,21 @@ void CPlayerPickupController::Use( CBaseEntity *pActivator, CBaseEntity *pCaller
 				DevMsg( 1, "pin meh!\n" );
 
 				trace_t tr;
-				Vector vecStart = m_pPlayer->Weapon_ShootPosition();
-				Vector vecForward;
-				m_pPlayer->EyeVectors( &vecForward );
-				QAngle angles;
-				Vector vecEnd = vecStart + vecForward * 24;
+				Vector vStart = m_pPlayer->Weapon_ShootPosition();
+				Vector vForward;
+				m_pPlayer->EyeVectors( &vForward );
+				QAngle qAngle;
+				Vector vEnd = vStart + vForward * 24;
 
-				UTIL_TraceLine( vecStart, vecEnd, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
+				UTIL_TraceLine( vStart, vEnd, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
 
-				vecEnd = tr.endpos + tr.plane.normal * 4;
+				vEnd = tr.endpos + tr.plane.normal * 4;
 				if ( tr.fraction < 1.0 )
 				{
 					DevMsg( 1, "pinned!\n" );
 
-					pAttached->VPhysicsGetObject()->GetPosition( NULL, &angles );
-					pAttached->VPhysicsGetObject()->SetPosition( vecEnd, angles, true );
+					pAttached->VPhysicsGetObject()->GetPosition( NULL, &qAngle );
+					pAttached->VPhysicsGetObject()->SetPosition( vEnd, qAngle, true );
 
 					constraint_fixedparams_t fixed;
 					fixed.Defaults();

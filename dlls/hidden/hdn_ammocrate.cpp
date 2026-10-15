@@ -77,7 +77,7 @@ void CHDNAmmoCrate::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE
 		}
 	}
 
-	m_flCloseTime = gpGlobals->curtime + 2.0f;
+	m_flAmmoCrateCloseTime = gpGlobals->curtime + 2.0f;
 }
 
 void CHDNAmmoCrate::Think( void )
@@ -87,7 +87,7 @@ void CHDNAmmoCrate::Think( void )
 
 	SetNextThink( gpGlobals->curtime + 0.1f );
 
-	if ( m_flCloseTime < gpGlobals->curtime && GetSequence() == LookupSequence( "open" ) )
+	if ( m_flAmmoCrateCloseTime < gpGlobals->curtime && GetSequence() == LookupSequence( "open" ) )
 	{
 		// Time to close
 		m_flAnimTime = gpGlobals->curtime;
