@@ -50,6 +50,7 @@
 #include "gamevars_shared.h"
 #include "world.h"
 #include "physobj.h"
+#include "props.h"
 #include "KeyValues.h"
 #include "coordsize.h"
 #include "vphysics/player_controller.h"
@@ -2501,6 +2502,13 @@ bool CBasePlayer::IsUseableEntity( CBaseEntity *pEntity, unsigned int requiredCa
 			if ( (caps & requiredCaps) == requiredCaps )
 				return true;
 		}
+
+		// Hidden: ragdolls and players can always be used
+		if ( pEntity->GetBaseAnimating() && pEntity->GetBaseAnimating()->IsRagdoll() )
+			return true;
+
+		if ( pEntity->GetBaseAnimating() && pEntity->GetBaseAnimating()->IsPlayer() )
+			return true;
 	}
 
 	return false;
@@ -2513,7 +2521,7 @@ bool CBasePlayer::IsUseableEntity( CBaseEntity *pEntity, unsigned int requiredCa
 bool CBasePlayer::CanPickupObject( CBaseEntity *pObject, float massLimit, float sizeLimit )
 {
 	// UNDONE: Make this virtual and move to HL2 player
-#ifdef HL2_DLL
+	// Hidden: the Hidden picks up physics objects, so this is compiled in
 	//Must be valid
 	if ( pObject == NULL )
 		return false;
@@ -2553,11 +2561,6 @@ bool CBasePlayer::CanPickupObject( CBaseEntity *pObject, float massLimit, float 
 
 	if ( checkEnable )
 	{
-		// Allowing picking up of bouncebombs that player placed.
-		CBounceBomb *pBomb = dynamic_cast<CBounceBomb*>(pObject);
-		if( pBomb && pBomb->IsPlayerPlaced() )
-			return true;
-
 		// Allow pickup of phys props that are motion enabled on player pickup
 		CPhysicsProp *pProp = dynamic_cast<CPhysicsProp*>(pObject);
 		CPhysBox *pBox = dynamic_cast<CPhysBox*>(pObject);
@@ -2573,15 +2576,12 @@ bool CBasePlayer::CanPickupObject( CBaseEntity *pObject, float massLimit, float 
 
 	if ( sizeLimit > 0 )
 	{
-		const Vector &size = pObject->CollisionProp()->OBBSize();
+		const Vector &size = pObject->WorldAlignSize();
 		if ( size.x > sizeLimit || size.y > sizeLimit || size.z > sizeLimit )
 			return false;
 	}
 
 	return true;
-#else
-	return false;
-#endif
 }
 
 float CBasePlayer::GetHeldObjectMass( IPhysicsObject *pHeldObject )
@@ -2667,19 +2667,10 @@ void CBasePlayer::AddPoints( int score, bool bAllowNegativeScore )
 
 void CBasePlayer::AddPointsToTeam( int score, bool bAllowNegativeScore )
 {
-	int index = entindex();
-
-	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	// Hidden: the points go to the team itself, not to each teammate
+	if ( GetTeam() )
 	{
-		CBaseEntity *pPlayer = UTIL_PlayerByIndex( i );
-
-		if ( pPlayer && i != index )
-		{
-			if ( g_pGameRules->PlayerRelationship( this, pPlayer ) == GR_TEAMMATE )
-			{
-				pPlayer->AddPoints( score, bAllowNegativeScore );
-			}
-		}
+		GetTeam()->AddScore( score );
 	}
 }
 
