@@ -456,7 +456,7 @@ void UTIL_TraceEntity( CBaseEntity *pEntity, const Vector &vecAbsStart, const Ve
 // Purpose: Hidden: shortens a trace to the first player hitbox near the ray (mid-2005 form,
 //			ignoring one player instead of taking a trace filter)
 //-----------------------------------------------------------------------------
-void UTIL_ClipTraceToPlayers( const CBasePlayer *pIgnorePlayer, const Vector& vecAbsStart, const Vector& vecAbsEnd, unsigned int mask, trace_t *tr )
+void UTIL_ClipTraceToPlayers( const CBasePlayer *ignore, const Vector& vecAbsStart, const Vector& vecAbsEnd, unsigned int mask, trace_t *tr )
 {
 	trace_t playerTrace;
 	Ray_t ray;
@@ -469,7 +469,7 @@ void UTIL_ClipTraceToPlayers( const CBasePlayer *pIgnorePlayer, const Vector& ve
 	{
 		CBasePlayer *player = UTIL_PlayerByIndex( k );
 
-		if ( !player || player == pIgnorePlayer || !player->IsAlive() )
+		if ( !player || player == ignore || !player->IsAlive() )
 			continue;
 
 		float range = DistanceToRay( player->WorldSpaceCenter(), vecAbsStart, vecAbsEnd );

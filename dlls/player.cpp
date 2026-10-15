@@ -1381,13 +1381,13 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 			event->SetInt("attacker", player->GetUserID() ); // hurt by other player
 
 			// Hidden: the weapon name without its "weapon_" prefix, for the log
-			const char *weaponName = "world";
+			const char *attacker_weapon_name = "world";
 			if ( player->GetActiveWeapon() )
 			{
-				weaponName = player->GetActiveWeapon()->GetDeathNoticeName();
-				if ( strncmp( weaponName, "weapon_", 7 ) == 0 )
+				attacker_weapon_name = player->GetActiveWeapon()->GetDeathNoticeName();
+				if ( strncmp( attacker_weapon_name, "weapon_", 7 ) == 0 )
 				{
-					weaponName += 7;
+					attacker_weapon_name += 7;
 				}
 			}
 
@@ -1410,7 +1410,7 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 				GetNetworkIDString(),
 				team ? team->GetName() : "",
 				(int)info.GetDamage(),
-				weaponName );
+				attacker_weapon_name );
 
 			// Hidden: damage to the other team raises the attacker's chance of being the next
 			// Hidden, damage to a team mate lowers it (see CHiddenSelector)
@@ -4120,24 +4120,24 @@ void CBasePlayer::InitialSpawn( void )
 	m_iConnected = PlayerConnected;
 
 	// Hidden: collect the spectator cameras, falling back to the Hidden's spawn point
-	CBaseEntity *pCamera = NULL;
-	CBaseEntity *pFirstCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
-	pCamera = pFirstCamera;
+	CBaseEntity *pSpectatorSpot = NULL;
+	CBaseEntity *pFirstSpectator = gEntList.FindEntityByClassname( pSpectatorSpot, "info_spectator" );
+	pSpectatorSpot = pFirstSpectator;
 	do
 	{
-		pCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
-		if ( pCamera )
-			m_SpectorSpawns.AddToTail( pCamera );
-	} while ( pCamera != pFirstCamera );
+		pSpectatorSpot = gEntList.FindEntityByClassname( pSpectatorSpot, "info_spectator" );
+		if ( pSpectatorSpot )
+			m_SpectorSpawns.AddToTail( pSpectatorSpot );
+	} while ( pSpectatorSpot != pFirstSpectator );
 
 	DevMsg( 1, "Camera Count : %i\n", m_SpectorSpawns.Count() );
 
 	if ( m_SpectorSpawns.Count() == 0 )
 	{
-		pCamera = gEntList.FindEntityByClassname( pCamera, "info_hidden_spawn" );
-		if ( !pCamera )
-			pCamera = gEntList.FindEntityByClassname( NULL, "info_hidden_spawn" );
-		m_SpectorSpawns.AddToTail( pCamera );
+		pSpectatorSpot = gEntList.FindEntityByClassname( pSpectatorSpot, "info_hidden_spawn" );
+		if ( !pSpectatorSpot )
+			pSpectatorSpot = gEntList.FindEntityByClassname( NULL, "info_hidden_spawn" );
+		m_SpectorSpawns.AddToTail( pSpectatorSpot );
 	}
 }
 
@@ -6115,12 +6115,12 @@ const char *CBasePlayer::GetCurrentLocation( void )
 //-----------------------------------------------------------------------------
 // Purpose: Returns true if the location changed
 //-----------------------------------------------------------------------------
-bool CBasePlayer::SetCurrentLocation( char *pszLocation )
+bool CBasePlayer::SetCurrentLocation( char *m_location )
 {
-	if ( strcmp( m_CurrentLocation, pszLocation ) == 0 )
+	if ( strcmp( m_CurrentLocation, m_location ) == 0 )
 		return false;
 
-	Q_strncpy( m_CurrentLocation.GetForModify(), pszLocation, 25 );
+	Q_strncpy( m_CurrentLocation.GetForModify(), m_location, 25 );
 	return true;
 }
 
@@ -6129,9 +6129,9 @@ bool CBasePlayer::GetSafe( void )
 	return m_bSafety;
 }
 
-void CBasePlayer::SetSafe( bool bSafe )
+void CBasePlayer::SetSafe( bool safety )
 {
-	m_bSafety = bSafe;
+	m_bSafety = safety;
 }
 
 int CBasePlayer::GetClass( void )
@@ -6148,20 +6148,20 @@ int CBasePlayer::GetNewClass( void )
 // Purpose: Picks the class used from the next spawn; -1 clears it, anything but
 //			0 or 1 picks one at random
 //-----------------------------------------------------------------------------
-void CBasePlayer::ChangeClass( int iClass )
+void CBasePlayer::ChangeClass( int newClass )
 {
-	if ( iClass == -1 )
+	if ( newClass == -1 )
 	{
 		m_iMarineClass = -1;
 		m_iNewClass = -1;
 	}
-	else if ( iClass != 0 && iClass != 1 )
+	else if ( newClass != 0 && newClass != 1 )
 	{
 		m_iNewClass = random->RandomInt( 0, 3 );
 	}
 	else
 	{
-		m_iNewClass = iClass;
+		m_iNewClass = newClass;
 	}
 }
 
@@ -6179,26 +6179,26 @@ void CBasePlayer::UpdatePlayerInfo( void )
 	m_iSecondary = m_iNewSecondary;
 }
 
-void CBasePlayer::SetSpawnBool( bool bSpawn )
+void CBasePlayer::SetSpawnBool( bool should_spawn )
 {
-	m_bSpawn = bSpawn;
+	m_bSpawn = should_spawn;
 }
 
-void CBasePlayer::SetSpawnTimer( int iTime, int iStart )
+void CBasePlayer::SetSpawnTimer( int time_of_death, int wait )
 {
-	m_iTimer = iTime - iStart;
+	m_iTimer = time_of_death - wait;
 	m_bSpawn = ( m_iTimer > 9 );
 }
 
 //-----------------------------------------------------------------------------
 // Purpose: Stamina changes only while it stays within 0 to 100
 //-----------------------------------------------------------------------------
-void CBasePlayer::SetStamina( float flAmount )
+void CBasePlayer::SetStamina( float newStamina )
 {
-	float flStamina = m_flStamina + flAmount;
+	float flStamina = m_flStamina + newStamina;
 	if ( flStamina > 100 || flStamina < 0 )
 		return;
-	m_flStamina += flAmount;
+	m_flStamina += newStamina;
 
 }
 
@@ -6218,10 +6218,10 @@ void CBasePlayer::Boost( void )
 //-----------------------------------------------------------------------------
 void CBasePlayer::Stun( CBasePlayer *pAttacker )
 {
-	StunTracker tracker;
-	tracker.m_flStunTimer = gpGlobals->curtime + 10.0f;
-	tracker.pStunner = pAttacker;
-	StunnerList.AddToTail( tracker );
+	StunTracker temp;
+	temp.m_flStunTimer = gpGlobals->curtime + 10.0f;
+	temp.pStunner = pAttacker;
+	StunnerList.AddToTail( temp );
 
 
 	if ( !IsStunned() )
@@ -6273,21 +6273,21 @@ void CBasePlayer::UpdateStun( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Caught in a shockwave: stunned for flDuration more seconds
+// Purpose: Caught in a shockwave: stunned for time more seconds
 //-----------------------------------------------------------------------------
-void CBasePlayer::Shockwave( float flBlur, float flDuration )
+void CBasePlayer::Shockwave( float bluramount, float time )
 {
 	if ( m_flStunTimer > gpGlobals->curtime )
-		m_flStunTimer = flDuration + m_flStunTimer;
+		m_flStunTimer = time + m_flStunTimer;
 	else
-		m_flStunTimer = flDuration + gpGlobals->curtime;
+		m_flStunTimer = time + gpGlobals->curtime;
 
 	m_bStunned = true;
 
 	if ( m_flBlur > 1.0f && m_flBlur < 10.0f && IsStunned() )
-		m_flBlur += flBlur;
+		m_flBlur += bluramount;
 	else
-		m_flBlur = flBlur;
+		m_flBlur = bluramount;
 
 	m_flStunUpdate = gpGlobals->curtime + 0.2f;
 }

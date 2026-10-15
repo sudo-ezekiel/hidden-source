@@ -333,49 +333,49 @@ public:
 	bool					IsDead() const;
 
 	// Hidden: player state. The getters and setters below are virtual in the original, in this order.
-	virtual void			SetZoom( bool bZoom ) { m_bZoom = bZoom; }
+	virtual void			SetZoom( bool zoomed ) { m_bZoom = zoomed; }
 
 	// Loadout chosen in the menus (the "new" values) and the one in use this round
-	virtual void			SetEquipment( int iEquipment ) { m_iNewEquip = iEquipment; }
+	virtual void			SetEquipment( int equip ) { m_iNewEquip = equip; }
 	virtual int				GetEquipment( void ) { return ( GetTeamNumber() == 3 ) ? -2 : m_iEquipment; }	// REBUILD: 3 is the Hidden's team
 	virtual int				GetNewEquipment( void ) { return m_iNewEquip; }
-	virtual void			SetPrimary( int iPrimary ) { m_iNewPrimary = iPrimary; }
+	virtual void			SetPrimary( int primary ) { m_iNewPrimary = primary; }
 	virtual int				GetPrimary( void ) { return m_iPrimary; }
 	virtual int				GetNewPrimary( void ) { return m_iNewPrimary; }
-	virtual void			SetSecondary( int iSecondary ) { m_iNewSecondary = iSecondary; }
+	virtual void			SetSecondary( int secondary ) { m_iNewSecondary = secondary; }
 	virtual int				GetSecondary( void ) { return m_iSecondary; }
 	virtual int				GetNewSecondary( void ) { return m_iNewSecondary; }
-	virtual void			SetReady( bool bReady ) { m_bReady = bReady; }
+	virtual void			SetReady( bool truth ) { m_bReady = truth; }
 	virtual bool			IsReady( void ) { return m_bReady; }
-	virtual void			SetPrimaryBool( bool bHas ) { m_bPrimary = bHas; }
+	virtual void			SetPrimaryBool( bool truth ) { m_bPrimary = truth; }
 	virtual bool			HasPrimary( void ) { return m_bPrimary; }
-	virtual void			SetSecondaryBool( bool bHas ) { m_bSecondary = bHas; }
+	virtual void			SetSecondaryBool( bool truth ) { m_bSecondary = truth; }
 	virtual bool			HasSecondary( void ) { return m_bSecondary; }
-	virtual void			SetEquipmentBool( bool bHas ) { m_bEquipment = bHas; }
+	virtual void			SetEquipmentBool( bool truth ) { m_bEquipment = truth; }
 	virtual bool			HasEquipment( void ) { return m_bEquipment; }
 
 	// Opting out of being picked as the Hidden
-	virtual void			SetNoHidden( bool bNoHidden ) { m_bNoHidden = bNoHidden; }
+	virtual void			SetNoHidden( bool truth ) { m_bNoHidden = truth; }
 	virtual bool			GetNoHidden( void ) { return m_bNoHidden; }
-	virtual void			SetHadHidden( bool bHadHidden ) { m_bHadHidden = bHadHidden; }
+	virtual void			SetHadHidden( bool truth ) { m_bHadHidden = truth; }
 	virtual bool			GetHadHidden( void ) { return m_bHadHidden; }
 
-	virtual void			ChangeClass( int iClass );
+	virtual void			ChangeClass( int newClass );
 	virtual int				GetClass( void );
 	virtual int				GetNewClass( void );
 	virtual void			UpdatePlayerInfo( void );
 
-	virtual void			SetSafe( bool bSafe );
+	virtual void			SetSafe( bool safety );
 	virtual bool			GetSafe( void );
 
 	virtual float			GetStamina( void ) { return m_flStamina; }
-	virtual void			SetStamina( float flAmount );
+	virtual void			SetStamina( float newStamina );
 
-	virtual void			SetRadio( float flDelay ) { m_flRadioTimer = gpGlobals->curtime + flDelay; }
+	virtual void			SetRadio( float radiolimit ) { m_flRadioTimer = gpGlobals->curtime + radiolimit; }
 	virtual float			GetRadio( void ) { return m_flRadioTimer; }
 
 	virtual bool			RequestedAmmo( void ) { return m_bRequestAmmo; }
-	virtual void			SetAmmoRequest( bool bRequest ) { m_bRequestAmmo = bRequest; }
+	virtual void			SetAmmoRequest( bool ammo ) { m_bRequestAmmo = ammo; }
 	virtual void			SetAmmoRecieved( void ) { m_bAmmoRecieved = true; }
 	virtual bool			GetAmmoRecieved( void ) { return m_bAmmoRecieved; }
 
@@ -384,30 +384,30 @@ public:
 	virtual void			LaserTurnOn( void ) { m_bLAM = true; }
 	virtual void			LaserTurnOff( void ) { m_bLAM = false; }
 	virtual bool			NightVisionEnabled( void ) { return m_bNightVision; }
-	virtual void			SetNightVision( bool bEnabled ) { m_bNightVision = bEnabled; }
+	virtual void			SetNightVision( bool nvgpower ) { m_bNightVision = nvgpower; }
 
 	virtual bool			IsBoosted( void ) { return m_bBoosted; }
-	virtual void			SetBoosted( bool bBoosted ) { m_bBoosted = bBoosted; }
-	virtual void			SetBoost( int iBoost ) { if ( iBoost == 0 ) m_iBoostCount = 0; else m_iBoostCount += iBoost; }
+	virtual void			SetBoosted( bool boost ) { m_bBoosted = boost; }
+	virtual void			SetBoost( int count ) { if ( count == 0 ) m_iBoostCount = 0; else m_iBoostCount += count; }
 	virtual int				GetBoost( void ) { return m_iBoostCount; }
 	virtual float			GetBoostTimer( void ) { return m_flBoostTimer; }
 	virtual void			Boost( void );
 
 	// The Hidden's aura vision
 	virtual bool			IsViewing( void ) { return m_bAura; }
-	virtual void			SetAura( bool bAura ) { m_bAura = bAura; }
+	virtual void			SetAura( bool aura ) { m_bAura = aura; }
 
 	// Stun (sonic grenade and shockwave)
 	virtual bool			IsStunned( void ) { return m_bStunned; }
 	virtual void			CancelStun( void ) { m_bStunned = false; }
 	virtual void			Stun( CBasePlayer *pAttacker );
 	virtual void			UpdateStun( void );
-	virtual void			Shockwave( float flBlur, float flDuration );
+	virtual void			Shockwave( float bluramount, float time );
 
 	const char				*GetCurrentLocation( void );
-	bool					SetCurrentLocation( char *pszLocation );
-	void					SetSpawnBool( bool bSpawn );
-	void					SetSpawnTimer( int iTime, int iStart );
+	bool					SetCurrentLocation( char *m_location );
+	void					SetSpawnBool( bool should_spawn );
+	void					SetSpawnTimer( int time_of_death, int wait );
 
 	bool					HasPhysicsFlag( unsigned int flag ) { return (m_afPhysicsFlags & flag) != 0; }
 
