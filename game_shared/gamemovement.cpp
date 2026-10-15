@@ -1993,7 +1993,7 @@ bool CGameMovement::CheckPounceButton( void )
 	}
 
 	// A pounce costs 20 stamina
-	if ( player->GetStamina() < 20.0f )
+	if ( player->GetStamina() < 20.0 )
 		return false;
 
 	// If we are in the water most of the way...
@@ -2044,7 +2044,7 @@ bool CGameMovement::CheckPounceButton( void )
 	float flPounceSpeed = 615.0f;
 	Vector vecPounce = player->GetAutoaimVector( 0 );
 	vecPounce *= flPounceSpeed;
-	mv->m_vecVelocity += vecPounce;
+	VectorAdd( mv->m_vecVelocity, vecPounce, mv->m_vecVelocity );
 
 	FinishGravity();
 
