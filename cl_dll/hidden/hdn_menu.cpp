@@ -14,6 +14,10 @@ HDNMenu::HDNMenu( Panel *pParent ) : Frame( NULL, "team" )
 	m_pPlayer = C_BasePlayer::GetLocalPlayer();
 }
 
+HDNMenu::~HDNMenu()
+{
+}
+
 //-----------------------------------------------------------------------------
 // Purpose: Sets the frame up and takes the parent's size; the menus load
 //			their .res file first

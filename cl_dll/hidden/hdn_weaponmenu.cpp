@@ -19,6 +19,7 @@ private:
 
 public:
 	HDNWeaponMenu( vgui::Panel *pParent );
+	virtual ~HDNWeaponMenu() {}
 
 	vgui::VPANEL GetVPanel( void ) { return BaseClass::GetVPanel(); }
 	virtual bool IsVisible() { return BaseClass::IsVisible(); }
@@ -142,20 +143,20 @@ void HDNWeaponMenu::SetPrimary( int iPrimary )
 
 void HDNWeaponMenu::SetSecondary( int iSecondary )
 {
-	if ( iSecondary == 0 )
+	switch ( iSecondary )
 	{
+	case 0:
 		strcpy( m_szSecondary, "secondary 0" );
 		SetImagePos( m_Images[3], 28, 224 );
-	}
-	else if ( iSecondary == 1 )
-	{
+		break;
+	case 1:
 		strcpy( m_szSecondary, "secondary 1" );
 		SetImagePos( m_Images[3], 27, 246 );
-	}
-	else
-	{
+		break;
+	default:
 		strcpy( m_szSecondary, "secondary 9" );
 		m_Images[3]->SetVisible( false );
+		break;
 	}
 }
 

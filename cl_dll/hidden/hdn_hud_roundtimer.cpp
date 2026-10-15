@@ -41,7 +41,7 @@ DECLARE_HUDELEMENT( CHudRoundTimer );
 //-----------------------------------------------------------------------------
 CHudRoundTimer::CHudRoundTimer( const char *pElementName ) : CHudElement( pElementName ), BaseClass( NULL, "HudRoundTimer" )
 {
-	SetPaintEnabled( false );
+	SetPaintBackgroundEnabled( false );
 
 	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT );
 }

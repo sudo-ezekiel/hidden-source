@@ -654,7 +654,7 @@ void HDNTeamMenu::OnCommand( const char *command )
 
 Panel *HDNTeamMenu::CreateControlByName( const char *controlName )
 {
-	if ( !Q_stricmp( "CSClassImagePanel", controlName ) )
+	if ( !Q_stricmp( controlName, "CSClassImagePanel" ) )
 	{
 		return new CCSClassImagePanel( NULL, controlName );
 	}

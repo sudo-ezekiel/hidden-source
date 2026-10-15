@@ -23,6 +23,7 @@ private:
 
 public:
 	HDNMenu( vgui::Panel *pParent );
+	virtual ~HDNMenu();
 
 	// both vgui::Frame and the menus define these, so explicitly define them here as passthroughs to vgui
 	vgui::VPANEL GetVPanel( void ) { return BaseClass::GetVPanel(); }

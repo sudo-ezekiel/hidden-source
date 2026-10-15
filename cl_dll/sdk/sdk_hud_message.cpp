@@ -57,9 +57,12 @@ DECLARE_HUD_MESSAGE( CHudGameMessage, GameMessage );
 void CHudGameMessage::VidInit( void )
 {
 	// Store off a reference to our icon
-	m_pIcon = gHUD.GetIcon( "message_icon" );
+	m_pIcon = gHUD.GetIcon( "dmg_cold" );	// Hidden: client.dll uses the cold damage icon
 
 	m_pText[0] = '\0';
+
+	// Hidden: start out faded
+	m_flStartTime = gpGlobals->curtime - 100.0f;
 }
 
 void CHudGameMessage::Init( void )

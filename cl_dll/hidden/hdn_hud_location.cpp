@@ -98,7 +98,7 @@ void CHudLocation::Reset( void )
 //-----------------------------------------------------------------------------
 void CHudLocation::FireGameEvent( IGameEvent *event )
 {
-	if ( !Q_strcmp( event->GetName(), "player_location" ) )
+	if ( !Q_strcmp( "player_location", event->GetName() ) )
 	{
 		C_BasePlayer *pPlayer = USERID2PLAYER( event->GetInt( "userid" ) );
 
