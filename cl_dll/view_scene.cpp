@@ -53,6 +53,7 @@ extern void ComputeCameraVariables( const Vector &vecOrigin, const QAngle &vecAn
 
 static ConVar cl_overdraw_test( "cl_overdraw_test", "0", FCVAR_CHEAT | FCVAR_NEVER_AS_STRING );
 static ConVar r_eyewaterepsilon( "r_eyewaterepsilon", "7.0f", FCVAR_CHEAT );
+static ConVar cl_hvision( "cl_hvision", "1", FCVAR_ARCHIVE, "toggles the hiddens view shader." );	// Hidden
 
 // Used to verify frame syncing.
 void GenerateOverdrawForTesting()
@@ -2045,6 +2046,138 @@ void CViewRender::RenderPlayerSprites()
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: Hidden: draws a material over the whole screen, with identity matrices
+//-----------------------------------------------------------------------------
+static void DrawScreenEffectMaterial( IMaterial *pMaterial )	// REBUILD: name; inlined into RenderView in client.dll
+{
+	UpdateScreenEffectTexture( 0 );
+
+	materials->MatrixMode( MATERIAL_PROJECTION );
+	materials->PushMatrix();
+	materials->LoadIdentity();
+
+	materials->MatrixMode( MATERIAL_VIEW );
+	materials->PushMatrix();
+	materials->LoadIdentity();
+
+	materials->MatrixMode( MATERIAL_MODEL );
+	materials->LoadIdentity();
+
+	materials->DrawScreenSpaceQuad( pMaterial );
+
+	materials->MatrixMode( MATERIAL_PROJECTION );
+	materials->PopMatrix();
+
+	materials->MatrixMode( MATERIAL_VIEW );
+	materials->PopMatrix();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the local player's screen effects: the scope mask, night
+//			vision, the stun blur, the spectator and helmet cams, the Hidden's
+//			aura vision and his view shader
+//-----------------------------------------------------------------------------
+static void DrawPlayerScreenEffects( void )	// REBUILD: name; inlined into RenderView in client.dll
+{
+	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+	if ( !pPlayer )
+		return;
+
+	IMaterial *pMaterial;
+
+	if ( pPlayer->IsZoomed() && pPlayer->IsAlive() )
+	{
+		if ( g_pMaterialSystemHardwareConfig->GetDXSupportLevel() >= 80 )
+			pMaterial = materials->FindMaterial( "models/weapons/v_fn2000/scopemask", TEXTURE_GROUP_OTHER );
+		else
+			pMaterial = materials->FindMaterial( "models/weapons/v_fn2000/scopemask_dx6", TEXTURE_GROUP_OTHER );
+
+		if ( !IsErrorMaterial( pMaterial ) )
+		{
+			DrawScreenEffectMaterial( pMaterial );
+		}
+	}
+
+	if ( pPlayer->NightVisionEnabled() && pPlayer->IsAlive() )
+	{
+		if ( g_pMaterialSystemHardwareConfig->GetDXSupportLevel() >= 80 )
+			pMaterial = materials->FindMaterial( "vgui/hud/hdn_nightvision", TEXTURE_GROUP_OTHER );
+		else
+			pMaterial = materials->FindMaterial( "vgui/hud/nightvision_dx6", TEXTURE_GROUP_OTHER );
+
+		if ( !IsErrorMaterial( pMaterial ) )
+		{
+			DrawScreenEffectMaterial( pMaterial );
+		}
+	}
+
+	if ( pPlayer->IsStunned() && pPlayer->IsAlive() )
+	{
+		float flBlur = pPlayer->GetBlur();
+
+		if ( g_pMaterialSystemHardwareConfig->GetDXSupportLevel() >= 80 )
+			pMaterial = materials->FindMaterial( "vgui/hud/blur", TEXTURE_GROUP_OTHER );
+		else
+			pMaterial = materials->FindMaterial( "vgui/hud/blur_dx6", TEXTURE_GROUP_OTHER );
+
+		if ( !IsErrorMaterial( pMaterial ) )
+		{
+			bool bFound;
+			IMaterialVar *pBlurOffset = pMaterial->FindVar( "$bluroffset", &bFound, false );
+			if ( bFound )
+			{
+				DevMsg( 1, "bluroffset : %f\n", flBlur );
+				pBlurOffset->SetFloatValue( flBlur );
+			}
+
+			DrawScreenEffectMaterial( pMaterial );
+		}
+
+		// REBUILD: client.dll then calls a CViewRender motion blur (241ac8e0, "bluralpha : %f\n")
+		// with 0.1 / ( flBlur / 7 ). It needs a 256x256 render target kept in a CViewRender member
+		// that client.dll has at +4 and sets in LevelInit; both are left to the CViewRender layout work.
+	}
+
+	if ( ( !pPlayer->IsAlive() && pPlayer->GetObserverMode() == OBS_MODE_FIXED ) || pPlayer->GetObserverMode() == OBS_MODE_IN_EYE )
+	{
+		if ( g_pMaterialSystemHardwareConfig->GetDXSupportLevel() < 80 )
+			pMaterial = materials->FindMaterial( "vgui/hud/svision_dx6", TEXTURE_GROUP_OTHER );
+		else if ( pPlayer->GetObserverMode() == OBS_MODE_FIXED )
+			pMaterial = materials->FindMaterial( "vgui/hud/svision", TEXTURE_GROUP_OTHER );
+		else
+			pMaterial = materials->FindMaterial( "vgui/hud/helmetcam", TEXTURE_GROUP_OTHER );
+
+		if ( !IsErrorMaterial( pMaterial ) )
+		{
+			DrawScreenEffectMaterial( pMaterial );
+		}
+	}
+
+	float flSpeed = pPlayer->GetAbsVelocity().Length();
+
+	// the aura vision, only while standing still
+	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN && pPlayer->IsAlive() && pPlayer->IsViewing() &&
+		g_pMaterialSystemHardwareConfig->GetDXSupportLevel() >= 80 && flSpeed < 0.5f )
+	{
+		pMaterial = materials->FindMaterial( "vgui/hud/hdn_invert", TEXTURE_GROUP_OTHER );
+		if ( !IsErrorMaterial( pMaterial ) )
+		{
+			DrawScreenEffectMaterial( pMaterial );
+		}
+	}
+
+	// the Hidden's view shader when the aura is off
+	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN && cl_hvision.GetInt() && pPlayer->IsAlive() && !pPlayer->IsViewing() )
+	{
+		pMaterial = materials->FindMaterial( "vgui/hud/hvision", TEXTURE_GROUP_OTHER );
+		if ( !IsErrorMaterial( pMaterial ) )
+		{
+			DrawScreenEffectMaterial( pMaterial );
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Renders entire view
 // Input  : &view - 
 //			drawViewModel - 
@@ -2110,6 +2243,9 @@ void CViewRender::RenderView( const CViewSetup &view, bool drawViewModel )
 
 	PixelVisibility_EndScene();
 	g_pClientMode->PostRenderWorld();
+
+	// Hidden: the local player's screen effects
+	DrawPlayerScreenEffects();
 
 	// Draw fade over entire screen if needed
 	byte color[4];

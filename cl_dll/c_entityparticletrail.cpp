@@ -207,6 +207,33 @@ trailNoHitboxes:
 
 inline void C_EntityParticleTrail::RenderParticles( CParticleRenderIterator *pIterator )
 {
+	// Hidden: the trails are the Hidden's aura vision. They only draw for a local Hidden
+	// with the aura on who stands still, on other living players, colored by health.
+	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+	if ( !pLocalPlayer || pLocalPlayer->GetTeamNumber() != TEAM_HIDDEN || !pLocalPlayer->IsViewing() )
+		return;
+
+	pLocalPlayer->IsAlive();	// REBUILD: client.dll makes this call here and ignores the result
+
+	if ( pLocalPlayer->GetAbsVelocity().Length() > 0.5f )
+		return;
+
+	C_BasePlayer *pPlayer = dynamic_cast< C_BasePlayer * >( GetMoveParent() );
+	if ( !pPlayer || pPlayer == pLocalPlayer || !pPlayer->IsAlive() )
+		return;
+
+	Vector color( 1.0f, 0.5f, 1.0f );
+
+	if ( pPlayer->GetHealth() < 74 )
+	{
+		color.Init( 0.0f, 0.65f, 1.0f );
+	}
+
+	if ( pPlayer->GetHealth() < 37 )
+	{
+		color.Init( 0.4f, 1.0f, 1.0f );
+	}
+
 	const SimpleParticle *pParticle = (const SimpleParticle*)pIterator->GetFirst();
 	while ( pParticle )
 	{
@@ -217,7 +244,6 @@ inline void C_EntityParticleTrail::RenderParticles( CParticleRenderIterator *pIt
 		TransformParticle( g_ParticleMgr.GetModelView(), pParticle->m_Pos, tPos );
 		float sortKey = tPos.z;
 
-		Vector	color = Vector( pParticle->m_uchColor[0] / 255.0f, pParticle->m_uchColor[1] / 255.0f, pParticle->m_uchColor[2] / 255.0f );
 		float alpha = Lerp( t, pParticle->m_uchStartAlpha / 255.0f, pParticle->m_uchEndAlpha / 255.0f );
 		float flSize = Lerp( t, pParticle->m_uchStartSize, pParticle->m_uchEndSize );
 
