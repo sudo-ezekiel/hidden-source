@@ -3428,6 +3428,22 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 				Filter="">
 			</Filter>
 			<Filter
+				Name="Hidden Rules"
+				Filter="">
+				<File
+					RelativePath="..\game_shared\hidden\hdn_evacuationrules.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_overrunrules.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_tutorialrules.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_spectator.cpp">
+				</File>
+			</Filter>
+			<Filter
 				Name="Hidden Weapons"
 				Filter="">
 				<File

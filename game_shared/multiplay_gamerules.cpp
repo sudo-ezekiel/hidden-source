@@ -140,6 +140,8 @@ bool CMultiplayRules::IsMultiplayer( void )
 	{
 		BaseClass::Think();
 		
+		// Hidden: CSDKGameRules runs the intermission and the time limit itself
+		/*
 		///// Check game rules /////
 
 		if ( g_fGameOver )   // someone else quit the game already
@@ -171,6 +173,7 @@ bool CMultiplayRules::IsMultiplayer( void )
 				}
 			}
 		}
+		*/
 	}
 
 

@@ -27,6 +27,7 @@
 #include "engine/IEngineSound.h"
 #include "sdk_player.h"
 #include "sdk_gamerules.h"
+#include "sdk_bot_temp.h"
 #include "tier0/vprof.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
@@ -41,16 +42,35 @@ extern bool			g_fGameOver;
 void FinishClientPutInServer( CSDKPlayer *pPlayer )
 {
 	pPlayer->InitialSpawn();
-	pPlayer->Spawn();
+
+	// Hidden: new players watch from the map's info_spectator camera until they join a team
+	CBaseEntity *pSpectator = gEntList.FindEntityByClassname( NULL, "info_spectator" );
+	if ( pSpectator )
+	{
+		Vector vecSpawn = vec3_origin;
+		QAngle angSpawn = vec3_angle;
+
+		DevMsg( 1, "Found a valid info_spectator\n" );
+		DevMsg( 1, "value of 'position' attachment : %i\n", pSpectator->GetBaseAnimating()->LookupAttachment( "position" ) );
+		pSpectator->GetBaseAnimating()->GetAttachment( "position", vecSpawn, angSpawn );
+		DevMsg( 1, "value of vecSpawn.x : %f\nvalue of vecSpawn.y : %f\nvalue of vecSpawn.z : %f\n", vecSpawn.x, vecSpawn.y, vecSpawn.z );
+		DevMsg( 1, "value of angSpawn.x : %f\nvalue of angSpawn.y : %f\nvalue of angSpawn.z : %f\n", pSpectator->GetAbsAngles().x, pSpectator->GetAbsAngles().y, pSpectator->GetAbsAngles().z );
+
+		pPlayer->SetLocalOrigin( vecSpawn );
+		pPlayer->SetAbsVelocity( vec3_origin );
+		pPlayer->SetLocalAngles( pSpectator->GetAbsAngles() );
+		pPlayer->m_Local.m_vecPunchAngle = vec3_angle;
+		pPlayer->m_Local.m_vecPunchAngleVel = vec3_angle;
+		pPlayer->SnapEyeAngles( pSpectator->GetAbsAngles() );
+	}
 
 	if (!pPlayer->IsBot())
 	{
-		// When the player first joins the server, they
-		pPlayer->m_takedamage = DAMAGE_YES;
+		// When the player first joins the server, they are a dead spectator
+		pPlayer->m_takedamage = DAMAGE_NO;
 		pPlayer->pl.deadflag = false;
-		pPlayer->m_lifeState = LIFE_ALIVE;
-		pPlayer->RemoveEffects( EF_NODRAW );
-		pPlayer->ChangeTeam( TEAM_UNASSIGNED );
+		pPlayer->m_lifeState = LIFE_DEAD;
+		pPlayer->ChangeTeam( TEAM_SPECTATOR );
 		pPlayer->SetThink( NULL );
 	}
 
@@ -106,7 +126,7 @@ const char *GetGameDescription()
 	if ( g_pGameRules ) // this function may be called before the world has spawned, and the game rules initialized
 		return g_pGameRules->GetGameDescription();
 	else
-		return "CounterStrike";
+		return "Hidden : Source B2B";
 }
 
 
@@ -152,6 +172,8 @@ void GameStartFrame( void )
 		return;
 
 	gpGlobals->teamplay = teamplay.GetInt() ? true : false;
+
+	Bot_RunAll();
 }
 
 //=========================================================
@@ -159,5 +181,37 @@ void GameStartFrame( void )
 //=========================================================
 void InstallGameRules()
 {
-	CreateGameRulesObject( "CSDKGameRules" );
+	// Hidden: the map name prefix picks the game mode
+	const char *pszMapName = STRING( gpGlobals->mapname );
+	const char *pszGameRules = "CSDKGameRules";
+	int iGameType = HDN_GAMETYPE_HIDDEN;
+
+	char szMapName[256];
+	char szPrefix[256];
+	Q_FileBase( pszMapName, szMapName, sizeof( szMapName ) );
+	nexttoken( szPrefix, szMapName, '_' );
+
+	if ( !Q_strcmp( szPrefix, "ovr" ) )
+	{
+		pszGameRules = "COverRunGameRules";
+		iGameType = HDN_GAMETYPE_OVERRUN;
+	}
+	else if ( !Q_strcmp( szPrefix, "obj" ) )
+	{
+		pszGameRules = "CEvacuationGameRules";
+		iGameType = HDN_GAMETYPE_EVACUATION;
+	}
+	else if ( !Q_strcmp( szPrefix, "mtr" ) )
+	{
+		pszGameRules = "CTutorialGameRules";
+		iGameType = HDN_GAMETYPE_MARINE_TUTORIAL;
+	}
+	else if ( !Q_strcmp( szPrefix, "htr" ) )
+	{
+		pszGameRules = "CTutorialGameRules";
+		iGameType = HDN_GAMETYPE_HIDDEN_TUTORIAL;
+	}
+
+	CreateGameRulesObject( pszGameRules );
+	SDKGameRules()->SetGameType( iGameType );
 }
