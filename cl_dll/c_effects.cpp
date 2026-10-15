@@ -192,6 +192,7 @@ ConVar CClient_Precipitation::s_rainlength( "r_rainlength", "0.1f" );
 ConVar CClient_Precipitation::s_rainspeed( "r_rainspeed", "600.0f" );
 ConVar r_rainalpha( "r_rainalpha", "0.4" );
 ConVar r_rainalphapow( "r_rainalphapow", "0.8" );
+ConVar hdn_particles( "hdn_particles", "1" );	// Hidden; REBUILD: client.dll registers it after the rain ConVars and never reads it
 
 
 Vector CClient_Precipitation::s_WindVector;		// Stores the wind speed vector

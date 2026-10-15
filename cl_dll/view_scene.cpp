@@ -1978,64 +1978,6 @@ void CViewRender::SetupVis( const CViewSetup& view )
 }
 
 
-// GR - HDR
-static void DoScreenSpaceBloom( void )
-{
-	int w, h;
-	IMaterial *pMatDownsample;
-	IMaterial *pMatBlurX;
-	IMaterial *pMatBlurY;
-	IMaterial *pMatBloom;
-
-	pMatDownsample = materials->FindMaterial( "dev/downsample", TEXTURE_GROUP_OTHER, true );
-	if( IsErrorMaterial( pMatDownsample ) )
-		return;
-	pMatBlurX = materials->FindMaterial( "dev/blurfilterx", TEXTURE_GROUP_OTHER, true );
-	if( IsErrorMaterial( pMatBlurX ) )
-		return;
-	pMatBlurY = materials->FindMaterial( "dev/blurfiltery", TEXTURE_GROUP_OTHER, true );
-	if( IsErrorMaterial( pMatBlurY ) )
-		return;
-	pMatBloom = materials->FindMaterial( "dev/bloom", TEXTURE_GROUP_OTHER, true );
-	if( IsErrorMaterial( pMatBloom ) )
-		return;
-
-	int oldX, oldY, oldW, oldH;
-	materials->GetViewport( oldX, oldY, oldW, oldH );
-
-	ITexture *pSaveRenderTarget = materials->GetRenderTarget();
-
-	ITexture *pFBTexture = GetFullFrameFrameBufferTexture( 0 );
-	ITexture *pTex0 = GetSmallBufferHDR0();
-	ITexture *pTex1 = GetSmallBufferHDR1();
-
-	// First copy the FB off to the offscreen texture
-	materials->CopyRenderTargetToTexture( pFBTexture );
-	
-	w = pTex0->GetActualWidth();
-	h = pTex0->GetActualHeight();
-
-	// Downsample image
-	materials->SetRenderTarget( pTex0 );
-	materials->Viewport( 0, 0, w, h );
-	materials->DrawScreenSpaceQuad( pMatDownsample );
-
-	// Blur filter pass 1
-	materials->SetRenderTarget( pTex1 );
-	materials->Viewport( 0, 0, w, h );
-	materials->DrawScreenSpaceQuad( pMatBlurX );
-
-	// Blur filter pass 2
-	materials->SetRenderTarget( pTex0 );
-	materials->Viewport( 0, 0, w, h );
-	materials->DrawScreenSpaceQuad( pMatBlurY );
-
-	// Render bloom
-	materials->SetRenderTarget( pSaveRenderTarget );
-	materials->Viewport( oldX, oldY, oldW, oldH );
-	materials->DrawScreenSpaceQuad( pMatBloom );
-}
-
 //-----------------------------------------------------------------------------
 // Purpose: Renders voice feedback and other sprites attached to players
 // Input  : none
@@ -2261,11 +2203,7 @@ void CViewRender::RenderView( const CViewSetup &view, bool drawViewModel )
 	// Prevent sound stutter if going slow
 	engine->Sound_ExtraUpdate();	
 
-	// GR - HDR
-	if( mat_bloom.GetBool() && engine->SupportsHDR() )
-	{
-		DoScreenSpaceBloom();
-	}
+	// REBUILD: client.dll has no screen space bloom pass here (no DoScreenSpaceBloom, no dev/bloom materials)
 
 	// Draw the 2D graphics
 	tmpView.clearColor = false;

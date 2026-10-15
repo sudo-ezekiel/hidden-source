@@ -68,7 +68,7 @@ static ConVar	cl_smoothtime	(
 	true, 2.0
 	 );
 
-ConVar zoom_sensitivity_ratio( "zoom_sensitivity_ratio", "1.0", 0, "Additional mouse sensitivity scale factor applied when FOV is zoomed in." );
+ConVar zoom_sensitivity_ratio( "zoom_sensitivity_ratio", "0.4", 0, "Additional mouse sensitivity scale factor applied when FOV is zoomed in." );
 
 void RecvProxy_FOV( const CRecvProxyData *pData, void *pStruct, void *pOut );
 void RecvProxy_DefaultFOV( const CRecvProxyData *pData, void *pStruct, void *pOut );
