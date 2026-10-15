@@ -527,6 +527,10 @@ char const *CBaseEntity::DamageDecal( int bitsDamageType, int gameMaterial )
 	if ( bitsDamageType == DMG_SLASH )
 		return "ManhackCut";
 
+	// Hidden: the FN303's pepper balls (they impact as DMG_PARALYZE)
+	if ( bitsDamageType == DMG_PARALYZE )
+		return "303Splash";
+
 	// This will get translated at a lower layer based on game material
 	return "Impact.Concrete";
 }
