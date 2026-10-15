@@ -3982,7 +3982,9 @@ void CBasePlayer::PostThinkVPhysics( void )
 
 	if ( !(TouchedPhysics() || pPhysGround) )
 	{
-		g_pMoveData->m_outWishVel.Init( m_flMaxspeed, m_flMaxspeed, m_flMaxspeed );
+		float maxSpeed = m_flMaxspeed > 0.0f ? m_flMaxspeed : sv_maxspeed.GetFloat();
+		g_pMoveData->m_outWishVel.Init( maxSpeed, maxSpeed, maxSpeed );
+
 	}
 
 	// teleport the physics object up by stepheight (game code does this - reflect in the physics)
