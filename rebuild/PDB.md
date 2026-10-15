@@ -68,3 +68,39 @@ Things to know when reading the output:
 - Lines: the functions of hdn_hiddenselection.cpp and weapon_sonic.cpp come out in a plausible
   source order with plausible lengths, and the NetworkVar helpers of CWeapon_Sonic land in
   `game_shared\hidden\weapon_sonic.h` lines 39 to 47, one per CNetworkVar.
+
+## Where the PDB and the August code disagree
+
+The names in this tree come from the PDB wherever May and August share the code (data members,
+enumerators, parameters and locals; see the commits on the pdb-names branch). Where they do not:
+
+- Mangled names win. compare.sh matches functions by their mangled names, so any name that is part
+  of one (functions, classes, globals with linkage) stays as the August symbols have it. No class
+  or function name had to be kept against the PDB: the classes of Hidden's modules have the same
+  names in both (CWeapon_Sonic, CHDNAmmoCrate, CHiddenSelector and so on).
+- Collision groups: May has COLLISION_GROUP_HIDDEN (18) and COLLISION_GROUP_MARINECLIP (19) inside
+  Collision_Group_t, before LAST_SHARED_COLLISION_GROUP. The tree keeps them in sdk_shareddefs.h,
+  starting at LAST_SHARED_COLLISION_GROUP, which gives the same values (public/const.h is the SDK's).
+- CSDKGameRules: May has members August's code has no use for, which the tree does not add:
+  roundRestart, m_bIntermission, m_bSpawns, m_bRoundStart, pSurviveMarine, m_bGameOver, m_iWait,
+  m_bMarineKilled, m_iTimerWait, m_iSurvival, m_flMaterialCheckTime, m_flLanFlag, m_MarineSpawns,
+  m_HiddenSpawns, m_Players, m_ValidPlayers, m_WaitingPlayers and tempTime; and the methods
+  RespawnAsHidden, FillEntities, StandardThink, OverRunThink and TutorialThink. May also has the
+  ConVar hdn_randomselect in sdk_gamerules, and August's hdn_jointime and hdn_limitbombs are not
+  in May.
+- m_bTimeout is May's name for the bool at the same place in CSDKGameRules (after m_bumpCRC and
+  m_flMaterialCheckTime there). August clears it in the constructor and nothing else uses it, so
+  the name is matched by position only.
+- CHiddenSelector: May's SelectHidden takes (int, int, bool) and there is a CheckRestart(int);
+  August's selector differs (the weighting members and SelectWeightedHidden are after May), and
+  the tree follows August. Parameter and local names were taken only for the functions that kept
+  the same variables.
+- CWeapon_Sonic: the PDB lists a public copy constructor. weapon_sonic.h follows the HL2MP
+  weapon_slam.h layout, whose copy constructor is declared private and never defined; it is kept
+  so, since the PDB's line numbers for the header fit that layout and no code copies the class.
+- Locals that changed after May keep ours: CBasePlayer::OnTakeDamage_Alive has an int damage in
+  May where August reads a float (flDamage), and CBasePlayer::SetStamina's flStamina has no record
+  in May. A local the PDB lacks may also live in a register: the PDB of a release build records only
+  the variables the optimiser gave a home.
+- The file column of compare.sh's cmp.tsv holds basenames only, so a moved file (dlls/hidden
+  against dlls/hl2_dll) does not show in the comparison.
