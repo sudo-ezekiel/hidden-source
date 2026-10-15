@@ -270,18 +270,16 @@ bool CWeaponFN303::Reload( void )
 	if ( pPlayer->GetAmmoCount( GetPrimaryAmmoType() ) <= 0 )
 		return false;
 
-	if ( DefaultReload( GetMaxClip1(), GetMaxClip2(), ACT_VM_RELOAD ) )
-	{
-		// Drop the empty magazine
-		CEffectData data;
-		data.m_vOrigin = pPlayer->GetLocalOrigin();
-		data.m_vAngles = pPlayer->GetLocalAngles();
-		DispatchEffect( "EjectFN303Clip", data );
+	if ( !DefaultReload( GetMaxClip1(), GetMaxClip2(), ACT_VM_RELOAD ) )
+		return false;
 
-		return CBaseCombatWeapon::Reload();
-	}
+	// Drop the empty magazine
+	CEffectData data;
+	data.m_vOrigin = pPlayer->GetLocalOrigin();
+	data.m_vAngles = pPlayer->GetLocalAngles();
+	DispatchEffect( "EjectFN303Clip", data );
 
-	return false;
+	return CBaseCombatWeapon::Reload();
 }
 
 void CWeaponFN303::SecondaryAttack( void )
@@ -355,11 +353,7 @@ void CFN303Ball::BoltTouch( CBaseEntity *pOther )
 			dmgInfo.SetDamagePosition( tr.endpos );
 			pOther->DispatchTraceAttack( dmgInfo, vecNormalizedVel, &tr );
 
-			if ( !pPlayer )
-			{
-				UTIL_ImpactTrace( &tr, DMG_PARALYZE );	// REBUILD: 0x8000 in the binary
-			}
-			else
+			if ( pPlayer )
 			{
 				// Stun the Hidden, or a team mate when friendly fire is on
 				if ( ( pPlayer->GetTeamNumber() == pAttacker->GetTeamNumber() && friendlyfire.GetInt() > 0 ) || pPlayer->GetTeamNumber() == TEAM_HIDDEN )
@@ -367,16 +361,20 @@ void CFN303Ball::BoltTouch( CBaseEntity *pOther )
 
 				// Hitting the Hidden makes the shooter more likely to be picked as the next Hidden
 				CBasePlayer *pOwner = ToBasePlayer( GetOwnerEntity() );	// REBUILD: name
-				if ( pPlayer->GetTeamNumber() == pOwner->GetTeamNumber() )
-				{
-					pOwner->AddWeighting( -25 );
-					DevMsg( 1, "303 FF hit, remove 25 from weighting\n" );
-				}
-				else
+				if ( pPlayer->GetTeamNumber() != pOwner->GetTeamNumber() )
 				{
 					pOwner->AddWeighting( 25 );
 					DevMsg( 1, "303 hit, add 25 to weighting\n" );
 				}
+				else
+				{
+					pOwner->AddWeighting( -25 );
+					DevMsg( 1, "303 FF hit, remove 25 from weighting\n" );
+				}
+			}
+			else
+			{
+				UTIL_ImpactTrace( &tr, DMG_PARALYZE );	// REBUILD: 0x8000 in the binary
 			}
 		}
 
