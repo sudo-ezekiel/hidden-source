@@ -861,7 +861,8 @@ void CGameMovement::CheckWaterJump( void )
 	Vector vecEnd;
 	VectorMA( vecStart, 24.0f, flatforward, vecEnd );
 
-	// Hidden: splash at the feet
+#ifndef CLIENT_DLL
+	// Hidden: splash at the feet (the August server.dll has it, the June client.dll does not)
 	Vector point;
 	point[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
 	point[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
@@ -874,6 +875,7 @@ void CGameMovement::CheckWaterJump( void )
 	VectorAngles( data.m_vNormal, data.m_vAngles );
 	data.m_flScale = random->RandomFloat( 8, 10 );
 	DispatchEffect( "watersplash", data );
+#endif
 	
 	trace_t tr;
 	TracePlayerBBox( vecStart, vecEnd, MASK_PLAYERSOLID, COLLISION_GROUP_PLAYER_MOVEMENT, tr );
@@ -3349,7 +3351,8 @@ void CGameMovement::CheckFalling( void )
 		if ( player->GetWaterLevel() > 0 )
 		{
 			// They landed in water.
-			// Hidden: splash at the feet
+#ifndef CLIENT_DLL
+			// Hidden: splash at the feet (the August server.dll has it, the June client.dll does not)
 			Vector point;
 			point[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
 			point[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
@@ -3362,6 +3365,7 @@ void CGameMovement::CheckFalling( void )
 			VectorAngles( data.m_vNormal, data.m_vAngles );
 			data.m_flScale = random->RandomFloat( 8, 10 );
 			DispatchEffect( "watersplash", data );
+#endif
 		}
 		else
 		{
