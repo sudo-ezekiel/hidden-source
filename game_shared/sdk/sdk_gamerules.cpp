@@ -1349,6 +1349,123 @@ int CSDKGameRules::PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarge
 
 #ifndef CLIENT_DLL
 
+CSDKGameRules::CSDKGameRules()
+{
+	// Create the team managers
+	for ( int i = 0; i < ARRAYSIZE( sTeamNames ); i++ )
+	{
+		CTeam *pTeam = static_cast<CTeam*>(CreateEntityByName( "sdk_team_manager" ));
+		pTeam->Init( sTeamNames[i], i );
+
+		g_Teams.AddToTail( pTeam );
+	}
+
+	char szMapName[256];
+	Q_FileBase( STRING( gpGlobals->mapname ), szMapName, sizeof( szMapName ) - 1 );	// REBUILD: unused
+
+	m_iGameType = HDN_GAMETYPE_HIDDEN;
+	m_fStart = -1;
+	m_iDuration = 0;
+
+	CreateEntityByName( "sdk_gamerules" );
+
+	m_bLastRound = false;
+	m_iMarineCount = -1;
+	m_iHiddenCount = -1;
+	m_iTotalPlayers = 0;
+	m_flIntermissionEndTime = -1;
+	m_bTimeout = false;
+	m_iHiddenRounds = 1;
+
+	for ( int i = 0; i < HDN_MAX_CHARACTERS; i++ )
+		m_bPlayer.Set( i, false );
+
+	m_vmtCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry.vmt" );
+	m_bumpCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry_dx7.vmt" );
+
+	// Wait for players before the first round
+	RestartThinkSet( &CSDKGameRules::RoundStartThink );
+	GoToIntermission();
+	m_flIntermissionEndTime = gpGlobals->curtime + hdn_jointime.GetInt();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:
+//-----------------------------------------------------------------------------
+CSDKGameRules::~CSDKGameRules()
+{
+	// Note, don't delete each team since they are in the gEntList and will
+	// automatically be deleted from there, instead.
+	g_Teams.Purge();
+}
+
+void CSDKGameRules::RestartRound( void )
+{
+	m_iMarineCount = 0;
+
+	CBaseEntity *pEntity = gEntList.FirstEnt();	// REBUILD: unused, but the call is in the binary
+
+	CBasePlayer *pHidden = m_HiddenSelector.SelectHidden( m_iGameType, hdn_hiddenrounds.GetInt() );
+	if ( !pHidden )
+	{
+		// Not enough players yet, try again after another intermission
+		GoToIntermission();
+		return;
+	}
+
+	CleanUpMap();
+	UTIL_ClientPrintAll( HUD_PRINTCENTER, "Round restarting..." );
+
+	for ( int i = 0; i <= gpGlobals->maxClients; i++ )
+	{
+		CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
+		if ( !pPlayer )
+			continue;
+
+		pPlayer->UpdatePlayerInfo();
+
+		if ( pPlayer->GetTeamNumber() == TEAM_SPECTATOR )
+			continue;
+
+		if ( pPlayer == pHidden )
+			pPlayer->ChangeTeam( TEAM_HIDDEN );
+		else
+			pPlayer->ChangeTeam( TEAM_IRIS );
+
+		pPlayer->SetSpawnBool( false );
+		pPlayer->RemoveAllItems( true );
+		pPlayer->ShowViewPortPanel( "scores", false );
+	}
+
+	lagcompensation->FinishCompensationReset();
+
+	SetSpawns();
+	CountMarines();
+	CountHiddens();
+	TotalPlayers();
+
+	IGameEvent *event = gameeventmanager->CreateEvent( "game_round_restart" );
+	if ( event )
+	{
+		DevMsg( 1, "Fired roundrestart event\n" );
+		gameeventmanager->FireEvent( event );
+	}
+
+	m_pfnThink = m_pfnRestartThink;
+	m_iDuration = mp_roundtime.GetInt();
+	m_fStart = gpGlobals->curtime;
+}
+
+void CommandRestartRound( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	SDKGameRules()->RestartRound();
+}
+
+static ConCommand hdn_restartround( "hdn_restartround", CommandRestartRound, "Restarts the round", FCVAR_GAMEDLL );
+
 void CSDKGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &info )
 {
 	DeathNotice( pVictim, info );
@@ -1432,73 +1549,6 @@ void CSDKGameRules::IntermissionThink( void )
 	}
 }
 
-void CSDKGameRules::RestartRound( void )
-{
-	m_iMarineCount = 0;
-
-	CBaseEntity *pEntity = gEntList.FirstEnt();	// REBUILD: unused, but the call is in the binary
-
-	CBasePlayer *pHidden = m_HiddenSelector.SelectHidden( m_iGameType, hdn_hiddenrounds.GetInt() );
-	if ( !pHidden )
-	{
-		// Not enough players yet, try again after another intermission
-		GoToIntermission();
-		return;
-	}
-
-	CleanUpMap();
-	UTIL_ClientPrintAll( HUD_PRINTCENTER, "Round restarting..." );
-
-	for ( int i = 0; i <= gpGlobals->maxClients; i++ )
-	{
-		CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
-		if ( !pPlayer )
-			continue;
-
-		pPlayer->UpdatePlayerInfo();
-
-		if ( pPlayer->GetTeamNumber() == TEAM_SPECTATOR )
-			continue;
-
-		if ( pPlayer == pHidden )
-			pPlayer->ChangeTeam( TEAM_HIDDEN );
-		else
-			pPlayer->ChangeTeam( TEAM_IRIS );
-
-		pPlayer->SetSpawnBool( false );
-		pPlayer->RemoveAllItems( true );
-		pPlayer->ShowViewPortPanel( "scores", false );
-	}
-
-	lagcompensation->FinishCompensationReset();
-
-	SetSpawns();
-	CountMarines();
-	CountHiddens();
-	TotalPlayers();
-
-	IGameEvent *event = gameeventmanager->CreateEvent( "game_round_restart" );
-	if ( event )
-	{
-		DevMsg( 1, "Fired roundrestart event\n" );
-		gameeventmanager->FireEvent( event );
-	}
-
-	m_pfnThink = m_pfnRestartThink;
-	m_iDuration = mp_roundtime.GetInt();
-	m_fStart = gpGlobals->curtime;
-}
-
-void CommandRestartRound( void )
-{
-	if ( !UTIL_IsCommandIssuedByServerAdmin() )
-		return;
-
-	SDKGameRules()->RestartRound();
-}
-
-static ConCommand hdn_restartround( "hdn_restartround", CommandRestartRound, "Restarts the round", FCVAR_GAMEDLL );
-
 float CSDKGameRules::FlPlayerFallDamage( CBasePlayer *pPlayer )
 {
 	// The Hidden takes no fall damage
@@ -1507,56 +1557,6 @@ float CSDKGameRules::FlPlayerFallDamage( CBasePlayer *pPlayer )
 
 	pPlayer->m_Local.m_flFallVelocity -= PLAYER_MAX_SAFE_FALL_SPEED;
 	return pPlayer->m_Local.m_flFallVelocity * DAMAGE_FOR_FALL_SPEED;
-}
-
-//-----------------------------------------------------------------------------
-// Purpose:
-//-----------------------------------------------------------------------------
-CSDKGameRules::~CSDKGameRules()
-{
-	// Note, don't delete each team since they are in the gEntList and will
-	// automatically be deleted from there, instead.
-	g_Teams.Purge();
-}
-
-CSDKGameRules::CSDKGameRules()
-{
-	// Create the team managers
-	for ( int i = 0; i < ARRAYSIZE( sTeamNames ); i++ )
-	{
-		CTeam *pTeam = static_cast<CTeam*>(CreateEntityByName( "sdk_team_manager" ));
-		pTeam->Init( sTeamNames[i], i );
-
-		g_Teams.AddToTail( pTeam );
-	}
-
-	char szMapName[256];
-	Q_FileBase( STRING( gpGlobals->mapname ), szMapName, sizeof( szMapName ) - 1 );	// REBUILD: unused
-
-	m_iGameType = HDN_GAMETYPE_HIDDEN;
-	m_fStart = -1;
-	m_iDuration = 0;
-
-	CreateEntityByName( "sdk_gamerules" );
-
-	m_bLastRound = false;
-	m_iMarineCount = -1;
-	m_iHiddenCount = -1;
-	m_iTotalPlayers = 0;
-	m_flIntermissionEndTime = -1;
-	m_bTimeout = false;
-	m_iHiddenRounds = 1;
-
-	for ( int i = 0; i < HDN_MAX_CHARACTERS; i++ )
-		m_bPlayer.Set( i, false );
-
-	m_vmtCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry.vmt" );
-	m_bumpCRC = GetMaterialCRC( "materials/models/manor/mn_tapestry_dx7.vmt" );
-
-	// Wait for players before the first round
-	RestartThinkSet( &CSDKGameRules::RoundStartThink );
-	GoToIntermission();
-	m_flIntermissionEndTime = gpGlobals->curtime + hdn_jointime.GetInt();
 }
 
 #endif
