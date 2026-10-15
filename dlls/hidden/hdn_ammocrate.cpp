@@ -27,7 +27,7 @@ public:
 	void	Think( void );
 	void	Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
 
-	virtual int	ObjectCaps( void ) { return ( BaseClass::ObjectCaps() & ~FCAP_ACROSS_TRANSITION ) | FCAP_IMPULSE_USE | FCAP_WCEDIT_POSITION; }
+	virtual int	ObjectCaps( void ) { return ( BaseClass::ObjectCaps() & ~FCAP_ACROSS_TRANSITION ) | FCAP_IMPULSE_USE | FCAP_DONT_SAVE; }
 
 	float	m_flCloseTime;		// REBUILD: name ours. The lid stays open until then
 };
