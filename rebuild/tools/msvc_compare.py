@@ -36,9 +36,15 @@ Without a decompile (the August server.dll has neither PDB nor decompile), the r
 are the strong ones plus every code address .rdata or .data points at and every 16-byte aligned
 address after int3 padding, kept where the code before cannot fall through.
 
+--ref-names takes names for some of the reference's functions in procs.tsv's columns (the size is
+not used) and pairs by them the same way, without the PDB's extents: names carried over from the
+May DLL to a later one. --ours-procs makes the third argument a procs.tsv instead of a map file, so
+that one reference DLL can be mapped to another that has a PDB (the August DLL to the May DLL);
+the result's "our name" column then holds the PDB's names.
+
 Usage:
     python3 -I msvc_compare.py <reference.dll> <our dll> <our map> [<decomp dir>]
-        --out <result.tsv> [--ref-procs procs.tsv] [--show NAME]
+        --out <result.tsv> [--ref-procs procs.tsv] [--ref-names names.tsv] [--ours-procs] [--show NAME]
 
 Result columns: object (lib:object from the map, ours), status (same / changed / unmapped /
 only-ref / only-ours), similarity, ref size, our size, our name (mangled), demangled name,
@@ -213,11 +219,13 @@ def pointer_seeds(img):
 
 
 def padding_starts(img):
-    """16-byte aligned addresses that end a run of int3 padding."""
+    """16-byte aligned addresses that end a run of int3 padding: objdump's linear sweep decodes an
+    int3 right before them (a 0xcc byte alone can be the end of an address operand)."""
     d, out = img.pe.data, set()
     for a in range((img.text[0] + 15) & ~15, img.text[1], 16):
         o = img.pe.off(a)
-        if o and d[o - 1] == 0xCC and d[o] != 0xCC:
+        i = img.index.get(a)
+        if o and d[o] != 0xCC and i and img.ins[i - 1] == "int3":
             out.add(a)
     return out
 
@@ -615,11 +623,16 @@ def main():
     ap.add_argument("decomp", nargs="?")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ref-procs", help="the reference's functions from its PDB (procs.tsv)")
+    ap.add_argument("--ref-names", help="names for reference functions, procs.tsv's columns, extents not used")
+    ap.add_argument("--ours-procs", action="store_true", help="<our map> is a procs.tsv: map two references")
     ap.add_argument("--show")
     args = ap.parse_args()
 
     ref, ours = Image(args.ref), Image(args.ours)
-    funcs = read_map(args.map)
+    if args.ours_procs:
+        funcs = {a: (n, mod) for a, (n, mod, _) in read_procs(args.map).items()}
+    else:
+        funcs = read_map(args.map)
     ours.names = {a: n for a, (n, _) in funcs.items()}
     objs = {a: o for a, (_, o) in funcs.items()}
     ours.finish(funcs)
@@ -660,20 +673,26 @@ def main():
                     refnames[int(p[0], 16)] = (p[1], p[2])
     for a, (n, *_) in procs.items():
         refnames[a] = (n, "pdb")
-    dem = demangle(sorted(set(ours.names.values())))
+    ref_names = dict(procs)
+    if args.ref_names:
+        for a, v in read_procs(args.ref_names).items():
+            if a in ref.start_set:
+                ref_names.setdefault(a, v)
+                refnames.setdefault(a, (v[0], "names"))
+    dem = {} if args.ours_procs else demangle(sorted(set(ours.names.values())))
     our_names = {}
-    if procs:
+    if ref_names:
         for a, n in ours.names.items():
-            name, _ = undecorated_parts(n, dem.get(n, n))
+            name = n if args.ours_procs else undecorated_parts(n, dem.get(n, n))[0]
             our_names[a] = (name, objs.get(a, "").split(":")[-1])
 
-    m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, procs, our_names)
+    m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names)
     hints = {a for a in start_hints(m) if outside(a)}
     if hints:
         # A second pass with the reference starts the first one implied.
         print(f"{len(hints)} reference starts found through the mapping, mapping again", file=sys.stderr)
         ref.finish(set(ref.starts) | hints)
-        m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, procs, our_names)
+        m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names)
 
     def label(t):
         r = m.r2o.get(t)
@@ -763,10 +782,10 @@ def main():
         print(f"  {g}: " + ", ".join(f"{k} {v}" for k, v in sorted(c.items())), file=sys.stderr)
 
 
-def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames, procs, our_names):
+def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames, ref_names, our_names):
     m = Mapper(ref, ours)
-    if procs:
-        print(f"pdbname: {pair_by_name(m, procs, our_names)} pairs", file=sys.stderr)
+    if ref_names:
+        print(f"pdbname: {pair_by_name(m, ref_names, our_names)} pairs", file=sys.stderr)
     # vftables of the same class, subobject and slot count
     votes = defaultdict(Counter)
     for key, slots in vr.items():

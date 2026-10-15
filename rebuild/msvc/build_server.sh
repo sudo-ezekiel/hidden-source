@@ -5,7 +5,9 @@
 #
 # The repo is mirrored into <work dir>/src. Every source of dlls/hl_sdk.vcproj "Release SDK|Win32" is
 # compiled with that configuration's switches and per-file settings, then server.dll is linked with
-# /MAP. With file arguments (paths from the repo root) only those objects are rebuilt before the link.
+# /MAP, the objects in the order of Hidden's PDB (server_link_order.txt; files the PDB lacks go to
+# their alphabetical place in their filter). With file arguments (paths from the repo root) only
+# those objects are rebuilt before the link.
 #
 # Output in <work dir>/out/msvc/server: server.dll, server.map, server.pdb, <name>.obj.log per file,
 # server.dll.log (link), build.tsv (file, OK/FAIL, first error).
@@ -53,7 +55,7 @@ run_make() {
 
 python3 -I "$REPO/rebuild/msvc/vcproj_to_msvc.py" "$WORK/src/dlls/hl_sdk.vcproj" "Release SDK|Win32" \
     "$OUT/server" "$OUT/server.mk" --host-root "$WORK/src" --slots "$JOBS" \
-    --lib "$SDKLIB/tier0.lib" --lib "$SDKLIB/vstdlib.lib"
+    --lib "$SDKLIB/tier0.lib" --lib "$SDKLIB/vstdlib.lib" --link-order "$WORK/src/rebuild/msvc/server_link_order.txt"
 for f in "$@"; do
     f="${f#./}"
     rel=$(realpath -m --relative-to="$REPO/dlls" "$REPO/$f")
