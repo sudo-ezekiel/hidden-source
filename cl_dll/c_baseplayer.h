@@ -26,6 +26,16 @@ class C_BaseViewModel;
 class C_FuncLadder;
 class CFlashlightEffect;
 
+// Hidden: one entry of the damage list printed to the console at the end of a round or on death
+// (REBUILD: names; client.dll compares the ids with the local player's userid)
+struct PlayerDamageRecord_t
+{
+	int			m_iAttacker;	// userid
+	int			m_iVictim;	// userid
+	float		m_flDamage;
+	int			m_iShots;
+};
+
 class C_CommandContext
 {
 public:
@@ -289,8 +299,22 @@ public:
 	bool			LAMIsOn( void ) { return m_bLAM; }
 	bool			RequestedAmmo( void ) { return m_bRequestAmmo; }
 	bool			IsViewing( void );	// the Hidden's aura vision, only while standing still
+
+	// Hidden: the damage list and the aura loop sound
+	void			AddDamage( PlayerDamageRecord_t damage );
+	void			PrintDamageList( void );
+	void			ClearDamageList( void );				// REBUILD: name
+	void			ResetDamageListPrinted( void );			// REBUILD: name
+	void			SetAuraSoundTime( float flDelay );		// REBUILD: name
+
 	const char		*GetCurrentLocation( void ) { return m_CurrentLocation; }	// REBUILD: no client copy found; named as the server's
 	const char		*GetLastKnownPlaceName( void ) const { return m_szLastPlaceName; }	// REBUILD: no client copy found; named as the server's
+
+	// Hidden: data client.dll keeps ahead of m_StuckLast (REBUILD: names)
+	int								m_iUnknownd6c[3];		// 12 bytes at 0xd6c, no use found
+	CUtlVector< PlayerDamageRecord_t >	m_DamageRecords;		// filled from player_hurt, cleared on game_round_restart
+	bool							m_bDamageListPrinted;	// set once the list is printed, cleared on game_round_end
+	float							m_flNextAuraSound;		// next "Hidden.AuraLoop" while the aura is on
 
 public:
 	int m_StuckLast;

@@ -26,6 +26,18 @@ from collections import defaultdict
 HEX = re.compile(r"\b0x[0-9a-f]+\b")
 TARGET = re.compile(r"^([0-9a-f]+) <([^>]+)>$")
 
+# GCC names anonymous namespaces and file-keyed static initialisers after the source path plus two
+# hashes, the second one random per compile: "_GLOBAL__N_.._dlls_x.cpp_FDF1F060_3F9FE640" in
+# Hidden's build is "_GLOBAL__N__src_dlls_x.cpp_FDF1F060_A80A4E1D" in ours. Both sides are keyed
+# by file name and the first hash instead, so the same function lines up under one name.
+ANON_NS = re.compile(r"\d+_GLOBAL__N_[A-Za-z0-9_.]*?([A-Za-z0-9]+\.cpp)_([0-9A-F]{8})_[0-9A-F]{8}")
+FILE_INIT = re.compile(r"^_GLOBAL__I_[A-Za-z0-9_.]*?([A-Za-z0-9]+\.cpp)_([0-9A-F]{8})_[0-9A-F]{8}$")
+
+
+def canon(name):
+    name = ANON_NS.sub(lambda m: f"_GLOBAL__N_{m.group(1)}_{m.group(2)}", name)
+    return FILE_INIT.sub(lambda m: f"_GLOBAL__I_{m.group(1)}_{m.group(2)}", name)
+
 
 def function_symbols(path):
     out = subprocess.run(["nm", "--defined-only", "-S", path], capture_output=True, text=True, check=True).stdout
@@ -61,7 +73,7 @@ def disassemble(path):
         if m:
             target = int(m.group(1), 16)
             name = m.group(2)
-            base = name.split("+")[0]
+            base = canon(name.split("+")[0])
             if "+" not in name or op.startswith("call"):
                 args = f"<{base}>"
             else:
@@ -76,7 +88,7 @@ def disassemble(path):
 def disassemble_cached(path):
     """The reference build never changes, so keep its normalised disassembly next to the work dir."""
     st = os.stat(path)
-    key = hashlib.sha1(f"{os.path.abspath(path)}:{st.st_size}:{st.st_mtime_ns}".encode()).hexdigest()[:16]
+    key = hashlib.sha1(f"v2:{os.path.abspath(path)}:{st.st_size}:{st.st_mtime_ns}".encode()).hexdigest()[:16]
     cache = os.path.join(os.path.expanduser("~/.cache/hsrebuild-disasm"), key + ".pickle")
     if os.path.exists(cache):
         with open(cache, "rb") as f:
@@ -115,21 +127,25 @@ def main():
     ref_blocks = disassemble_cached(args.ref)
     cand_blocks = disassemble(args.cand)
 
+    # Pair functions by canonical name; rows keep the reference's own name.
+    cand_by_canon = {canon(n): n for n in cand_syms}
+    ref_canon = {canon(n) for n in ref_syms}
     rows = []
     for name, (addr, size) in ref_syms.items():
-        if name in cand_syms:
+        cname = cand_by_canon.get(canon(name))
+        if cname is not None:
             a = body(ref_blocks, addr, size)
-            b = body(cand_blocks, *cand_syms[name])
+            b = body(cand_blocks, *cand_syms[cname])
             if a == b:
                 status, ratio = "same", 1.0
             else:
                 status = "changed"
                 ratio = difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() if len(a) + len(b) < 20000 else 0.0
-            rows.append((owner.get(name, "?"), status, ratio, size, cand_syms[name][1], name))
+            rows.append((owner.get(name, "?"), status, ratio, size, cand_syms[cname][1], name))
         else:
             rows.append((owner.get(name, "?"), "only-ref", 0.0, size, 0, name))
     for name, (addr, size) in cand_syms.items():
-        if name not in ref_syms:
+        if canon(name) not in ref_canon:
             rows.append(("?", "only-cand", 0.0, 0, size, name))
 
     names = [r[5] for r in rows]

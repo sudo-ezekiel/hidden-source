@@ -389,6 +389,9 @@ C_BasePlayer::~C_BasePlayer()
 //-----------------------------------------------------------------------------
 void C_BasePlayer::Spawn( void )
 {
+	// Hidden: a new life gets a new damage list printout
+	m_bDamageListPrinted = false;
+
 	// Clear all flags except for FL_FULLEDICT
 	ClearFlags();
 	AddFlag( FL_CLIENT );
@@ -841,6 +844,100 @@ bool C_BasePlayer::IsViewing( void )
 		return false;
 
 	return m_bAura;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the delay before the aura loop sound plays
+//-----------------------------------------------------------------------------
+void C_BasePlayer::SetAuraSoundTime( float flDelay )
+{
+	m_flNextAuraSound = gpGlobals->curtime + flDelay;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: allow the damage list to print again
+//-----------------------------------------------------------------------------
+void C_BasePlayer::ResetDamageListPrinted( void )
+{
+	m_bDamageListPrinted = false;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: forget the damage list (a round restart)
+//-----------------------------------------------------------------------------
+void C_BasePlayer::ClearDamageList( void )
+{
+	m_DamageRecords.Purge();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: print the damage dealt and taken this life to the console,
+//			once, then clear the list
+//-----------------------------------------------------------------------------
+void C_BasePlayer::PrintDamageList( void )
+{
+	if ( m_bDamageListPrinted )
+		return;
+
+	int count = m_DamageRecords.Count();
+	if ( !count )
+		return;
+
+	Msg( "Damage List - \n\n" );
+
+	int i;
+	for ( i = 0; i < count; i++ )
+	{
+		if ( m_DamageRecords[i].m_iAttacker == GetUserID() )
+		{
+			const char *pszVictim = g_PR->GetPlayerName( engine->GetPlayerForUserID( m_DamageRecords[i].m_iVictim ) );
+			Msg( "You did %f to %s in %i shots\n", m_DamageRecords[i].m_flDamage, pszVictim, m_DamageRecords[i].m_iShots );
+		}
+	}
+
+	Msg( "\n-------------------------------\n\n" );
+
+	for ( i = 0; i < count; i++ )
+	{
+		if ( m_DamageRecords[i].m_iVictim == GetUserID() )
+		{
+			const char *pszAttacker = g_PR->GetPlayerName( engine->GetPlayerForUserID( m_DamageRecords[i].m_iAttacker ) );
+			Msg( "%s did %i to you in %i shots\n", pszAttacker, (int)m_DamageRecords[i].m_flDamage, m_DamageRecords[i].m_iShots );
+		}
+	}
+
+	Msg( "\n-------------------------------\n\n" );
+	Msg( "Weighting : %i\n", m_iWeighting );
+
+	m_DamageRecords.Purge();
+	m_bDamageListPrinted = true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: add a hit to the damage list, merging it with an earlier
+//			hit between the same two players
+//-----------------------------------------------------------------------------
+void C_BasePlayer::AddDamage( PlayerDamageRecord_t damage )
+{
+	int count = m_DamageRecords.Count();
+
+	DevMsg( 1, "damage done : %f\n", damage.m_flDamage );
+
+	if ( count > 0 )
+	{
+		for ( int i = 0; i < count; i++ )
+		{
+			if ( m_DamageRecords[i].m_iVictim == damage.m_iVictim && m_DamageRecords[i].m_iAttacker == damage.m_iAttacker )
+			{
+				m_DamageRecords[i].m_iShots++;
+				m_DamageRecords[i].m_flDamage += damage.m_flDamage;
+				return;
+			}
+		}
+	}
+
+	damage.m_iShots = 1;
+	m_DamageRecords.AddToTail( damage );
 }
 
 
@@ -1349,6 +1446,13 @@ void C_BasePlayer::PostThink( void )
 		if ( GetSequence() == -1 )
 		{
 			SetSequence( 0 );
+		}
+
+		// Hidden: repeat the aura loop sound while the aura is on
+		if ( IsViewing() && m_flNextAuraSound > 0 && m_flNextAuraSound < gpGlobals->curtime )
+		{
+			EmitSound( "Hidden.AuraLoop" );
+			m_flNextAuraSound = gpGlobals->curtime + 3.9;
 		}
 
 		StudioFrameAdvance();
