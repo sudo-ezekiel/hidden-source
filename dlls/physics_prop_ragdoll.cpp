@@ -1040,6 +1040,16 @@ bool CRagdollProp::IsFading()
 	return ( GetNextThink( s_pFadeOutContext ) >= gpGlobals->curtime );
 }
 
+void CRagdollProp::SetHealth( int iHealth )
+{
+	m_iRagdollHealth += iHealth;
+}
+
+int CRagdollProp::GetHealth( void )
+{
+	return m_iRagdollHealth;
+}
+
 void CRagdollProp::FadeOutThink(void) 
 {
 	float dt = gpGlobals->curtime - m_flFadeOutStartTime;

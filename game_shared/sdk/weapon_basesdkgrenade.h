@@ -41,6 +41,9 @@ public:
 	bool			Reload();
 
 	virtual void	ItemPostFrame();
+
+	// Grenades have no safe pose
+	virtual void	SetSafe( void ) {}
 	
 	void			DecrementAmmo( CBaseCombatCharacter *pOwner );
 	virtual void	StartGrenadeThrow();

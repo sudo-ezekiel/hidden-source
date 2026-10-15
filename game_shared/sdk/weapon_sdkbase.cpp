@@ -10,6 +10,7 @@
 #include "takedamageinfo.h"
 #include "weapon_sdkbase.h"
 #include "ammodef.h"
+#include "hidden/hdn_lasersight.h"
 
 
 #if defined( CLIENT_DLL )
@@ -31,7 +32,12 @@
 static const char * s_WeaponAliasInfo[] = 
 {
 	"none",		// WEAPON_NONE
-	"mp5",		// WEAPON_MP5
+	"crowbar",	// WEAPON_CROWBAR
+	"pistol",	// WEAPON_PISTOL
+	"pistol2",	// WEAPON_PISTOL2
+	"p90",		// WEAPON_P90
+	"fn2000",	// WEAPON_FN2000
+	"fn303",	// WEAPON_FN303
 	"shotgun",	// WEAPON_SHOTGUN
 	"grenade",	// WEAPON_GRENADE
 	NULL,		// WEAPON_NONE
@@ -138,6 +144,32 @@ CSDKPlayer* CWeaponSDKBase::GetPlayerOwner() const
 	return dynamic_cast< CSDKPlayer* >( GetOwner() );
 }
 
+bool CWeaponSDKBase::Deploy()
+{
+	if ( m_bDeployed )
+		return true;
+
+	m_bDeployed = true;
+
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+
+	// REBUILD: equipment 0 is the laser aiming module
+	if ( !pPlayer->GetSafe() && pPlayer->GetEquipment() == 0 && pPlayer->LAMIsOn() )
+		CreateLaserPointer();
+
+	m_bJustDeployed = true;
+
+	return BaseClass::Deploy();
+}
+
+bool CWeaponSDKBase::ShouldRemoveOnRoundRestart() const
+{
+	if ( GetPlayerOwner() )
+		return true;
+
+	return false;
+}
+
 #ifdef GAME_DLL
 
 void CWeaponSDKBase::SendReloadEvents()
@@ -150,12 +182,176 @@ void CWeaponSDKBase::SendReloadEvents()
 	CPASFilter filter( pPlayer->GetAbsOrigin() );
 	filter.RemoveRecipient( pPlayer );
 
-	UserMessageBegin( filter, "ReloadEffect" );
-	WRITE_SHORT( pPlayer->entindex() );
-	MessageEnd();
-
 	// Make the player play his reload animation.
 	pPlayer->DoAnimationEvent( PLAYERANIMEVENT_RELOAD );
 }
 
 #endif
+
+//-----------------------------------------------------------------------------
+// Purpose: Move the laser dot to where the weapon is pointing
+//-----------------------------------------------------------------------------
+void CWeaponSDKBase::UpdateLaserPosition( Vector vecMuzzlePos, Vector vecEndPos )
+{
+	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( !pPlayer )
+		return;
+
+	if ( !pPlayer->LAMIsOn() )
+		return;
+
+	if ( vecMuzzlePos == vec3_origin || vecEndPos == vec3_origin )
+	{
+		vecMuzzlePos = pPlayer->Weapon_ShootPosition();
+
+		Vector	forward;
+		pPlayer->EyeVectors( &forward );
+		vecEndPos = vecMuzzlePos + ( forward * MAX_TRACE_LENGTH );
+	}
+
+	// Trace out for the endpoint
+	trace_t	tr;
+	UTIL_TraceLine( vecMuzzlePos, vecEndPos, (MASK_SHOT & ~CONTENTS_WINDOW), GetOwner(), COLLISION_GROUP_NONE, &tr );
+
+	// Move the laser sprite
+	if ( m_hLaserDot != NULL )
+	{
+		Vector	laserPos = tr.endpos;
+		m_hLaserDot->SetLaserPosition( laserPos, tr.plane.normal );
+		
+		if ( tr.DidHitNonWorldEntity() )
+		{
+			CBaseEntity *pHit = tr.m_pEnt;
+
+			if ( ( ( pHit != NULL ) && ( pHit->m_takedamage ) ) || pHit->GetTeamNumber() == TEAM_HIDDEN )
+			{
+				m_hLaserDot->SetTargetEntity( pHit );
+			}
+			else
+			{
+				m_hLaserDot->SetTargetEntity( NULL );
+			}
+		}
+		else
+		{
+			m_hLaserDot->SetTargetEntity( NULL );
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Create the laser dot if there is none yet
+//-----------------------------------------------------------------------------
+void CWeaponSDKBase::CreateLaserPointer( void )
+{
+	if ( !m_hLaserDot && GetOwner() != NULL )
+	{
+		m_hLaserDot = CLaserDot::Create( GetAbsOrigin(), GetOwner() );
+
+		UpdateLaserPosition();
+	}
+}
+
+void CWeaponSDKBase::ItemPostFrame( void )
+{
+	BaseClass::ItemPostFrame();
+
+	if ( m_bInReload )
+		return;
+
+	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( !pPlayer )
+		return;
+
+	if ( !pPlayer->IsOnLadder() && pPlayer->GetTeamNumber() == TEAM_IRIS )
+		Deploy();
+
+	if ( pPlayer->GetSafe() || pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+		return;
+
+	UpdateLaserPosition();
+
+	if ( pPlayer->LAMIsOn() && m_hLaserDot == NULL )
+	{
+		DevMsg( 1, "Creating laser pointer in ItemPostFrame\n" );
+		CreateLaserPointer();
+	}
+
+	if ( !pPlayer->LAMIsOn() && m_hLaserDot )
+	{
+		m_hLaserDot->TurnOff();
+		UTIL_Remove( m_hLaserDot );
+		m_hLaserDot = NULL;
+	}
+}
+
+bool CWeaponSDKBase::Holster( CBaseCombatWeapon *pSwitchingTo )
+{
+	if ( m_hLaserDot != NULL )
+	{
+		m_hLaserDot->TurnOff();
+		UTIL_Remove( m_hLaserDot );
+		m_hLaserDot = NULL;
+	}
+
+	m_bDeployed = false;
+
+	return BaseClass::Holster( pSwitchingTo );
+}
+
+void CWeaponSDKBase::SetSafe( void )
+{
+	SendWeaponAnim( ACT_VM_IDLE_TO_LOWERED );
+	SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
+
+	if ( m_hLaserDot != NULL )
+	{
+		m_hLaserDot->TurnOff();
+		UTIL_Remove( m_hLaserDot );
+		m_hLaserDot = NULL;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Same as CBaseCombatWeapon::Drop
+//-----------------------------------------------------------------------------
+void CWeaponSDKBase::Drop( const Vector &vecVelocity )
+{
+#if !defined( CLIENT_DLL )
+
+	// Once somebody drops a gun, it's fair game for removal when/if
+	// a game_weapon_manager does a cleanup on surplus weapons in the
+	// world.
+	SetRemoveable( true );
+
+	//If it was dropped then there's no need to respawn it.
+	AddSpawnFlags( SF_NORESPAWN );
+
+	StopAnimation();
+	StopFollowingEntity( );
+	SetMoveType( MOVETYPE_FLYGRAVITY );
+	// clear follow stuff, setup for collision
+	SetGravity(1.0);
+	m_iState = WEAPON_NOT_CARRIED;
+	RemoveEffects( EF_NODRAW );
+	FallInit();
+	SetGroundEntity( NULL );
+	SetThink( &CBaseCombatWeapon::SetPickupTouch );
+	SetTouch(NULL);
+
+	IPhysicsObject *pObj = VPhysicsGetObject();
+	if ( pObj != NULL )
+	{
+		AngularImpulse	angImp( 200, 200, 200 );
+		pObj->AddVelocity( &vecVelocity, &angImp );
+	}
+	else
+	{
+		SetAbsVelocity( vecVelocity );
+	}
+
+	SetNextThink( gpGlobals->curtime + 1.0f );
+	SetOwnerEntity( NULL );
+	SetOwner( NULL );
+#endif
+}
