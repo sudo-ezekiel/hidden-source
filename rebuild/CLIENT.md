@@ -2,9 +2,9 @@
 
 Hidden's client.dll was built with MSVC 7.1 (Visual Studio .NET 2003 RTM, cl.exe 13.10.3077, per
 the PE Rich header) from `cl_dll/client_sdk.vcproj`, configuration "Release SDK|Win32". There is no
-PDB and no MSVC 7.1 compiler here, so the client cannot be byte-compared the way the server is.
-Instead it is checked structurally: every file must compile, every class's vtable must match the
-reference slot for slot, and every RecvTable must match.
+PDB. Until an MSVC build exists the client is checked structurally: every file must compile, every
+class's vtable must match the reference slot for slot, and every RecvTable must match. That exact
+compiler (Visual C++ Toolkit 2003 1.01) now unpacks and runs under Wine; see `msvc/MSVC.md`.
 
 Reference files, all under `~/.cache/subject51764/hsrebuild/`:
 
