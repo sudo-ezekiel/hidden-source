@@ -6,7 +6,7 @@ The compiles run under Wine from the project's directory, as the IDE ran them. W
   ExcludedFromBuild="TRUE"; objects are listed in project order, which is the IDE's link order;
 - the configuration's VCCLCompilerTool, as cl.exe switches (SWITCHES below; WIN32 and _WIN32 stay
   defined, this is the Windows build);
-- per file: UsePrecompiledHeader (0 none, 1 create, 3 use) and ObjectFile
+- per file: UsePrecompiledHeader (0 none, 1 create, 2 automatic /YX: compiled without, 3 use) and ObjectFile
   ($(IntDir)/$(InputName)1.obj for sdk/c_te_firebullets.cpp);
 - VCLinkerTool for a DLL, VCLibrarianTool for a static library (link /lib, the Toolkit has no
   lib.exe).
@@ -270,8 +270,11 @@ def main():
     write_if_changed(link_rsp, "\n".join(link) + "\n")
     t = os.path.basename(target)
     lines.append(f".PHONY: objs {t}\n{t}: $(OUT)/{t}\n")
-    lines.append(f"$(OUT)/{t}: $(OBJS) $(OUT)/link.rsp {' '.join(given[posixpath.basename(r).lower()] for r in proj_libs)}".rstrip())
-    lines.append(f"\t@cd $(OUT) && $(MSLINK) {'/lib ' if args.kind == 'lib' else ''}{q('@' + win(link_rsp))} > $@.log 2>&1 || {{ rm -f $@; echo FAIL link; exit 1; }}\n")
+    libs = " ".join(given[posixpath.basename(r).lower()] for r in proj_libs)
+    lines.append(f"$(OUT)/{t}: $(OBJS) $(OUT)/link.rsp {libs}".rstrip())
+    lib_switch = "/lib " if args.kind == "lib" else ""
+    lines.append(f"\t@cd $(OUT) && $(MSLINK) {lib_switch}{q('@' + win(link_rsp))} > $@.log 2>&1 "
+                 f"|| {{ rm -f $@; echo FAIL link; exit 1; }}\n")
     lines.extend(rules)
     with open(args.makefile, "w") as f:
         f.write("\n".join(lines) + "\n")

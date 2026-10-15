@@ -46,9 +46,10 @@ if echo "$CHANGED" | grep -qiE '\.(h|hpp|inl)$'; then
     rm -rf "$OUT/vgui_controls" "$OUT/client"
 fi
 
-# One persistent wineserver for all compiles; Wine's first start prints graphics driver noise.
+# One persistent wineserver for all compiles. Wine's first start prints graphics driver noise, so
+# a bare cl.exe run (its banner) takes it.
 wineserver -p60 2>/dev/null || true
-wine cmd /c exit >/dev/null 2>&1 || true
+$MSCL >/dev/null 2>&1 || true
 
 GEN="python3 -I $REPO/rebuild/msvc/vcproj_to_msvc.py"
 run_make() {

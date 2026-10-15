@@ -6,8 +6,12 @@ inside the function become offsets, calls and jumps out of it become names, and 
 the image become ADDR (import table slots become IMP:<name>). Jump and index tables that MSVC
 places after a function's code are cut off and compared as in-function offsets.
 
-Functions: ours from the /MAP file; the reference's from the Ghidra decompile (decomp.c), plus
-every vftable slot, direct call target and jmp target in another function (tail calls).
+Functions: ours from the /MAP file; the reference's from every vftable slot, direct call target
+and import thunk, plus the Ghidra decompile's starts (decomp.c) and direct jmp targets (tail calls)
+where the code before them cannot fall through and they are not inside a jump table. objdump's
+linear sweep is redone from any start it ran past. After a first mapping, the starts it implies
+are added (where our branch goes to a function start, or our body is a strict prefix of the
+reference's) and the mapping runs again.
 Mapping, each step repeated until nothing changes:
 - vftable: classes whose vftable (same class, same subobject offset) has the same slot count in
   both binaries, slot by slot (RTTI, pe_rtti.py); the export and the entry point;
@@ -172,25 +176,39 @@ def ref_starts(decomp, img):
     return starts
 
 
-def branch_targets(img, starts):
-    """Direct call targets, and jmp targets in another function than the jmp (tail calls)."""
-    starts = sorted(starts)
-    out = set()
+def branch_targets(img):
+    """Direct call targets plus import thunks (jmp *[IAT slot]), and direct jmp targets (some are
+    tail calls)."""
+    calls, jumps = set(), set()
     for a, i in zip(img.addrs, img.ins):
         op, _, args = i.partition(" ")
         m = BRANCH.match(args)
-        if not m:
-            continue
-        t = int(m.group(1), 16)
-        if op == "call":
-            out.add(t)
-        elif op == "jmp" and bisect.bisect_right(starts, t) != bisect.bisect_right(starts, a):
-            out.add(t)
-    return out
+        if m and op in ("call", "jmp"):
+            (calls if op == "call" else jumps).add(int(m.group(1), 16))
+        elif op == "jmp" and BRANCH.match(args[1:]) and int(args[1:], 16) in img.imports:
+            calls.add(a)
+    return calls, jumps
+
+
+def after_terminator(img, a):
+    """True when the code before a cannot run into it: ret, jmp, int3 padding, or a jump table."""
+    i = img.index[a] - 1
+    while i >= 0 and img.ins[i] in PAD_OPS and img.ins[i] != "int3":
+        i -= 1  # nop padding (nvtc.lib's objects), back to the instruction before it
+    if i >= 0 and img.ins[i].split(" ", 1)[0] in ("ret", "jmp", "int3"):
+        return True
+    o = img.pe.off(a)
+    if o and img.pe.data[o - 1] == 0xCC:
+        return True
+    # after a jump table, but not inside one (whose entries point back into the function before)
+    prev, cur = img.pe.u32(a - 4), img.pe.u32(a)
+    return (prev is not None and img.text[0] <= prev < img.text[1]
+            and not (cur is not None and a - 0x10000 <= cur < a))
 
 
 def body(img, start):
-    """[(op, args, external target or None, [function pointer immediates])], tables, size."""
+    """[(op, args, external target or None, [function pointer immediates], address, branch target)],
+    tables, size. args is None for a branch out of the function."""
     lo, end = img.extent(start)
     i = img.index[lo]
     rows = []
@@ -220,10 +238,10 @@ def body(img, start):
         if m and (op.startswith("j") or op.startswith("call") or op.startswith("loop")):
             t = int(m.group(1), 16)
             if lo <= t < end:
-                out.append((op, f"<+{t - lo:#x}>", None, []))
+                out.append((op, f"<+{t - lo:#x}>", None, [], a, t))
                 continue
             target = t
-            out.append((op, None, target, []))
+            out.append((op, None, target, [], a, t))
             continue
         ptrs = []
 
@@ -236,7 +254,7 @@ def body(img, start):
                     ptrs.append(v)
                 return "ADDR"
             return h.group(0)
-        out.append((op, HEX.sub(sub, args), None, ptrs))
+        out.append((op, HEX.sub(sub, args), None, ptrs, a, None))
     tabs = []
     for t, is_jump in sorted(set(tables)):
         if t >= end:
@@ -244,7 +262,7 @@ def body(img, start):
         if is_jump:
             offs = []
             p = t
-            while p + 4 <= end:
+            while len(offs) < 1024:
                 v = img.pe.u32(p)
                 if v is None or not lo <= v < cut:
                     break
@@ -271,11 +289,11 @@ class Side:
 
 
 def masked(rows):
-    return [f"{op} {'EXT' if args is None else args}" for op, args, _, _ in rows]
+    return [f"{x[0]} {'EXT' if x[1] is None else x[1]}" for x in rows]
 
 
 def labelled(rows, label):
-    return [f"{op} {label(t) if args is None else args}" for op, args, t, _ in rows]
+    return [f"{x[0]} {label(x[2]) if x[1] is None else x[1]}" for x in rows]
 
 
 def string_refs(img, start):
@@ -413,16 +431,22 @@ class Mapper:
                     for k in range(i2 - i1):
                         a = masked(self.ref.get(gr[i1 + k])[0])
                         b = masked(self.ours.get(go[j1 + k])[0])
-                        if len(a) + len(b) < 6000 and difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.6:
+                        if len(a) + len(b) < 6000 and \
+                                difflib.SequenceMatcher(None, a, b, autojunk=False).ratio() >= 0.6:
                             n += self.add(gr[i1 + k], go[j1 + k], "order")
         return n
 
 
+ANON = re.compile(r"\?A0x[0-9a-f]{8}")
+
+
 def vtable_classes(img):
+    """(class, subobject offset) -> slot targets. Anonymous namespaces carry a per-build hash
+    (?A0x1aa454be::GripPanel), so it is dropped from the name."""
     r = pe_rtti.rtti(img.pe)
     out = {}
     for v in r["vtables"]:
-        out[(v["class"], v["offset"])] = v["slots"]
+        out[(ANON.sub("?A", v["class"]), v["offset"])] = v["slots"]
     return out
 
 
@@ -460,9 +484,16 @@ def main():
     objs = {a: o for a, (_, o) in funcs.items()}
     ours.finish(funcs)
     vr, vo = vtable_classes(ref), vtable_classes(ours)
-    rstarts = ref_starts(args.decomp, ref) | {t for s in vr.values() for t in s}
-    rstarts |= branch_targets(ref, rstarts)
-    ref.finish(rstarts)
+    xr, xo = exports(args.ref, ref.lo), exports(args.ours, ours.lo)
+    er = ref.lo + entry_point(ref.pe)
+    eo = ours.lo + entry_point(ours.pe)
+    calls, jumps = branch_targets(ref)
+    strong = {t for s in vr.values() for t in s} | calls | set(xr.values()) | {er}
+    weak = ref_starts(args.decomp, ref) | jumps
+    ref.finish(strong | weak)
+    # The decompile's seeds and jmp targets include points inside functions; a real start never
+    # follows an instruction that falls through into it.
+    ref.finish(strong | {a for a in weak if a in ref.index and after_terminator(ref, a)})
     print(f"reference: {len(ref.starts)} functions; ours: {len(ours.starts)} functions", file=sys.stderr)
 
     refnames = {}
@@ -472,48 +503,13 @@ def main():
             if len(p) >= 3 and p[0] != "address":
                 refnames[int(p[0], 16)] = (p[1], p[2])
 
-    m = Mapper(ref, ours)
-    # vftables of the same class, subobject and slot count
-    votes = defaultdict(Counter)
-    for key, slots in vr.items():
-        o = vo.get(key)
-        if o and len(o) == len(slots):
-            for x, y in zip(slots, o):
-                votes[x][y] += 1
-    for x, c in votes.items():
-        (y, n), *rest = c.most_common(2)
-        if not rest or n > 2 * rest[0][1]:
-            m.add(x, y, "vftable")
-    er = ref.lo + entry_point(ref.pe)
-    eo = ours.lo + entry_point(ours.pe)
-    m.add(er, eo, "vftable")
-    xr, xo = exports(args.ref, ref.lo), exports(args.ours, ours.lo)
-    for name, a in xr.items():
-        if name in xo:
-            m.add(a, xo[name], "vftable")
-    # names.tsv names unique among ours
-    simple = defaultdict(list)
-    for a, n in ours.names.items():
-        simple[msvc_simple_demangle(n)].append(a)
-    for a, (n, conf) in refnames.items():
-        if conf in ("high", "medium") and len(simple.get(n, [])) == 1:
-            m.add(a, simple[n][0], "names")
-    steps = [
-        ("order", m.order),
-        ("string", lambda: m.by_unique_key(lambda a: string_refs(ref, a), lambda a: string_refs(ours, a), "string")),
-        ("body", lambda: m.by_unique_key(
-            lambda a: _body_key(m.ref.get(a)[0]), lambda a: _body_key(m.ours.get(a)[0]), "body")),
-    ]
-    rounds = 0
-    while True:
-        rounds += 1
-        changed = m.propagate()
-        for name, fn in steps:
-            changed += fn()
-            changed += m.propagate()
-        print(f"round {rounds}: {len(m.r2o)} mapped", file=sys.stderr)
-        if not changed or rounds >= 8:
-            break
+    m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames)
+    hints = start_hints(m)
+    if hints:
+        # A second pass with the reference starts the first one implied.
+        print(f"{len(hints)} reference starts found through the mapping, mapping again", file=sys.stderr)
+        ref.finish(set(ref.starts) | hints)
+        m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames)
 
     def label(t):
         r = m.r2o.get(t)
@@ -602,6 +598,78 @@ def main():
         per[group(r[0])][r[1]] += 1
     for g, c in sorted(per.items(), key=lambda x: -sum(x[1].values())):
         print(f"  {g}: " + ", ".join(f"{k} {v}" for k, v in sorted(c.items())), file=sys.stderr)
+
+
+def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames):
+    m = Mapper(ref, ours)
+    # vftables of the same class, subobject and slot count
+    votes = defaultdict(Counter)
+    for key, slots in vr.items():
+        o = vo.get(key)
+        if o and len(o) == len(slots):
+            for x, y in zip(slots, o):
+                votes[x][y] += 1
+    for x, c in votes.items():
+        (y, n), *rest = c.most_common(2)
+        if not rest or n > 2 * rest[0][1]:
+            m.add(x, y, "vftable")
+    m.add(*entries, "vftable")
+    for name, a in xr.items():
+        if name in xo:
+            m.add(a, xo[name], "vftable")
+    # names.tsv names unique among ours
+    simple = defaultdict(list)
+    for a, n in ours.names.items():
+        simple[msvc_simple_demangle(n)].append(a)
+    for a, (n, conf) in refnames.items():
+        if conf in ("high", "medium") and len(simple.get(n, [])) == 1:
+            m.add(a, simple[n][0], "names")
+    steps = [
+        ("order", m.order),
+        ("string", lambda: m.by_unique_key(lambda a: string_refs(ref, a), lambda a: string_refs(ours, a), "string")),
+        ("body", lambda: m.by_unique_key(
+            lambda a: _body_key(m.ref.get(a)[0]), lambda a: _body_key(m.ours.get(a)[0]), "body")),
+    ]
+    rounds = 0
+    while True:
+        rounds += 1
+        changed = m.propagate()
+        for name, fn in steps:
+            changed += fn()
+            changed += m.propagate()
+        print(f"round {rounds}: {len(m.r2o)} mapped", file=sys.stderr)
+        if not changed or rounds >= 8:
+            break
+
+    return m
+
+
+def start_hints(m):
+    """Reference function starts implied by mapped pairs whose bodies line up: where our branch goes
+    to the start of another of our functions, the reference's goes to a start too (a tail jump into
+    a CRT function, je __floor_default); where our body is a strict prefix of the reference's, the
+    reference's next instruction starts the next function."""
+    ref, ours = m.ref.img, m.ours.img
+    hints = set()
+    for r, o in m.r2o.items():
+        a, _, _ = m.ref.get(r)
+        b, _, _ = m.ours.get(o)
+        ma, mb = masked(a), masked(b)
+        if len(mb) < len(ma) and ma[:len(mb)] == mb:
+            nxt = a[len(mb)][4]
+            if after_terminator(ref, nxt):
+                hints.add(nxt)
+            continue
+        if len(ma) + len(mb) >= 6000:
+            continue
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, ma, mb, autojunk=False).get_opcodes():
+            if tag != "replace" or i2 - i1 != j2 - j1:
+                continue
+            for x, y in zip(a[i1:i2], b[j1:j2]):
+                if x[0] == y[0] and y[1] is None and y[2] in ours.start_set and x[5] is not None \
+                        and x[5] not in ref.start_set and x[5] in ref.index:
+                    hints.add(x[5])
+    return hints
 
 
 def _body_key(rows):
