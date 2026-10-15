@@ -14,12 +14,17 @@
 #include "sdk_weapon_parse.h"
 
 #if defined( CLIENT_DLL )
+	#include "materialsystem/MaterialSystemUtil.h"
+
 	#define CWeaponSDKBase C_WeaponSDKBase
 	#define CLaserDot C_LaserDot
 #endif
 
 class CSDKPlayer;
 class CLaserDot;
+#if defined( CLIENT_DLL )
+class Beam_t;
+#endif
 
 // These are the names of the ammo types that the weapon script files reference.
 #define AMMO_BULLETS			"AMMO_BULLETS"
@@ -82,6 +87,12 @@ public:
 	// Laser aiming module
 	virtual void	UpdateLaserPosition( Vector vecMuzzlePos = vec3_origin, Vector vecEndPos = vec3_origin );
 	virtual void	CreateLaserPointer( void );
+
+#ifdef CLIENT_DLL
+	// The laser beam is drawn on the client, the way Valve's HL2MP RPG draws its guide laser.
+	virtual bool	IsTranslucent( void );
+	virtual void	DrawEffects( void );
+#endif
 	
 	// Get SDK weapon specific weapon data.
 	CSDKWeaponInfo const	&GetSDKWpnData() const;
@@ -94,15 +105,53 @@ public:
 	// override to play custom empty sounds
 	virtual bool PlayEmptySound();
 
+	// The server's weapons only fire once Deploy has run. REBUILD: Hidden's client.dll, built
+	// two months before its server, has no such test, so the client always says yes.
+	bool	IsDeployed( void ) const
+	{
+#ifdef CLIENT_DLL
+		return true;
+#else
+		return m_bDeployed;
+#endif
+	}
+
 #ifdef GAME_DLL
 	virtual void SendReloadEvents();
+#else
+	// We need to render opaque and translucent pieces
+	virtual RenderGroup_t	GetRenderGroup( void ) { return RENDER_GROUP_TWOPASS; }
+
+	virtual void	Release( void );
+	virtual void	NotifyShouldTransmit( ShouldTransmitState_t state );
+	virtual int		DrawModel( int flags );
+	virtual void	ViewModelDrawn( C_BaseViewModel *pBaseViewModel );
+
+	// View model bob, from Valve's HL2 weapons
+	virtual void	AddViewmodelBob( CBaseViewModel *viewmodel, Vector &origin, QAngle &angles );
+	virtual float	CalcViewmodelBob( void );
+
+	void			InitBeam( void );
+	void			GetWeaponAttachment( int attachmentId, Vector &outVector, Vector *dir = NULL );
+
+	// Tell the beam to die right away and let the beam code free it
+	void			KillBeam( void );
 #endif
 
 protected:
+#ifdef CLIENT_DLL
+	int					m_iUnknown;			// REBUILD: 4 bytes in Hidden's client that no code reads or writes
+	CMaterialReference	m_hSpriteMaterial;	// Used for the laser glint
+	CMaterialReference	m_hBeamMaterial;	// Used for the laser beam
+	Beam_t				*m_pBeam;			// Laser beam temp entity
+#endif
+
 	bool	m_bDeployed;		// REBUILD: name. Set by Deploy, cleared by Holster; the weapons only fire when it is set.
 	bool	m_bJustDeployed;	// REBUILD: name. Set by Deploy, cleared by the sonic weapon; nothing on the server reads it.
 
+#ifndef CLIENT_DLL
 	CHandle<CLaserDot>	m_hLaserDot;
+#endif
 
 private:
 	CWeaponSDKBase( const CWeaponSDKBase & );
