@@ -2447,12 +2447,6 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 						<Tool
 							Name="VCCLCompilerTool"/>
 					</FileConfiguration>
-					<FileConfiguration
-						Name="Release SDK|Win32"
-						ExcludedFromBuild="TRUE">
-						<Tool
-							Name="VCCLCompilerTool"/>
-					</FileConfiguration>
 				</File>
 				<File
 					RelativePath="..\game_shared\hl2\env_headcrabcanister_shared.cpp">
@@ -3458,6 +3452,9 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 				</File>
 				<File
 					RelativePath=".\hidden\hdn_hud_roundtimer.cpp">
+				</File>
+				<File
+					RelativePath=".\sdk\sdk_hud_health.cpp">
 				</File>
 			</Filter>
 			<Filter
