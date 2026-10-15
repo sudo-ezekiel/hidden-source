@@ -235,7 +235,10 @@ bool CMapOverview::CanPlayerBeSeen( int index )
 		return false;
 
 	// a player outside our PVS is only shown when spectators may see everyone
-	return !pPlayer->IsDormant() || mp_forcecamera.GetInt() == OBS_ALLOW_ALL;
+	if ( pPlayer->IsDormant() && mp_forcecamera.GetInt() != OBS_ALLOW_ALL )
+		return false;
+
+	return true;
 }
 
 void CMapOverview::SetPlayerPositions(int index, const Vector &position, const QAngle &angle)
@@ -611,9 +614,9 @@ void CMapOverview::ResetRound()
 		}
 
 		Q_memset( p->trail, 0, sizeof(p->trail) );
+
+		p->position = Vector( 0, 0, 0 );
 	}
-
-
 }
 
 void CMapOverview::OnMousePressed( MouseCode code )
@@ -759,7 +762,11 @@ void CMapOverview::SetZoom( float zoom )
 
 	if ( m_fZoom == -1.0f )
 	{
-		m_fZoom = m_fFullZoom;
+		// Hidden: no overview image, no zoom
+		if ( m_nMapTextureID > 0 )
+			m_fZoom = m_fFullZoom;
+		else
+			m_fZoom = 1.0f;
 	}
 	else if ( m_fZoom < 0.5f )
 	{

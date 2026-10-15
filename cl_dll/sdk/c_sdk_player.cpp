@@ -310,14 +310,11 @@ IRagdoll* C_SDKPlayer::GetRepresentativeRagdoll() const
 
 ShadowType_t C_SDKPlayer::ShadowCastType( void )
 {
-	if ( !IsVisible() )
-		return SHADOWS_NONE;
-
 	// Hidden: the Hidden casts no shadow
-	if ( GetTeamNumber() == TEAM_HIDDEN )
-		return SHADOWS_NONE;
+	if ( IsVisible() && GetTeamNumber() != TEAM_HIDDEN )
+		return SHADOWS_RENDER_TO_TEXTURE_DYNAMIC;
 
-	return SHADOWS_RENDER_TO_TEXTURE_DYNAMIC;
+	return SHADOWS_NONE;
 }
 
 

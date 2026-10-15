@@ -365,7 +365,7 @@ void CBaseHudWeaponSelection::UserCmd_NextWeapon(void)
 	}
 
 	CycleToNextWeapon();
-	UpdateSelectionTime();
+	SelectWeapon();	// Hidden: the weapon is switched to at once
 }
 
 //-----------------------------------------------------------------------------
@@ -383,7 +383,7 @@ void CBaseHudWeaponSelection::UserCmd_PrevWeapon(void)
 	}
 
 	CycleToPrevWeapon();
-	UpdateSelectionTime();
+	SelectWeapon();	// Hidden: the weapon is switched to at once
 }
 
 //-----------------------------------------------------------------------------
@@ -445,6 +445,7 @@ void CBaseHudWeaponSelection::SelectWeapon( void )
 	// Don't allow selections of weapons that can't be selected (out of ammo, etc)
 	if ( !GetSelectedWeapon()->CanBeSelected() )
 	{
+		DevMsg( 1, "Weapon not selected\n" );
 		player->EmitSound( "Player.DenyWeaponSelection" );
 	}
 	else
