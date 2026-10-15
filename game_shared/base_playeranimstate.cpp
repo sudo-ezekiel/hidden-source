@@ -50,7 +50,8 @@ ConVar mp_facefronttime(
 ConVar mp_ik( "mp_ik", "1", FCVAR_REPLICATED, "Use IK on in-place turns." );
 
 // Pose parameters stored for debugging.
-static float g_flLastBodyPitch, g_flLastBodyYaw, m_flLastMoveYaw;
+float g_flLastBodyPitch, g_flLastBodyYaw, m_flLastMoveYaw;
+
 
 
 // ------------------------------------------------------------------------------------------------ //
