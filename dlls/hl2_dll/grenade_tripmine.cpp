@@ -311,5 +311,5 @@ void CTripmineGrenade::DelayDeathThink( void )
 	KillBeam();
 	MakeBeam();
 	SetThink( &CTripmineGrenade::BeamBreakThink );
-	SetNextThink( gpGlobals->curtime + 2.5 );
+	SetNextThink( gpGlobals->curtime + 2.5f );
 }
