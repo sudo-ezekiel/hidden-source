@@ -3462,6 +3462,15 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 				<File
 					RelativePath=".\sdk\sdk_hud_health.cpp">
 				</File>
+				<File
+					RelativePath=".\game_controls\NavProgress.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_radiomenu.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\MyPanel.cpp">
+				</File>
 			</Filter>
 			<Filter
 				Name="Hidden Rules"
