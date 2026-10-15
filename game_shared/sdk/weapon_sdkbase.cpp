@@ -673,7 +673,10 @@ bool CWeaponSDKBase::IsTranslucent( void )
 {
 	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
 
-	return pPlayer->LAMIsOn();
+	if ( pPlayer->LAMIsOn() )
+		return true;
+
+	return false;
 }
 
 //-----------------------------------------------------------------------------
