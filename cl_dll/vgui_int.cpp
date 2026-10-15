@@ -199,7 +199,7 @@ void VGui_PreRender()
 {
 	VPROF( "VGui_PreRender" );
 	loadingdisc->SetLoadingVisible( engine->IsDrawingLoadingImage() && !engine->IsPlayingDemo() );
-	loadingdisc->SetPausedVisible( engine->IsPaused() && !engine->IsTakingScreenshot() );
+	loadingdisc->SetPausedVisible( engine->IsPaused() && !engine->IsTakingScreenshot() && !engine->IsPlayingDemo() );
 }
 
 //-----------------------------------------------------------------------------

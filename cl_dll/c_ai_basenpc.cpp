@@ -7,11 +7,10 @@
 #include "cbase.h"
 #include "c_AI_BaseNPC.h"
 #include "engine/IVDebugOverlay.h"
+#include "death_pose.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
-
-#define MAX_DEATHPOSE_FRAMES 6
 
 IMPLEMENT_CLIENTCLASS_DT( C_AI_BaseNPC, DT_AI_BaseNPC, CAI_BaseNPC )
 	RecvPropInt( RECVINFO( m_lifeState ) ),
@@ -50,57 +49,5 @@ void C_AI_BaseNPC::GetRagdollPreSequence( matrix3x4_t *preBones, float flTime )
 
 void C_AI_BaseNPC::GetRagdollCurSequence( matrix3x4_t *curBones, float flTime )
 {
-	// blow the cached prev bones
-	InvalidateBoneCache();
-
-	Vector vPrevOrigin = GetAbsOrigin();
-
-	Interpolate( flTime );
-	
-	if ( m_iDeathPose != ACT_INVALID )
-	{
-		Vector vNewOrigin = GetAbsOrigin();
-		Vector vDirection = vNewOrigin - vPrevOrigin;
-
-		float flVelocity = VectorNormalize( vDirection );
-
-		Vector vAdjustedOrigin = vNewOrigin + vDirection * ( ( flVelocity * flVelocity ) * gpGlobals->frametime );
-
-		int iTempSequence = GetSequence();
-		float flTempCycle = GetCycle();
-
-		SetEffects( EF_NOINTERP );
-
-		SetSequence( m_iDeathPose );
-
-		SetCycle( (float)m_iDeathFrame / MAX_DEATHPOSE_FRAMES );
-
-		SetAbsOrigin( vAdjustedOrigin );
-
-		// Now do the current bone setup
-		SetupBones( curBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, flTime );
-
-		SetAbsOrigin( vNewOrigin );
-
-		// blow the cached prev bones
-		InvalidateBoneCache();
-
-		SetSequence( iTempSequence );
-		SetCycle( flTempCycle );
-
-		Interpolate( gpGlobals->curtime );
-
-		SetupBones( NULL, -1, BONE_USED_BY_ANYTHING, gpGlobals->curtime );
-
-		RemoveEffects( EF_NOINTERP );
-	}
-	else
-	{
-		SetupBones( curBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, flTime );
-
-		// blow the cached prev bones
-		InvalidateBoneCache();
-
-		SetupBones( NULL, -1, BONE_USED_BY_ANYTHING, flTime );
-	}
+	GetRagdollCurSequenceWithDeathPose( this, curBones, flTime, m_iDeathPose, m_iDeathFrame );
 }
