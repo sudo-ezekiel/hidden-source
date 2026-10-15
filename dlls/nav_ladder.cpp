@@ -334,29 +334,53 @@ void CNavLadder::DrawLadder( void ) const
 	absMax.x += max( left.x, right.x );
 	absMax.y += max( left.y, right.y );
 
-	Vector bottomLeft, bottomRight;
+	Vector bottomLeft, bottomRight, topLeft, topRight;
+	topLeft.z = topRight.z = m_top.z;
+	bottomLeft.z = bottomRight.z = m_bottom.z;
 	switch ( m_dir )
 	{
 	case NORTH:
-		bottomLeft = Vector( absMin.x, absMin.y, m_bottom.z );
-		bottomRight = Vector( absMax.x, absMin.y, m_bottom.z );
+		topLeft.x = absMin.x;
+		topLeft.y = absMin.y;
+		bottomLeft.x = absMin.x;
+		bottomLeft.y = absMin.y;
+		topRight.x = absMax.x;
+		topRight.y = absMin.y;
+		bottomRight.x = absMax.x;
+		bottomRight.y = absMin.y;
 		break;
 	case SOUTH:
-		bottomLeft = Vector( absMin.x, absMax.y, m_bottom.z );
-		bottomRight = Vector( absMax.x, absMax.y, m_bottom.z );
+		topLeft.x = absMin.x;
+		topLeft.y = absMax.y;
+		bottomLeft.x = absMin.x;
+		bottomLeft.y = absMax.y;
+		topRight.x = absMax.x;
+		topRight.y = absMax.y;
+		bottomRight.x = absMax.x;
+		bottomRight.y = absMax.y;
 		break;
 	case EAST:
-		bottomLeft = Vector( absMax.x, absMin.y, m_bottom.z );
-		bottomRight = Vector( absMax.x, absMax.y, m_bottom.z );
+		topLeft.x = absMax.x;
+		topLeft.y = absMin.y;
+		bottomLeft.x = absMax.x;
+		bottomLeft.y = absMin.y;
+		topRight.x = absMax.x;
+		topRight.y = absMax.y;
+		bottomRight.x = absMax.x;
+		bottomRight.y = absMax.y;
 		break;
 	case WEST:
-		bottomLeft = Vector( absMin.x, absMin.y, m_bottom.z );
-		bottomRight = Vector( absMin.x, absMax.y, m_bottom.z );
+	default:
+		topLeft.x = absMin.x;
+		topLeft.y = absMin.y;
+		bottomLeft.x = absMin.x;
+		bottomLeft.y = absMin.y;
+		topRight.x = absMin.x;
+		topRight.y = absMax.y;
+		bottomRight.x = absMin.x;
+		bottomRight.y = absMax.y;
 		break;
 	}
-
-	Vector topLeft( bottomLeft.x, bottomLeft.y, m_top.z );
-	Vector topRight( bottomRight.x, bottomRight.y, m_top.z );
 
 	int bgcolor[4];
 	if ( 4 == sscanf( nav_area_bgcolor.GetString(), "%d %d %d %d", &(bgcolor[0]), &(bgcolor[1]), &(bgcolor[2]), &(bgcolor[3]) ) )

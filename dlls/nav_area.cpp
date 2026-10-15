@@ -3042,8 +3042,8 @@ void CNavArea::UpdateBlocked( void )
 
 	const float sizeX = max( 1, min( GetSizeX()/2 - 5, HalfHumanWidth ) );
 	const float sizeY = max( 1, min( GetSizeY()/2 - 5, HalfHumanWidth ) );
-	Vector mins( -sizeX, -sizeY, 0 );
-	Vector maxs( sizeX, sizeY, VEC_DUCK_HULL_MAX.z );
+	Vector mins = Vector( -sizeX, -sizeY, 0 );
+	Vector maxs = Vector( sizeX, sizeY, VEC_DUCK_HULL_MAX.z );
 
 	maxs.z -= HalfHumanHeight;
 
@@ -3066,9 +3066,9 @@ void CNavArea::UpdateBlocked( void )
 	if ( m_isBlocked )
 	{
 		// see if the blocker is a single entity we can walk through
+		CBaseEntity *blocker = NULL;
 		CBaseEntity *blockers[1];
 		CNavBlockerEnumerator enumerator( blockers, 1 );
-		CBaseEntity *blocker = NULL;
 		if ( GetPushawayEntsInVolume( origin, mins, maxs, blockers, 1, PARTITION_ENGINE_SOLID_EDICTS, &enumerator ) == 1 )
 		{
 			blocker = blockers[0];
