@@ -43,6 +43,11 @@ public:
 		SetButtonActivationType(ACTIVATE_ONPRESSED);
 
 		SetContentAlignment(Label::a_center);
+
+		// Hidden
+		SetEnabled( true );
+		SetMouseInputEnabled( true );
+		SetUseCaptureMouse( true );
 	}
 
 	void OnMouseFocusTicked()
@@ -80,9 +85,8 @@ public:
 				SetSelected(true);
 				Repaint();
 			}
-			
-			// lock mouse input to going to this button
-			input()->SetMouseCapture(GetVPanel());
+
+			// Hidden: no mouse capture here, the scroll bar holds it
 		}
 	}
     virtual void OnMouseReleased(MouseCode code)
@@ -99,9 +103,8 @@ public:
 				SetSelected(false);
 				Repaint();
 			}
-			
-			// lock mouse input to going to this button
-			input()->SetMouseCapture(NULL);
+
+			// Hidden: no mouse capture here, the scroll bar holds it
 		}
     }
 
@@ -359,7 +362,7 @@ void ScrollBar::OnMousePressed(MouseCode code)
 //-----------------------------------------------------------------------------
 void ScrollBar::OnMouseReleased(MouseCode code)
 {
-	if ( m_iPressedPart == 0 || m_iPressedPart == 1 )
+	if ( m_iPressedPart == 1 || m_iPressedPart == 0 )
 	{
 		static_cast< Panel * >( _button[m_iPressedPart] )->OnMouseReleased( code );
 		input()->SetMouseCapture( NULL );
@@ -539,12 +542,13 @@ void ScrollBar::OnMouseFocusTicked()
 	int direction = 0;
 	
 	// top button is down
-	if ( _button[0]->IsDepressed() )
+	// Hidden: the buttons are selected rather than depressed
+	if ( _button[0]->IsSelected() )
 	{
 		direction = -1;
 	}
 	// bottom top button is down
-	else if (_button[1]->IsDepressed())
+	else if (_button[1]->IsSelected())
 	{
 		direction = 1;
 	}
@@ -569,6 +573,15 @@ void ScrollBar::OnMouseFocusTicked()
 		// if neither button is down keep delay at max
 		_scrollDelay = system()->GetTimeMillis() + SCROLL_BAR_DELAY;
 		_respond = true; 
+	}
+
+	// Hidden: the slider is dragged through the bar, which holds the mouse capture
+	if ( m_iPressedPart == 2 )
+	{
+		int x, y;
+		input()->GetCursorPos( x, y );
+		_slider->ScreenToLocal( x, y );
+		_slider->OnCursorMoved( x, y );
 	}
 }
 
