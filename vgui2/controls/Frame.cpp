@@ -186,6 +186,12 @@ namespace
 			input()->SetMouseCapture(NULL);
 		}
 
+		void OnMouseCaptureLost()
+		{
+			Panel::OnMouseCaptureLost();
+			_dragging = false;
+		}
+
 		void ApplySchemeSettings(IScheme *pScheme)
 		{
 			Panel::ApplySchemeSettings(pScheme);
