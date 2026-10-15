@@ -217,23 +217,33 @@ similarity, ref size, our size, our name, demangled name, ref address, our addre
 names.tsv name. A call graph mapping makes the callee's name agree in the caller by construction;
 a wrong pairing then shows up as a changed callee.
 
-Result (client-finish 014ec2e; main f12fee2 had 23502 same and 336 changed strict, 23275 and 348
-loose):
+Result (class-image e71adaf; main 2f11229, the client-finish merge, had 23764 same and 143 changed
+strict, 23534 and 156 loose):
 
 | | strict: functions | bytes | --loose: functions | bytes |
 |---|---|---|---|---|
 | client.dll functions | 24320 | 2,148,634 | 24320 | 2,148,634 |
-| mapped | 23907 (98.3%) | 2,115,949 | 23690 (97.4%) | 2,110,786 |
-| same | 23764 | 2,070,313 | 23534 | 2,065,121 |
-| changed | 143 | 45,636 | 156 | 45,665 |
-| unmapped, client.dll | 413 | 32,685 | 630 | 37,848 |
-| unmapped, ours | 322 | 11,552 | 539 | 16,707 |
+| mapped | 23922 (98.4%) | 2,117,964 | 23705 (97.5%) | 2,112,980 |
+| same | 23780 | 2,072,512 | 23550 | 2,067,499 |
+| changed | 142 | 45,452 | 155 | 45,481 |
+| unmapped, client.dll | 398 | 30,670 | 615 | 35,654 |
+| unmapped, ours | 316 | 11,479 | 533 | 16,455 |
 
-By origin of our function, strict: client objects 20167 same, 84 changed; vgui_controls 3001
+By origin of our function, strict: client objects 20183 same, 83 changed; vgui_controls 3001
 same, 4 changed; libc.lib 462 same, 54 changed; nvtc.lib 19 same, 1 changed; import thunks 115
-same. Mapped by vftable 5418, call graph 4548, order 12775, string 787, body 110, strict 268,
-table 1. Most unmapped functions are 32 bytes or less (270 of 413), copies of small inline
+same. Mapped by vftable 5418, call graph 4553, order 12783, string 788, body 111, strict 268,
+table 1. Most unmapped functions are 32 bytes or less (263 of 398), copies of small inline
 functions that nothing tells apart.
+
+The class image (class-image lane) is in sdk/clientmode_sdk.cpp: ClientModeSDKNormal::PostRenderVGui
+draws the 3DModel of the first visible CSClassImagePanel (models/player/iris.mdl in Teammenu.res and
+Weaponmenu.res) through UpdateClassImageEntity, Counter-Strike: Source's code with Hidden's
+sequences and weapon: a client-only C_BaseAnimatingOverlay on "Idle_lower" with "walk_lower" and
+"Idle_Upper_Aug" layers, a bone-merged models/weapons/f2000/w_f2000.mdl, a dynamic light, and a
+view of its own (fov 54, 110 units behind the model, which faces yaw 210). All 14 functions of it
+(PostRenderVGui, the renderer at 241e6440, WillPanelBeVisible, ShouldRecreateClassImageEntity and
+the CHandle and CUtlVector COMDATs) are same in both modes, in client.dll's order, and the two
+handles sit in .data where client.dll has them.
 
 Strict against loose: 6 functions are same only in the loose mode, all pairs of functions with the
 same body that the strict tokens pair the other way (CMyPanel::GetPanelBaseClassName,
@@ -264,11 +274,9 @@ want the forward move stored before m_bSpeedCropped, server_i486.so wants the bo
 the load and the store; main keeps the GCC form). The fourth is hand-written CRT code in libc.lib
 and nvtc.lib, which the mapping cannot pair cleanly and which is left as it is.
 
-Missing code, from the unmapped client.dll functions over 32 bytes (143, of which 97 start at an
-address that is not 16-byte aligned and are the tails of reference functions cut short): the
-class image entity of ClientModeSDKNormal at 241e6440 (1633 bytes, a CS-style C_BaseAnimatingOverlay
-that plays "Idle_lower", with its helpers at 241e5ef0 to 241e63c0), an unreferenced C_BasePlayer
-helper at 24099df0 that hashes a lower-cased file name (CRC32_Init, strlwr), and two TGAWriter
+Missing code, from the unmapped client.dll functions over 32 bytes (135, of which 97 start at an
+address that is not 16-byte aligned and are the tails of reference functions cut short): an
+unreferenced C_BasePlayer helper at 24099df0 that hashes a lower-cased file name (CRC32_Init, strlwr), and two TGAWriter
 functions from a different SDK drop (24197430 and 241977e0). The rest are CUtlVector and CUtlMemory
 helpers, DECLARE map helpers and CRT pieces.
 
