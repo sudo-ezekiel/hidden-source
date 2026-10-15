@@ -229,6 +229,21 @@ void C_SDKRagdoll::CreateRagdoll()
 
 	SetModelIndex( m_nModelIndex );
 
+	// Hidden: the Hidden's ragdoll uses his own skin and body group; a marine's copies the player's.
+	// REBUILD: pPlayer is not checked for NULL here, as in client.dll
+	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+	{
+		DevMsg( 1, "player is hidden\n" );
+		m_nSkin = 2;
+		m_nBody = 1;
+	}
+	else
+	{
+		DevMsg( 1, "player is marine\n" );
+		m_nSkin = pPlayer->m_nSkin;
+		m_nBody = pPlayer->m_nBody;
+	}
+
 	// Turn it into a ragdoll.
 	// Make us a ragdoll..
 	m_nRenderFX = kRenderFxRagdoll;
@@ -272,6 +287,12 @@ C_BaseAnimating * C_SDKPlayer::BecomeRagdollOnClient( bool bCopyEntity )
 }
 
 
+void C_SDKPlayer::PostThink( void )
+{
+	BaseClass::PostThink();
+}
+
+
 IRagdoll* C_SDKPlayer::GetRepresentativeRagdoll() const
 {
 	if ( m_hRagdoll.Get() )
@@ -284,6 +305,19 @@ IRagdoll* C_SDKPlayer::GetRepresentativeRagdoll() const
 	{
 		return NULL;
 	}
+}
+
+
+ShadowType_t C_SDKPlayer::ShadowCastType( void )
+{
+	if ( !IsVisible() )
+		return SHADOWS_NONE;
+
+	// Hidden: the Hidden casts no shadow
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+		return SHADOWS_NONE;
+
+	return SHADOWS_RENDER_TO_TEXTURE_DYNAMIC;
 }
 
 

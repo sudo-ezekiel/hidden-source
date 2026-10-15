@@ -35,6 +35,10 @@ public:
 	virtual void PostDataUpdate( DataUpdateType_t updateType );
 	virtual void OnDataChanged( DataUpdateType_t updateType );
 
+	// Hidden: the Hidden casts no shadow
+	virtual ShadowType_t ShadowCastType( void );
+	virtual void PostThink( void );
+
 
 // Called by shared code.
 public:
