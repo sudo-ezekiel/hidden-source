@@ -370,6 +370,9 @@ public:
 
 	virtual void			NotifyShouldTransmit( ShouldTransmitState_t state );
 
+	// Valve's mid-2005 SDK: OnDataChanged sets the world model through this.
+	virtual int				GetWorldModelIndex( void );
+
 #endif // End client-only methods
 
 private:
@@ -456,11 +459,13 @@ private:
 	COutputEvent			m_OnNPCPickup;		// Fired when an NPC picks up the weapon.
 
 #else // Client .dll only
-	int						m_iOldState;
 	bool					m_bJustRestored;
 
 	// Allow weapons resource to access m_hWeaponFileInfo directly
 	friend class			WeaponsResource;
+
+	// Valve's mid-2005 SDK order: m_iOldState follows m_bJustRestored.
+	int						m_iOldState;
 
 #endif // End Client .dll only
 };
