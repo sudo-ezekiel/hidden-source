@@ -3462,6 +3462,15 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 				<File
 					RelativePath=".\hidden\MyPanel.cpp">
 				</File>
+				<File
+					RelativePath=".\hidden\hdn_menu.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_teammenu.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_weaponmenu.cpp">
+				</File>
 			</Filter>
 			<Filter
 				Name="Hidden Rules"
