@@ -94,7 +94,7 @@ To see how one function differs:
 | player.cpp | CBasePlayer::SetFOV | 0.815 | Scheduling; two ternary rewrites were worse. |
 | player.cpp | CBasePlayer::Spawn | 0.886 | Register allocation (one extra spill). |
 | sdk_player.cpp | CSDKPlayer::Spawn | 0.875 | Register allocation. |
-| util_shared.cpp | PassServerEntityFilter | 0.954 | The final marine-clip test: Hidden computes `!(a & b)` with `test` and `sete`, ours rewrites it as `!a | !b` with `or`. Six forms tried. Untried: `return ((a) & (b)) == 0;` or two bool locals. |
+| util_shared.cpp | PassServerEntityFilter | 0.954 | The final marine-clip test: Hidden computes `!(a & b)` with `test` and `sete`, ours rewrites it as `!a | !b` with `or`. Nine forms tried. `return ((a) & (b)) == 0;` and two bool locals both give Hidden's `sete`/`setne`/`test`/`sete` shape but widen the operands to int (one extra `xor`, a 32-bit `test`); `bool b = a; b &= c; return !b;` is further off. |
 | weapon_fn2000.cpp, weapon_p90.cpp | PrimaryAttack | 0.868, 0.949 | Register allocation and tail sharing in the recoil `? :` with SHARED_RANDOMINT; the FN2000 also swaps two spill slots. |
 | weapon_fn303.cpp | CFN303Ball::BoltTouch | 0.921 | Register choice (ebx/esi/edi) in the stun and weighting block, and tail sharing of a DevMsg. |
 | weapon_sdkbase.cpp | CWeaponSDKBase::CreateLaserPointer | 0.809 | Scheduling, and a tail that Hidden's build duplicates. |
