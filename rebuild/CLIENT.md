@@ -125,9 +125,34 @@ probe per source file (the file itself plus `(int)&((Class *)0)->member` for eac
 `<work>/out/layout/recv_offsets.tsv`. Run `client_check.sh` first (it needs the mirror and the
 makefile). Read the result as differences: a constant gap over a class's own members means that
 class is right and a base class differs. Example, after the C_BasePlayer state commit: every
-C_BasePlayer member is 0x4c lower than in client.dll, while C_BaseEntity's are 0x10 lower and
-C_BaseCombatCharacter's m_iAmmo 0x20 lower, so the missing bytes are in the bases. Members written
+C_BasePlayer member was 0x4c lower than in client.dll, while C_BaseEntity's were 0x10 lower and
+C_BaseCombatCharacter's m_iAmmo 0x20 lower, so the missing bytes were in the bases. Members written
 as `m_vecViewOffset[0]` (a Vector element) print `?`: the probe expression is not a constant there.
+
+Two more references for members without a RecvProp, in `decomp/client0614/`:
+
+- `class_sizes.tsv`: sizeof for the 58 classes client.dll's client class factories allocate (the
+  constant passed to operator new, FUN_24089b40, just before the constructor call).
+- `typedesc_tables.txt`: the 41 prediction/datadesc typedescription tables (0x34-byte entries:
+  type, name, offset), which give offsets for predicted members that are not networked.
+
+MSVC 7.1 lays these classes out differently from GCC 3.4 in three ways, and the compile check makes
+GCC follow client.dll in each (all GCC-only, so an MSVC build is unchanged):
+
+- Member function pointers of C_BaseEntity (`m_pfnThink`, `m_pfnTouch`) are 16 bytes in MSVC,
+  because BASEPTR names the class before it is defined and MSVC falls back to its general
+  representation; GCC uses 8. `c_baseentity.h` adds 8 bytes after each under `__GNUC__`.
+- MSVC aligns doubles in structures to 8 bytes: `client_check.sh` passes `-malign-double`
+  (CSimplePhysics holds a double).
+- MSVC aligns C_BaseEntity, and so every entity class, to 8 bytes: every size in
+  `class_sizes.tsv` is a multiple of 8, and entity-type members such as C_FireSmoke's C_FireSprite
+  array sit on 8-byte boundaries. `REBUILD_MSVC_ALIGN8` on C_BaseEntity gives GCC the same
+  alignment. GCC (Itanium ABI) also reuses a base class's tail padding for the derived class's
+  first members, which MSVC never does, so a base class whose members end 4 bytes short of a
+  multiple of 8 ends with `REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )`. A leaf class needs no pad.
+  Which C_BaseEntity member gives MSVC the 8-byte alignment is not known yet.
+
+With these, all 58 factory sizes match.
 
 ## Original build settings ("Release SDK|Win32", cl_dll/client_sdk.vcproj)
 

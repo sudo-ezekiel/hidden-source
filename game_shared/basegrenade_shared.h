@@ -128,6 +128,10 @@ protected:
 private:
 	CNetworkHandle( CBaseEntity, m_hThrower );					// Who threw this grenade
 
+#ifdef CLIENT_DLL
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0xd6c; client.dll's C_BaseGrenade is 0xd70 bytes
+#endif
+
 	CBaseGrenade( const CBaseGrenade & ); // not defined, not accessible
 
 };

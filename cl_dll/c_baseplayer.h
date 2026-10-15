@@ -26,6 +26,16 @@ class C_BaseViewModel;
 class C_FuncLadder;
 class CFlashlightEffect;
 
+// Hidden: one entry of the damage list printed to the console at the end of a round or on death
+// (REBUILD: names; client.dll compares the ids with the local player's userid)
+struct PlayerDamageRecord_t
+{
+	int			m_iAttacker;	// userid
+	int			m_iVictim;	// userid
+	float		m_flDamage;
+	int			m_iShots;
+};
+
 class C_CommandContext
 {
 public:
@@ -292,6 +302,12 @@ public:
 	const char		*GetCurrentLocation( void ) { return m_CurrentLocation; }	// REBUILD: no client copy found; named as the server's
 	const char		*GetLastKnownPlaceName( void ) const { return m_szLastPlaceName; }	// REBUILD: no client copy found; named as the server's
 
+	// Hidden: data client.dll keeps ahead of m_StuckLast (REBUILD: names)
+	int								m_iUnknownd6c[3];		// 12 bytes at 0xd6c, no use found
+	CUtlVector< PlayerDamageRecord_t >	m_DamageRecords;		// filled from player_hurt, cleared on game_round_restart
+	bool							m_bDamageListPrinted;	// set once the list is printed, cleared on game_round_end
+	float							m_flNextAuraSound;		// next "Hidden.AuraLoop" while the aura is on
+
 public:
 	int m_StuckLast;
 	
@@ -471,6 +487,9 @@ public:
 
 	float GetLaggedMovementValue( void ){ return m_flLaggedMovementValue;	}
 	bool  ShouldGoSouth( Vector vNPCForward, Vector vNPCRight ); //Such a bad name.
+
+private:
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x11b4; client.dll's C_BasePlayer is 0x11b8 bytes
 };
 
 EXTERN_RECV_TABLE(DT_BasePlayer);

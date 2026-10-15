@@ -133,6 +133,8 @@ private:
 	void			ComputeBlendedSetting( Emphasized_Phoneme *classes, float emphasis_intensity );
 
 	Emphasized_Phoneme m_PhonemeClasses[ NUM_PHONEME_CLASSES ];
+
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0xbfc; client.dll's C_BaseFlex is 0xc00 bytes
 };
 
 EXTERN_RECV_TABLE(DT_BaseFlex);

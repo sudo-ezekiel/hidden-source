@@ -122,6 +122,8 @@ protected:
 	CHandle<C_BasePlayer>		m_hPrevPlayer;
 
 	ViewSmoothingData_t			m_ViewSmoothingData;
+
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x8bc; client.dll's C_PropVehicleDriveable is 0x8c0 bytes
 };
 
 

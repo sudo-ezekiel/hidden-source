@@ -320,6 +320,8 @@ private:
 	CNetworkVar( float, m_flBlendWeight );
 	float m_flBlendWeightCurrent;
 	CNetworkVar( int, m_nOverlaySequence );
+
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0xd1c; client.dll's C_ServerRagdoll is 0xd20 bytes
 };
 
 
