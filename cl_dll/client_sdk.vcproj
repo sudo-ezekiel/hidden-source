@@ -3426,6 +3426,42 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 			<Filter
 				Name="Hidden HUD"
 				Filter="">
+				<File
+					RelativePath=".\hidden\hdn_hud_hammo.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_hhealth.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_hstamina.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_hstaminabar.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_htimer.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_ihealth.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_ilocation.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_itimer.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_location.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_material.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_name.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_radar.cpp">
+				</File>
 			</Filter>
 			<Filter
 				Name="Hidden Rules"
