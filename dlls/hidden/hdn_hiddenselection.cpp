@@ -14,10 +14,14 @@
 
 ConVar hdn_selectmethod( "hdn_selectmethod", "0", FCVAR_REPLICATED | FCVAR_NOTIFY, "0 = weighted, 1 = classic, 2 = random - defaults to weighted" );
 
-void CHiddenSelector::ClearHidden( void )
+CHiddenSelector::CHiddenSelector()
 {
-	m_iHiddenRounds = 0;
 	m_pCurrentHidden = NULL;
+	m_iHiddenRounds = 0;
+}
+
+CHiddenSelector::~CHiddenSelector()
+{
 }
 
 void CHiddenSelector::ForfeitHidden( CBasePlayer *hidden )
@@ -33,6 +37,12 @@ void CHiddenSelector::NewHidden( CBasePlayer *hidden )
 	// In classic selection the player who killed the Hidden takes his place
 	if ( hdn_selectmethod.GetInt() == 1 && !hidden->GetNoHidden() )
 		m_pCurrentHidden = hidden;
+}
+
+void CHiddenSelector::ClearHidden( void )
+{
+	m_iHiddenRounds = 0;
+	m_pCurrentHidden = NULL;
 }
 
 CBasePlayer *CHiddenSelector::GetCurrentHidden( void )
@@ -96,118 +106,6 @@ void CHiddenSelector::SelectWeightedHidden( CUtlVector<CBasePlayer *> &players )
 
 	if ( !m_pCurrentHidden )
 		UTIL_ClientPrintAll( HUD_PRINTNOTIFY, "No player is eligible for weighted selection." );
-}
-
-void CHiddenSelector::NotEnoughPlayers( CUtlVector<CBasePlayer *> &players, char *type, int total, int ready, int required )
-{
-	for ( int i = 0; i < total; i++ )
-		players[i]->StartObserverMode( OBS_MODE_FIXED );
-
-	char cbuffer[64];
-	int iMore;
-	char *pszWhat;
-	if ( total < required )
-	{
-		iMore = required - total;
-		pszWhat = "connected";
-	}
-	else
-	{
-		iMore = required - ready;
-		pszWhat = "ready";
-	}
-	Q_snprintf( cbuffer, sizeof( cbuffer ), "%s Game : Needs %d more %s player(s) to start", type, iMore, pszWhat );
-
-	UTIL_ClientPrintAll( HUD_PRINTCENTER, cbuffer );
-}
-
-CHiddenSelector::CHiddenSelector()
-{
-	m_pCurrentHidden = NULL;
-	m_iHiddenRounds = 0;
-}
-
-CHiddenSelector::~CHiddenSelector()
-{
-}
-
-void CHiddenSelector::CheckSelectFlags( CUtlVector<CBasePlayer *> &from, CUtlVector<CBasePlayer *> &to, bool reset )
-{
-	int count = from.Count();
-	to.Purge();
-
-	for ( int i = 0; i < count; i++ )
-	{
-		if ( reset )
-			from[i]->SetHadHidden( false );
-
-		if ( !from[i]->GetHadHidden() )
-			to.AddToTail( from[i] );
-	}
-
-	// Everyone has had a turn: start over
-	if ( to.Count() == 0 )
-		CheckSelectFlags( from, to, true );
-}
-
-void CHiddenSelector::SelectRandomHidden( CUtlVector<CBasePlayer *> &fromthese )
-{
-	CUtlVector<CBasePlayer *> realfrom;
-	CheckSelectFlags( fromthese, realfrom, false );
-
-	int iRandom = random->RandomInt( 0, realfrom.Count() - 1 );
-	m_pCurrentHidden = realfrom[iRandom];
-}
-
-void CHiddenSelector::SetSelectHidden( CUtlVector<CBasePlayer *> &fromthese )
-{
-	CUtlVector<CBasePlayer *> marines;		// willing, not the Hidden now
-	CUtlVector<CBasePlayer *> hiddens;		// willing, the Hidden now
-	CUtlVector<CBasePlayer *> forfeits;	// asked not to be the Hidden
-
-	for ( int i = 0; i < fromthese.Count(); i++ )
-	{
-		CBasePlayer *candidate = fromthese[i];
-		if ( candidate->GetNoHidden() )
-			forfeits.AddToTail( candidate );
-		else if ( candidate->GetTeamNumber() == TEAM_HIDDEN )
-			hiddens.AddToTail( candidate );
-		else
-			marines.AddToTail( candidate );
-	}
-
-	// Prefer someone who is not the Hidden yet, and anyone over a player who opted out
-	if ( marines.Count() > 0 )
-		SelectRandomHidden( marines );
-	else if ( hiddens.Count() > 0 )
-		SelectRandomHidden( hiddens );
-	else
-		SelectRandomHidden( forfeits );
-}
-
-void CHiddenSelector::FillPlayerVectors( void )
-{
-	m_prefplayers.Purge();
-	m_readyplayers.Purge();
-	m_allplayers.Purge();
-
-	for ( int i = 0; i <= gpGlobals->maxClients; i++ )
-	{
-		CBasePlayer *player = UTIL_PlayerByIndex( i );
-		if ( !player )
-			continue;
-
-		int iTeam = player->GetTeamNumber();
-		if ( iTeam != TEAM_SPECTATOR )
-		{
-			if ( iTeam == TEAM_IRIS && player->IsAlive() && !player->GetNoHidden() )
-				m_prefplayers.AddToTail( player );
-
-			m_readyplayers.AddToTail( player );
-		}
-
-		m_allplayers.AddToTail( player );
-	}
 }
 
 CBasePlayer *CHiddenSelector::SelectHidden( int gametype, int maxrounds )
@@ -289,4 +187,106 @@ CBasePlayer *CHiddenSelector::SelectHidden( int gametype, int maxrounds )
 
 	m_pCurrentHidden->SetHadHidden( true );
 	return m_pCurrentHidden;
+}
+
+void CHiddenSelector::SetSelectHidden( CUtlVector<CBasePlayer *> &fromthese )
+{
+	CUtlVector<CBasePlayer *> marines;		// willing, not the Hidden now
+	CUtlVector<CBasePlayer *> hiddens;		// willing, the Hidden now
+	CUtlVector<CBasePlayer *> forfeits;	// asked not to be the Hidden
+
+	for ( int i = 0; i < fromthese.Count(); i++ )
+	{
+		CBasePlayer *candidate = fromthese[i];
+		if ( candidate->GetNoHidden() )
+			forfeits.AddToTail( candidate );
+		else if ( candidate->GetTeamNumber() == TEAM_HIDDEN )
+			hiddens.AddToTail( candidate );
+		else
+			marines.AddToTail( candidate );
+	}
+
+	// Prefer someone who is not the Hidden yet, and anyone over a player who opted out
+	if ( marines.Count() > 0 )
+		SelectRandomHidden( marines );
+	else if ( hiddens.Count() > 0 )
+		SelectRandomHidden( hiddens );
+	else
+		SelectRandomHidden( forfeits );
+}
+
+void CHiddenSelector::CheckSelectFlags( CUtlVector<CBasePlayer *> &from, CUtlVector<CBasePlayer *> &to, bool reset )
+{
+	int count = from.Count();
+	to.Purge();
+
+	for ( int i = 0; i < count; i++ )
+	{
+		if ( reset )
+			from[i]->SetHadHidden( false );
+
+		if ( !from[i]->GetHadHidden() )
+			to.AddToTail( from[i] );
+	}
+
+	// Everyone has had a turn: start over
+	if ( to.Count() == 0 )
+		CheckSelectFlags( from, to, true );
+}
+
+void CHiddenSelector::SelectRandomHidden( CUtlVector<CBasePlayer *> &fromthese )
+{
+	CUtlVector<CBasePlayer *> realfrom;
+	CheckSelectFlags( fromthese, realfrom, false );
+
+	int iRandom = random->RandomInt( 0, realfrom.Count() - 1 );
+	m_pCurrentHidden = realfrom[iRandom];
+}
+
+void CHiddenSelector::FillPlayerVectors( void )
+{
+	m_prefplayers.Purge();
+	m_readyplayers.Purge();
+	m_allplayers.Purge();
+
+	for ( int i = 0; i <= gpGlobals->maxClients; i++ )
+	{
+		CBasePlayer *player = UTIL_PlayerByIndex( i );
+		if ( !player )
+			continue;
+
+		int iTeam = player->GetTeamNumber();
+		if ( iTeam != TEAM_SPECTATOR )
+		{
+			if ( iTeam == TEAM_IRIS && player->IsAlive() && !player->GetNoHidden() )
+				m_prefplayers.AddToTail( player );
+
+			m_readyplayers.AddToTail( player );
+		}
+
+		m_allplayers.AddToTail( player );
+	}
+}
+
+void CHiddenSelector::NotEnoughPlayers( CUtlVector<CBasePlayer *> &players, char *type, int total, int ready, int required )
+{
+	for ( int i = 0; i < total; i++ )
+		players[i]->StartObserverMode( OBS_MODE_FIXED );
+
+	char cbuffer[64];
+	int iMore;
+	char *pszWhat;
+	if ( total < required )
+	{
+		iMore = required - total;
+		pszWhat = "connected";
+	}
+	else
+	{
+		iMore = required - ready;
+		pszWhat = "ready";
+	}
+	Q_snprintf( cbuffer, sizeof( cbuffer ), "%s Game : Needs %d more %s player(s) to start", type, iMore, pszWhat );
+
+	UTIL_ClientPrintAll( HUD_PRINTCENTER, cbuffer );
 }
