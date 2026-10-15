@@ -229,6 +229,8 @@ public:
 
 	// returns the player name
 	const char *				GetPlayerName();
+	// REBUILD: name invented (client.dll 24099d70); CRC of a file, checked against the server's by CHudMaterial
+	CRC32_t					GetMaterialCRC( const char *pszFileName );
 	virtual const Vector		GetPlayerMins( void ) const; // uses local player
 	virtual const Vector		GetPlayerMaxs( void ) const; // uses local player
 

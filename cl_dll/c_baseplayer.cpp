@@ -31,6 +31,7 @@
 #include "particles_simple.h"
 #include "fx_water.h"
 #include "hltvcamera.h"
+#include "checksum_crc.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -483,6 +484,28 @@ surfacedata_t* C_BasePlayer::GetGroundSurface()
 const char * C_BasePlayer::GetPlayerName()
 {
 	return g_PR ? g_PR->GetPlayerName( entindex() ) : "";
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: CRC of a file the server checks ("material_check"); 0 when it is missing
+//-----------------------------------------------------------------------------
+CRC32_t C_BasePlayer::GetMaterialCRC( const char *pszFileName )
+{
+	CRC32_t crc;
+	CRC32_Init( &crc );
+
+	char szFileName[256];
+	Q_strncpy( szFileName, pszFileName, sizeof( szFileName ) );
+	Q_strlower( szFileName );
+
+	int iLength;
+	byte *pBuffer = UTIL_LoadFileForMe( szFileName, &iLength );
+	if ( !pBuffer )
+		return 0;
+
+	CRC32_ProcessBuffer( &crc, pBuffer, iLength );
+	CRC32_Final( &crc );
+	return crc;
 }
 
 //-----------------------------------------------------------------------------
