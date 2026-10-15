@@ -71,7 +71,7 @@ DECLARE_HUD_MESSAGE( CHudHealth, Damage );
 //-----------------------------------------------------------------------------
 CHudHealth::CHudHealth( const char *pElementName ) : CHudElement( pElementName ), CHudNumericDisplay(NULL, "HudHealth")
 {
-	SetPaintEnabled( false );
+	SetPaintBackgroundEnabled( false );
 
 	m_flScaleX = 0;
 	m_flScaleY = 0;

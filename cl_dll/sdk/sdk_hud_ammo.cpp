@@ -54,7 +54,7 @@ DECLARE_HUDELEMENT( CHudAmmo );
 //-----------------------------------------------------------------------------
 CHudAmmo::CHudAmmo( const char *pElementName ) : BaseClass(NULL, "HudAmmo"), CHudElement( pElementName )
 {
-	SetPaintEnabled( false );
+	SetPaintBackgroundEnabled( false );
 
 	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT | HIDEHUD_WEAPONSELECTION );
 }

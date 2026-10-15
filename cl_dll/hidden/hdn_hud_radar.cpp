@@ -150,13 +150,14 @@ void CHudRadar::FireGameEvent( IGameEvent *event )
 	{
 		RadarAlarm_t alarm;
 		alarm.m_vecOrigin = Vector( event->GetFloat( "posx" ), event->GetFloat( "posy" ), event->GetFloat( "posz" ) );
-		alarm.m_flEndTime = gpGlobals->curtime + 5.0f;
+		float flEndTime = gpGlobals->curtime + 5.0f;	// REBUILD: client.dll keeps the end time in a register
+		alarm.m_flEndTime = flEndTime;
 
 		for ( int i = 0; i < m_Alarms.Count(); i++ )
 		{
 			if ( m_Alarms[i].m_vecOrigin == alarm.m_vecOrigin )
 			{
-				m_Alarms[i].m_flEndTime = alarm.m_flEndTime;
+				m_Alarms[i].m_flEndTime = flEndTime;
 				return;
 			}
 		}
