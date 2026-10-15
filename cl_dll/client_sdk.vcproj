@@ -2720,12 +2720,6 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 						<Tool
 							Name="VCCLCompilerTool"/>
 					</FileConfiguration>
-					<FileConfiguration
-						Name="Release SDK|Win32"
-						ExcludedFromBuild="TRUE">
-						<Tool
-							Name="VCCLCompilerTool"/>
-					</FileConfiguration>
 				</File>
 				<File
 					RelativePath="hl2_hud\hud_flashlight.cpp">
@@ -3461,6 +3455,9 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 				</File>
 				<File
 					RelativePath=".\hidden\hdn_hud_radar.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_roundtimer.cpp">
 				</File>
 			</Filter>
 			<Filter
