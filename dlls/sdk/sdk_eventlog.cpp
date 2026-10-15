@@ -18,16 +18,16 @@ public:
 	virtual ~CSDKEventLog() {};
 
 public:
-	bool PrintEvent( KeyValues * event )	// override virtual function
+	bool PrintEvent( IGameEvent * event )	// override virtual function
 	{
 		if ( BaseClass::PrintEvent( event ) )
 		{
 			return true;
 		}
 	
-		if ( Q_strcmp(event->GetName(), "cstrike_") == 0 )
+		if ( Q_strcmp(event->GetName(), "sdk_") == 0 )
 		{
-			return PrintCStrikeEvent( event );
+			return PrintSDKEvent( event );
 		}
 
 		return false;
@@ -35,10 +35,9 @@ public:
 
 protected:
 
-	bool PrintCStrikeEvent( KeyValues * event )	// print Mod specific logs
+	bool PrintSDKEvent( IGameEvent * event )	// print Mod specific logs
 	{
-	//	const char * name = event->GetName() + Q_strlen("cstrike_"); // remove prefix
-
+		//const char * name = event->GetName() + Q_strlen("sdk_"); // remove prefix
 		return false;
 	}
 

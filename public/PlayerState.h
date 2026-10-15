@@ -31,7 +31,8 @@ public:
 	// true if the player is dead
 	CNetworkVar( bool, deadflag );	
 	// Viewing angle (player only)
-	QAngle		v_angle;		
+	// Hidden: networked, so spectators in first person see where the player looks
+	CNetworkQAngle( v_angle );
 	
 // The client .dll only cares about deadflag
 //  the game and engine .dlls need to worry about the rest of this data

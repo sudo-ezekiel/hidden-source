@@ -63,7 +63,6 @@ public:
 	CNetworkVar( int, m_nOldButtons );
 	// Base velocity that was passed in to server physics so 
 	//  client can predict conveyors correctly.  Server zeroes it, so we need to store here, too.
-	CNetworkVector( m_vecClientBaseVelocity );  
 	// auto-decaying view angle adjustment
 	CNetworkQAngle( m_vecPunchAngle );		
 	CNetworkQAngle( m_vecPunchAngleVel );

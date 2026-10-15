@@ -337,9 +337,9 @@ bool CMultiplayRules::IsMultiplayer( void )
 
 				// Kill off view model entities
 				pPlayer->DestroyViewModels();
-			}
 
-			pPlayer->SetConnected( false );
+				pPlayer->SetConnected( PlayerDisconnected );
+			}
 		}
 	}
 
@@ -571,12 +571,15 @@ bool CMultiplayRules::IsMultiplayer( void )
 			}
 		}
 
-		KeyValues * event = new KeyValues( "player_death" );
-		event->SetInt("userid", pVictim->GetUserID() );
-		event->SetInt("attacker", killer_ID );
-		event->SetInt("priority", 10 );
-
-		gameeventmanager->FireEvent( event );
+		IGameEvent * event = gameeventmanager->CreateEvent( "player_death" );
+		if ( event )
+		{
+			event->SetInt("userid", pVictim->GetUserID() );
+			event->SetInt("attacker", killer_ID );
+			event->SetInt("priority", 7 );	// HLTV event priority, not transmitted
+			
+			gameeventmanager->FireEvent( event );
+		}
 
 	}
 

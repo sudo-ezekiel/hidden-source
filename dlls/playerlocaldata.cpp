@@ -37,7 +37,6 @@ BEGIN_SEND_TABLE_NOBASE( CPlayerLocalData, DT_Local )
 	SendPropFloat	(SENDINFO(m_flJumpTime), 12, SPROP_ROUNDDOWN, 0.0f, 2048.0f ),
 	SendPropFloat	(SENDINFO(m_flFallVelocity), 17, SPROP_CHANGES_OFTEN, -4096.0f, 4096.0f ),
 //	SendPropInt		(SENDINFO(m_nOldButtons),	22, SPROP_UNSIGNED ),
-	SendPropVector	(SENDINFO(m_vecClientBaseVelocity),      -1,  SPROP_COORD),
 	SendPropVector	(SENDINFO(m_vecPunchAngle),      -1,  SPROP_COORD|SPROP_CHANGES_OFTEN),
 	SendPropVector	(SENDINFO(m_vecPunchAngleVel),      -1,  SPROP_COORD),
 	SendPropInt		(SENDINFO(m_bDrawViewmodel), 1, SPROP_UNSIGNED ),
@@ -129,7 +128,6 @@ BEGIN_SIMPLE_DATADESC( CPlayerLocalData )
 	DEFINE_FIELD( m_nStepside, FIELD_INTEGER ),
 	DEFINE_FIELD( m_flFallVelocity, FIELD_FLOAT ),
 	DEFINE_FIELD( m_nOldButtons, FIELD_INTEGER ),
-	DEFINE_FIELD( m_vecClientBaseVelocity, FIELD_VECTOR ),
 	DEFINE_FIELD( m_vecPunchAngle, FIELD_VECTOR ),
 	DEFINE_FIELD( m_vecPunchAngleVel, FIELD_VECTOR ),
 	DEFINE_FIELD( m_bDrawViewmodel, FIELD_BOOLEAN ),
@@ -154,7 +152,6 @@ CPlayerLocalData::CPlayerLocalData()
 {
 #ifdef _DEBUG
 	m_vecOverViewpoint.Init();
-	m_vecClientBaseVelocity.Init();
 	m_vecPunchAngle.Init();
 #endif
 	m_audio.soundscapeIndex = 0;

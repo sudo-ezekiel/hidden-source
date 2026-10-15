@@ -9,10 +9,14 @@ Usage:
     python3 -I diff_vtables.py <reference.so> <candidate.so> --all   (summary for every class)
 """
 import argparse
+import os
 import struct
 import subprocess
+import sys
 
-from dump_datamaps import Elf
+# python3 -I drops the script directory from sys.path; dump_datamaps.py sits next to this file.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dump_datamaps import Elf  # noqa: E402
 
 
 def relocations(path):

@@ -146,6 +146,8 @@ public:
 	#define MAX_PLAYERS				32  // Absolute max players supported
 #endif
 
+#define MAX_PLACE_NAME_LENGTH		16
+
 //===================================================================================================================
 // Team Defines
 #define	TEAM_INVALID			-1
@@ -156,6 +158,10 @@ public:
 	#define TEAM_UNASSIGNED			0	// not assigned to a team
 	#define TEAM_SPECTATOR			1	// spectator team
 #endif
+
+// Hidden's two teams. REBUILD: the names are ours, the original code uses the numbers.
+#define TEAM_IRIS				2	// the marines
+#define TEAM_HIDDEN				3	// the Hidden
 
 #define MAX_TEAMS				32	// Max number of teams in a game
 #define MAX_TEAM_NAME_LENGTH	32	// Max length of a team's name

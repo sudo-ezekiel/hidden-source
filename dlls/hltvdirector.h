@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2005, Valve Corporation, All rights reserved. ============//
+//========= Copyright Â© 1996-2005, Valve Corporation, All rights reserved. ============//
 //
 // Purpose: 
 //
@@ -17,9 +17,9 @@
 #include <ihltv.h>
 #include <utlrbtree.h>
 
-#define	HLTV_MIN_DELAY				0	// minimum delay
+#define	HLTV_MIN_DELAY				1	// minimum delay
 #define	HLTV_MIN_DIRECTOR_DELAY		10	// minimum delay if director is enabled
-#define	HLTV_MAX_DELAY				90	// maximum delay
+#define	HLTV_MAX_DELAY				120	// maximum delay
 
 
 #define MAX_NUM_CAMERAS				64	// support up to 64 fixed cameras per level
@@ -28,87 +28,87 @@
 #define MAX_SHOT_LENGTH				8.0f  // maximum time of a cut (seconds)
 #define DEF_SHOT_LENGTH				4.0f  // average time of a cut (seconds)
 
-class CDirectorCommand
+class CGameEvent
 {
 public:
 		int			m_Tick;		// tick of this command
-		KeyValues	*m_Keys;	// KeyValue describing data types, if NULL only name 
+		int			m_Priority; // game event priority
+		IGameEvent	*m_Event;	// IGameEvent
 };
 
-class CHLTVDirector : public CBaseGameSystem, public IHLTVDirector, public IGameEventListener
+class CHLTVDirector : public IGameEventListener2, public CBaseGameSystem, public IHLTVDirector
 {
 public:
+	DECLARE_CLASS_NOBASE( CHLTVDirector );
+
 	CHLTVDirector();
 	virtual ~CHLTVDirector();
 
-	void	SetHLTVServer( IHLTVServer *hltv ); // give the director an HLTV interface 
+	virtual void SetHLTVServer( IHLTVServer *hltv ); // give the director an HLTV interface 
 	IHLTVServer* GetHLTVServer( void ); 
 	int		GetDirectorTick( void );	// get current broadcast tick from director
 	int		GetPVSEntity( void ); // get current view entity (PVS)
 	Vector	GetPVSOrigin( void ); // get current PVS origin, if PVS entity is 0
-	bool	GetDirectorCommands( int fromTick, int toTick, bf_write &buffer);
-	void	AddDirectorCommand( int tick, KeyValues *data);
 	float	GetDelay( void ); // returns current delay in seconds
 	bool	IsActive( void );
+
+	virtual const char** GetModEvents(); // returns list of event names forwarded to HLTV clients
 		
 
 public: // IGameEventListener Interface
-	void FireGameEvent( KeyValues * event );
+	virtual void	FireGameEvent( IGameEvent * event );
 	
 public: // CBaseGameSystem overrides
 
-	bool Init();
-	void Shutdown();
-	void FrameUpdatePostEntityThink();
-	void LevelInitPostEntity();
+	virtual bool	Init();
+	virtual void	Shutdown();
+	virtual void	FrameUpdatePostEntityThink();
+	virtual void	LevelInitPostEntity();
 
-private:
 
-	void	StartNewShot();	
-	void	StartRandomShot();
-	void	StartBestFixedCameraShot();
-	void	StartFixedCameraShot(int iCamera, int iTarget);
-	void	StartPlayerShotChase1(int iPlayer, int offset, int distance, int fov, int theta, int phi, int inertia);
-	void	StartPlayerShotChase2(int iTraget1, int iTraget2 );
-	void	UpdateSettings();
-	void	AnalyzePlayers();
-	void 	AnalyzeCameras();
-	int		FindFirstCommand( int tick ); // finds first command >= tick
-	void	RemoveCommands(int tick); // removes all commands < tick, or all if tick -1
-	bool	StartCameraManShot();
-	void	FinishCameraManShot();
-	void	BuildActivePlayerList();
-	CDirectorCommand *FindBestGameEvent();
-	void	StartGameEventShot( CDirectorCommand *dc );
-	bool	IsKnownGameEvent( const char *name );
-		
 
+protected:
+
+	virtual void	StartNewShot();	
+	virtual void	StartRandomShot();
+	virtual void	StartBestFixedCameraShot();
+	virtual void	StartBestPlayerCameraShot();
+	virtual void	StartFixedCameraShot(int iCamera, int iTarget);
+	virtual void	UpdateSettings();
+	virtual void	AnalyzePlayers();
+	virtual void 	AnalyzeCameras();
+	virtual bool	StartCameraManShot();
+	virtual void	FinishCameraManShot();
+	virtual void	BuildActivePlayerList();
+	virtual CGameEvent *FindBestGameEvent();
+	virtual void	CreateShotFromEvent( CGameEvent *ge );
+
+	int		FindFirstEvent( int tick ); // finds first event >= tick
+	void	CheckHistory();
+	void	RemoveEventsFromHistory(int tick); // removes all commands < tick, or all if tick -1
+	
 	IHLTVServer		*m_pHLTVServer;	// interface to servers HLTV object
 	float			m_fDelay;	// hltv delay in seconds
 	int				m_nBroadcastTick; // world time that is currently "on the air"
 	int				m_iPVSEntity;	// entity for PVS center
 	Vector			m_vPVSOrigin;	// PVS origin if PVS entity is 0
-	int				m_iCameraMan;	// bot NULL if current viewentity is a cameraman
-	CBasePlayer		*m_pHLTVClient; // the HLTV fakeclient
+	int				m_iCameraMan;	//  >0 if current view entity is a cameraman
+	CBasePlayer		*m_pHLTVClient; // the HLTV fake client
 	int				m_nNextShotTick;	// time for the next scene cut
 	int				m_iLastPlayer;		// last player in random rotation
 
-	int				m_nNextAnalyzeCameraTick;	
-	int				m_nNextAnalyzePlayerTick;	
-	
-
-
+	int				m_nNextAnalyzeTick;	
+		
 	int				m_nNumFixedCameras;	//number of cameras in current map
 	CBaseEntity		*m_pFixedCameras[MAX_NUM_CAMERAS]; // fixed cameras (point_viewcontrol)
-	CBaseEntity		*m_pCameraTargets[MAX_NUM_CAMERAS]; // targets for fixed cameras
-
+	
 	int				m_nNumActivePlayers;	//number of cameras in current map
 	CBasePlayer		*m_pActivePlayers[MAX_PLAYERS]; // fixed cameras (point_viewcontrol)
 	
-	CUtlRBTree<CDirectorCommand,int>	m_DirectorCommands;
+	CUtlRBTree<CGameEvent>	m_EventHistory;
 };
 
 extern IGameSystem* HLTVDirectorSystem();
-extern IHLTVDirector* HLTVDirector();
+extern CHLTVDirector* HLTVDirector();
 
 #endif // HLTVDIRECTOR_H

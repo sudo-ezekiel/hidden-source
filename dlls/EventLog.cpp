@@ -22,12 +22,12 @@ CEventLog::~CEventLog()
 }
 
 
-void CEventLog::FireGameEvent( KeyValues * event )
+void CEventLog::FireGameEvent( IGameEvent *event )
 {
 	PrintEvent ( event );
 }
 
-bool CEventLog::PrintEvent( KeyValues * event )
+bool CEventLog::PrintEvent( IGameEvent *event )
 {
 	const char * name = event->GetName();
 
@@ -53,14 +53,14 @@ bool CEventLog::PrintEvent( KeyValues * event )
 	}
 }
 
-bool CEventLog::PrintGameEvent( KeyValues * event )
+bool CEventLog::PrintGameEvent( IGameEvent *event )
 {
 //	const char * name = event->GetName() + Q_strlen("game_"); // remove prefix
 
 	return false;
 }
 
-bool CEventLog::PrintPlayerEvent( KeyValues * event )
+bool CEventLog::PrintPlayerEvent( IGameEvent *event )
 {
 	const char * eventName = event->GetName();
 	const int userid = event->GetInt( "userid" );
@@ -99,7 +99,7 @@ bool CEventLog::PrintPlayerEvent( KeyValues * event )
 
 	if ( !Q_strncmp( eventName, "player_team", Q_strlen("player_team") ) )
 	{
-		const bool bDisconnecting = (bool)( event->GetInt( "disconnect" ) );
+		const bool bDisconnecting = event->GetBool( "disconnect" );
 
 		if ( !bDisconnecting )
 		{
@@ -121,6 +121,11 @@ bool CEventLog::PrintPlayerEvent( KeyValues * event )
 	else if ( !Q_strncmp( eventName, "player_death", Q_strlen("player_death") ) )
 	{
 		const int attackerid = event->GetInt("attacker" );
+
+#ifdef HL2MP
+		const char *weapon = event->GetString( "weapon" );
+#endif
+		
 		CBasePlayer *pAttacker = UTIL_PlayerByUserId( attackerid );
 		CTeam *team = pPlayer->GetTeam();
 		CTeam *attackerTeam = NULL;
@@ -131,6 +136,16 @@ bool CEventLog::PrintPlayerEvent( KeyValues * event )
 		}
 		if ( pPlayer == pAttacker && pPlayer )  
 		{  
+
+#ifdef HL2MP
+			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" committed suicide with \"%s\"\n",  
+							pPlayer->GetPlayerName(),
+							userid,
+							pPlayer->GetNetworkIDString(),
+							team ? team->GetName() : "",
+							weapon
+							);
+#else
 			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" committed suicide with \"%s\"\n",  
 							pPlayer->GetPlayerName(),
 							userid,
@@ -138,11 +153,25 @@ bool CEventLog::PrintPlayerEvent( KeyValues * event )
 							team ? team->GetName() : "",
 							pAttacker->GetClassname()
 							);
+#endif
 		}
 		else if ( pAttacker )
 		{
 			CTeam *attackerTeam = pAttacker->GetTeam();
 
+#ifdef HL2MP
+			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" killed \"%s<%i><%s><%s>\" with \"%s\"\n",  
+							pAttacker->GetPlayerName(),
+							attackerid,
+							pAttacker->GetNetworkIDString(),
+							attackerTeam ? attackerTeam->GetName() : "",
+							pPlayer->GetPlayerName(),
+							userid,
+							pPlayer->GetNetworkIDString(),
+							team ? team->GetName() : "",
+							weapon
+							);
+#else
 			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" killed \"%s<%i><%s><%s>\"\n",  
 							pAttacker->GetPlayerName(),
 							attackerid,
@@ -153,6 +182,7 @@ bool CEventLog::PrintPlayerEvent( KeyValues * event )
 							pPlayer->GetNetworkIDString(),
 							team ? team->GetName() : ""
 							);								
+#endif
 		}
 		else
 		{  
@@ -196,14 +226,14 @@ bool CEventLog::PrintPlayerEvent( KeyValues * event )
 	return false;
 }
 
-bool CEventLog::PrintTeamEvent( KeyValues * event )
+bool CEventLog::PrintTeamEvent( IGameEvent *event )
 {
 //	const char * name = event->GetName() + Q_strlen("team_"); // remove prefix
 
 	return false;
 }
 
-bool CEventLog::PrintOtherEvent( KeyValues * event )
+bool CEventLog::PrintOtherEvent( IGameEvent *event )
 {
 	return false;
 }
@@ -211,7 +241,16 @@ bool CEventLog::PrintOtherEvent( KeyValues * event )
 
 bool CEventLog::Init()
 {
-	return gameeventmanager->AddListener( this, true );
+	gameeventmanager->AddListener( this, "player_changename", true );
+	gameeventmanager->AddListener( this, "player_activate", true );
+	gameeventmanager->AddListener( this, "player_death", true );
+	gameeventmanager->AddListener( this, "player_team", true );
+	gameeventmanager->AddListener( this, "player_disconnect", true );
+	gameeventmanager->AddListener( this, "player_connect", true );
+	// Hidden: log round restarts too
+	gameeventmanager->AddListener( this, "game_round_restart", true );
+
+	return true;
 }
 
 void CEventLog::Shutdown()

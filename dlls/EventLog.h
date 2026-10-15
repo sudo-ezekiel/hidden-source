@@ -16,7 +16,7 @@
 #include <igameevents.h>
 #include <igamesystem.h>
 
-class CEventLog : public CBaseGameSystem, public IGameEventListener
+class CEventLog : public IGameEventListener2, public CBaseGameSystem
 {
 	
 public:
@@ -25,7 +25,7 @@ public:
 
 public: // IGameEventListener Interface
 	
-	virtual void FireGameEvent( KeyValues * event );
+	virtual void FireGameEvent( IGameEvent * event );
 	
 public: // CBaseGameSystem overrides
 
@@ -34,11 +34,11 @@ public: // CBaseGameSystem overrides
 
 protected:
 
-	virtual bool PrintEvent( KeyValues * event );
-	virtual bool PrintGameEvent( KeyValues * event );
-	virtual bool PrintPlayerEvent( KeyValues * event );
-	virtual bool PrintTeamEvent( KeyValues * event );
-	virtual bool PrintOtherEvent( KeyValues * event );
+	virtual bool PrintEvent( IGameEvent * event );
+	virtual bool PrintGameEvent( IGameEvent * event );
+	virtual bool PrintPlayerEvent( IGameEvent * event );
+	virtual bool PrintTeamEvent( IGameEvent * event );
+	virtual bool PrintOtherEvent( IGameEvent * event );
 };
 
 extern IGameSystem* GameLogSystem();

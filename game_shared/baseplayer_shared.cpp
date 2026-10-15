@@ -200,7 +200,7 @@ const QAngle &CBasePlayer::EyeAngles( )
 
 	if ( !pMoveParent )
 	{
-		return pl.v_angle;
+		return pl.v_angle.Get();
 	}
 
 	// FIXME: Cache off the angles?
@@ -216,7 +216,7 @@ const QAngle &CBasePlayer::EyeAngles( )
 
 const QAngle &CBasePlayer::LocalEyeAngles()
 {
-	return pl.v_angle;
+	return pl.v_angle.Get();
 }
 
 

@@ -25,7 +25,7 @@ class IStaticPropMgrServer;
 class ISpatialPartition;
 class IVModelInfo;
 class IEngineTrace;
-class IGameEventManager;
+class IGameEventManager2;
 class IVDebugOverlay;
 class IVEngineCache;
 
@@ -38,7 +38,7 @@ extern IEngineSound				*enginesound;
 extern IUniformRandomStream		*random;
 extern IVModelInfo				*modelinfo;
 extern IEngineTrace				*enginetrace;
-extern IGameEventManager		*gameeventmanager;
+extern IGameEventManager2		*gameeventmanager;
 extern IVDebugOverlay			*debugoverlay;
 extern IVEngineCache			*engineCache;
 

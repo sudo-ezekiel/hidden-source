@@ -67,6 +67,33 @@ typedef unsigned int uint;
 #define MULTIPLE_INHERITANCE 
 #endif
 
+#ifdef _MSC_VER
+#define NO_VTABLE __declspec( novtable )
+#else
+#define NO_VTABLE
+#endif
+
+// This can be used to declare an abstract (interface only) class. 
+// Classes marked abstract should not be instantiated.  If they are, and access violation will occur.
+//
+// Example of use:
+// 
+// abstract_class CFoo
+// {
+//      ...
+// }
+//
+// MSDN __declspec(novtable) documentation: http://msdn.microsoft.com/library/default.asp?url=/library/en-us/vclang/html/_langref_novtable.asp
+//
+// Note: NJS: This is not enabled for regular PC, due to not knowing the implications of exporting a class with no no vtable.
+//       It's probable that this shouldn't be an issue, but an experiment should be done to verify this.
+//
+#ifndef _XBOX
+#define abstract_class class
+#else
+#define abstract_class class NO_VTABLE
+#endif
+
 /*
 FIXME: Enable this when we no longer fear change =)
 
