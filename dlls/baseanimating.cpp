@@ -192,7 +192,7 @@ IMPLEMENT_SERVERCLASS_ST(CBaseAnimating, DT_BaseAnimating)
 
 	SendPropArray3  ( SENDINFO_ARRAY3(m_flPoseParameter), SendPropFloat(SENDINFO_ARRAY(m_flPoseParameter), ANIMATION_POSEPARAMETER_BITS, 0, 0.0f, 1.0f ) ),
 	
-	SendPropInt		( SENDINFO(m_nSequence),	ANIMATION_SEQUENCE_BITS, 0),
+	SendPropInt		( SENDINFO(m_nSequence),	ANIMATION_SEQUENCE_BITS, SPROP_UNSIGNED),
 	SendPropFloat	( SENDINFO(m_flPlaybackRate),	ANIMATION_PLAYBACKRATE_BITS,	SPROP_ROUNDUP,	-4.0,	12.0f), // NOTE: if this isn't a power of 2 than "1.0" can't be encoded correctly
 
 	SendPropArray3 	(SENDINFO_ARRAY3(m_flEncodedController), SendPropFloat(SENDINFO_ARRAY(m_flEncodedController), 11, SPROP_ROUNDDOWN, 0.0f, 1.0f ) ),
@@ -725,7 +725,10 @@ void CBaseAnimating::ResetSequenceInfo ( )
 	m_nResetEventsParity = ( m_nResetEventsParity+1 ) & EF_PARITY_MASK;
 
 	// FIXME: why is this called here?  Nothing should have changed to make this nessesary
-	SetEventIndexForSequence( GetModelPtr()->pSeqdesc( GetSequence() ) );
+	if ( GetModelPtr() )
+	{
+		SetEventIndexForSequence( GetModelPtr()->pSeqdesc( GetSequence() ) );
+	}
 }
 
 //=========================================================
@@ -2228,7 +2231,17 @@ void CBaseAnimating::InitBoneControllers ( void ) // FIXME: rename
 	if (!pStudioHdr)
 		return;
 
-	for (i = 0; i < pStudioHdr->numbonecontrollers; i++)
+	int nBoneControllerCount = pStudioHdr->numbonecontrollers;	
+	if ( nBoneControllerCount > NUM_BONECTRLS )
+	{
+		nBoneControllerCount = NUM_BONECTRLS;
+
+#ifdef _DEBUG
+		Warning( "Model %s has too many bone controllers! (Max %d allowed)\n", pStudioHdr->name, NUM_BONECTRLS );
+#endif
+	}
+
+	for (i = 0; i < nBoneControllerCount; i++)
 	{
 		SetBoneController( i, 0.0 );
 	}

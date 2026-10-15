@@ -836,7 +836,6 @@ public:
 	void				SetDeathPoseFrame( const int &iDeathPoseFrame ) { m_iDeathFrame = iDeathPoseFrame; }
 	
 	void				SelectDeathPose( const CTakeDamageInfo &info );
-	Activity			GetDeathPoseActivity( const CTakeDamageInfo &info );
 
 	virtual	bool		AllowedToIgnite( void ) { return false; }
 

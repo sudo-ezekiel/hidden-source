@@ -3086,17 +3086,20 @@ void CalcAutoplaySequences(
 		pIKContext->AddAutoplayLocks( pos, q );
 	}
 
-	for (i = 0; i < pStudioHdr->GetNumSeq(); i++)
+	unsigned short *pList = NULL;
+	int count = pStudioHdr->GetAutoplayList( &pList );
+	for (i = 0; i < count; i++)
 	{
-		mstudioseqdesc_t &seqdesc = pStudioHdr->pSeqdesc( i );
+		int sequenceIndex = pList[i];
+		mstudioseqdesc_t &seqdesc = pStudioHdr->pSeqdesc( sequenceIndex );
 		if (seqdesc.flags & STUDIO_AUTOPLAY)
 		{
 			float cycle = 0;
-			float cps = Studio_CPS( pStudioHdr, i, poseParameters );
+			float cps = Studio_CPS( pStudioHdr, sequenceIndex, poseParameters );
 			cycle = realTime * cps;
 			cycle = cycle - (int)cycle;
 
-			AccumulatePose( pStudioHdr, NULL, pos, q, i, cycle, poseParameters, boneMask, 1.0, realTime );
+			AccumulatePose( pStudioHdr, NULL, pos, q, sequenceIndex, cycle, poseParameters, boneMask, 1.0, realTime );
 		}
 	}
 

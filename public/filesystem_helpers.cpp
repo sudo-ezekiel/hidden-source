@@ -27,7 +27,7 @@ static void InitializeCharacterSets()
 }
 
 
-const char* ParseFile( const char* pFileBytes, char* pToken, bool* pWasQuoted )
+const char* ParseFile( const char* pFileBytes, char* pToken, bool* pWasQuoted, characterset_t *pCharSet )
 {
 	if (pWasQuoted)
 		*pWasQuoted = false;
@@ -39,7 +39,7 @@ const char* ParseFile( const char* pFileBytes, char* pToken, bool* pWasQuoted )
 
 	// YWB:  Ignore colons as token separators in COM_Parse
 	static bool com_ignorecolons = false;  
-	characterset_t& breaks = com_ignorecolons ? g_BreakSet : g_BreakSetIncludingColons;
+	characterset_t& breaks = pCharSet ? *pCharSet : (com_ignorecolons ? g_BreakSet : g_BreakSetIncludingColons);
 	
 	int c;
 	int len = 0;

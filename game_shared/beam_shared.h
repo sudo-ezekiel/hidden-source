@@ -436,6 +436,9 @@ enum
 	BEAM_HOSE,
 	BEAM_SPLINE,
 	BEAM_LASER,
+	// REBUILD: Hidden has one beam type more than Valve (DT_Beam sends Q_log2( 7 ) + 1 bits).
+	// The server binary never sets it, so its real name and use are unknown; invented name.
+	BEAM_HIDDEN_EXTRA,
 	NUM_BEAM_TYPES
 };
 

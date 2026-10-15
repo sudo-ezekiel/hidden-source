@@ -304,6 +304,7 @@ public:
 	// Marks the filename for consistency checking.  This should be called after precaching the file.
 	virtual void		ForceExactFile( const char *s ) = 0;
 	virtual void		ForceModelBounds( const char *s, const Vector &mins, const Vector &maxs ) = 0;
+	virtual void		ClearSaveDirAfterClientLoad() = 0;
 };
 
 #define INTERFACEVERSION_SERVERGAMEDLL			"ServerGameDLL003"

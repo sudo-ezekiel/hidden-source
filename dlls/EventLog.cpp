@@ -55,7 +55,14 @@ bool CEventLog::PrintEvent( IGameEvent *event )
 
 bool CEventLog::PrintGameEvent( IGameEvent *event )
 {
-//	const char * name = event->GetName() + Q_strlen("game_"); // remove prefix
+	const char * name = event->GetName() + Q_strlen("game_"); // remove prefix
+
+	// REBUILD: Hidden logs round restarts
+	if ( !Q_strncmp( name, "round_restart", Q_strlen("round_restart") ) )
+	{
+		UTIL_LogPrintf( "server message : \"round restart\"\n" );
+		return true;
+	}
 
 	return false;
 }
@@ -122,9 +129,8 @@ bool CEventLog::PrintPlayerEvent( IGameEvent *event )
 	{
 		const int attackerid = event->GetInt("attacker" );
 
-#ifdef HL2MP
+		// REBUILD: Hidden logs the weapon the way Valve's HL2MP build does
 		const char *weapon = event->GetString( "weapon" );
-#endif
 		
 		CBasePlayer *pAttacker = UTIL_PlayerByUserId( attackerid );
 		CTeam *team = pPlayer->GetTeam();
@@ -136,8 +142,6 @@ bool CEventLog::PrintPlayerEvent( IGameEvent *event )
 		}
 		if ( pPlayer == pAttacker && pPlayer )  
 		{  
-
-#ifdef HL2MP
 			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" committed suicide with \"%s\"\n",  
 							pPlayer->GetPlayerName(),
 							userid,
@@ -145,21 +149,11 @@ bool CEventLog::PrintPlayerEvent( IGameEvent *event )
 							team ? team->GetName() : "",
 							weapon
 							);
-#else
-			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" committed suicide with \"%s\"\n",  
-							pPlayer->GetPlayerName(),
-							userid,
-							pPlayer->GetNetworkIDString(),
-							team ? team->GetName() : "",
-							pAttacker->GetClassname()
-							);
-#endif
 		}
 		else if ( pAttacker )
 		{
 			CTeam *attackerTeam = pAttacker->GetTeam();
 
-#ifdef HL2MP
 			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" killed \"%s<%i><%s><%s>\" with \"%s\"\n",  
 							pAttacker->GetPlayerName(),
 							attackerid,
@@ -171,18 +165,6 @@ bool CEventLog::PrintPlayerEvent( IGameEvent *event )
 							team ? team->GetName() : "",
 							weapon
 							);
-#else
-			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" killed \"%s<%i><%s><%s>\"\n",  
-							pAttacker->GetPlayerName(),
-							attackerid,
-							pAttacker->GetNetworkIDString(),
-							attackerTeam ? attackerTeam->GetName() : "",
-							pPlayer->GetPlayerName(),
-							userid,
-							pPlayer->GetNetworkIDString(),
-							team ? team->GetName() : ""
-							);								
-#endif
 		}
 		else
 		{  
