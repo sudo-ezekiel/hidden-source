@@ -12,12 +12,8 @@
 #include "tier0/memdbgon.h"
 
 
-#ifndef CLIENT_DLL
-
 ConVar hdn_deathwait( "hdn_deathwait", "5", FCVAR_REPLICATED | FCVAR_NOTIFY, "Time between respawns in OverRun" );
 ConVar hdn_survivaltime( "hdn_survivaltime", "15", FCVAR_REPLICATED | FCVAR_NOTIFY, "survival time limit" );
-
-#endif
 
 REGISTER_GAMERULES_CLASS( COverRunGameRules );
 
@@ -185,10 +181,14 @@ float COverRunGameRules::FlPlayerFallDamage( CBasePlayer *pPlayer )
 	return BaseClass::FlPlayerFallDamage( pPlayer );
 }
 
+#endif
+
 bool COverRunGameRules::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 {
 	return BaseClass::ShouldCollide( collisionGroup0, collisionGroup1 );
 }
+
+#ifndef CLIENT_DLL
 
 const char *COverRunGameRules::GetDeadChatPrefix( bool bTeamOnly, CBasePlayer *pPlayer )
 {
@@ -205,10 +205,14 @@ const char *COverRunGameRules::GetChatPrefix( bool bTeamOnly, CBasePlayer *pPlay
 	return BaseClass::GetChatPrefix( bTeamOnly, pPlayer );
 }
 
+#endif
+
 int COverRunGameRules::PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget )
 {
 	return BaseClass::PlayerRelationship( pPlayer, pTarget );
 }
+
+#ifndef CLIENT_DLL
 
 void COverRunGameRules::RespawnHiddens( void )
 {
