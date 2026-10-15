@@ -126,6 +126,7 @@ class CGameScore : public CRulePointEntity
 {
 public:
 	DECLARE_CLASS( CGameScore, CRulePointEntity );
+	DECLARE_DATADESC();
 
 	void	Spawn( void );
 	void	Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
@@ -137,15 +138,27 @@ public:
 
 	inline	void	SetPoints( int points ) { m_Score = points; }
 
+	void	InputApplyScore( inputdata_t &inputdata );
+
 private:
 };
 
 LINK_ENTITY_TO_CLASS( game_score, CGameScore );
 
+BEGIN_DATADESC( CGameScore )
+
+	// inputs
+	DEFINE_INPUTFUNC( FIELD_VOID, "ApplyScore", InputApplyScore ),
+
+END_DATADESC()
+
 
 void CGameScore::Spawn( void )
 {
+	// The base Spawn clears m_Score; keep the "points" key value
+	int iScore = Points();
 	BaseClass::Spawn();
+	SetPoints( iScore );
 }
 
 
@@ -161,6 +174,30 @@ bool CGameScore::KeyValue( const char *szKeyName, const char *szValue )
 	return true;
 }
 
+
+void CGameScore::InputApplyScore( inputdata_t &inputdata )
+{
+	CBaseEntity *pActivator = inputdata.pActivator;
+
+	if ( pActivator == NULL )
+		return;
+
+	if ( CanFireForActivator( pActivator ) == false )
+		return;
+
+	// Only players can use this
+	if ( pActivator->IsPlayer() )
+	{
+		if ( AwardToTeam() )
+		{
+			pActivator->AddPointsToTeam( Points(), AllowNegativeScore() );
+		}
+		else
+		{
+			pActivator->AddPoints( Points(), AllowNegativeScore() );
+		}
+	}
+}
 
 
 void CGameScore::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )

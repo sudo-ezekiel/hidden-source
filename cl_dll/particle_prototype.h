@@ -57,9 +57,10 @@ public:
 
 
 	// Expose your effect with this macro.
+// REBUILD: "##" next to punctuation removed from the macros below (MSVC ignores it, GCC rejects it).
 	#define EXPOSE_PROTOTYPE_EFFECT(effectName, className)								\
-		static IPrototypeAppEffect* ___Create##effectName##() {return new className;}	\
-		static PrototypeEffectLink ___effectlink_##effectName##(___Create##effectName##, #effectName);
+		static IPrototypeAppEffect* ___Create##effectName() {return new className;}	\
+		static PrototypeEffectLink ___effectlink_##effectName(___Create##effectName, #effectName);
 #else
 	#define EXPOSE_PROTOTYPE_EFFECT(effectName, className)
 #endif

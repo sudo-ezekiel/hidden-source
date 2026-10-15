@@ -65,6 +65,9 @@ def main():
     ap.add_argument("--name", default="server")
     ap.add_argument("--extra-cflags", default="")
     ap.add_argument("--arch-cflags", default=ARCH_CFLAGS)
+    ap.add_argument("--objects-only", action="store_true",
+                    help="no link: 'all' builds the objects, each compile runs in its object's directory "
+                         "and logs to <obj>.log (client_check.sh)")
     args = ap.parse_args()
 
     # VS2003 project files are not always well-formed UTF-8; read leniently.
@@ -141,10 +144,21 @@ def main():
         for path in groups[d]:
             o = f"$(OBJ)/{d}/{posixpath.splitext(posixpath.basename(path))[0]}.o"
             lines.append(f"\t{o} \\")
-            rules.append(f"{o}: $(SRC)/{path}\n\t@mkdir -p $(dir $@)\n\t$(DO_CC)\n")
+            if args.objects_only:
+                rules.append(f"{o}: $(SRC)/{path}\n\t@mkdir -p $(dir $@)\n\t@cd $(dir $@) && $(DO_CC) > $@.log 2>&1 || {{ rm -f $@; echo FAIL {path}; exit 1; }}\n")
+            else:
+                rules.append(f"{o}: $(SRC)/{path}\n\t@mkdir -p $(dir $@)\n\t$(DO_CC)\n")
         lines.append("")
         objs.append(f"$({var})")
-    lines.append(f"all: $(NAME)_$(ARCH).so\n")
+    if args.objects_only:
+        lines.append(f"all: {' '.join(objs)}\n")
+        # Sidecar list for client_check.sh: source path<TAB>object path (relative to OBJ).
+        with open(args.out + ".files", "w") as f:
+            for d in order:
+                for path in groups[d]:
+                    f.write(f"{path}\t{d}/{posixpath.splitext(posixpath.basename(path))[0]}.o\n")
+    else:
+        lines.append(f"all: $(NAME)_$(ARCH).so\n")
     lines.append(f"$(NAME)_$(ARCH).so: {' '.join(objs)}")
     lines.append(f"\t$(CLINK) -shared -Wl,-Map,$@_map.txt -o $@ {' '.join(objs)} $(LDFLAGS) $(CPP_LIB)\n")
     lines.extend(rules)

@@ -69,6 +69,8 @@ void CTeamplayRules::Think ( void )
 		return;
 	}
 
+	// Hidden: the time limit is checked by CSDKGameRules, and there is no frag limit
+	/*
 	float flTimeLimit = mp_timelimit.GetFloat() * 60;
 	
 	if ( flTimeLimit != 0 && gpGlobals->curtime >= flTimeLimit )
@@ -90,6 +92,7 @@ void CTeamplayRules::Think ( void )
 			}
 		}
 	}
+	*/
 }
 
 //=========================================================
