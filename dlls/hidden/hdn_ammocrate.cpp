@@ -9,34 +9,10 @@
 #include "cbase.h"
 #include "player.h"
 #include "sdk_shareddefs.h"
+#include "hidden/hdn_ammocrate.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
-
-
-#define HDN_AMMOCRATE_MODEL	"models/generic/iris_ammobox.mdl"
-
-class CHDNAmmoCrate : public CBaseAnimating
-{
-public:
-	DECLARE_CLASS( CHDNAmmoCrate, CBaseAnimating );
-	DECLARE_DATADESC();
-
-	void	Precache( void );
-	void	Spawn( void );
-	void	Think( void );
-	void	Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value );
-
-	virtual int	ObjectCaps( void ) { return ( BaseClass::ObjectCaps() & ~FCAP_ACROSS_TRANSITION ) | FCAP_IMPULSE_USE | FCAP_WCEDIT_POSITION; }
-
-	float	m_flCloseTime;		// REBUILD: name ours. The lid stays open until then
-};
-
-LINK_ENTITY_TO_CLASS( hdn_ammocrate, CHDNAmmoCrate );
-
-BEGIN_DATADESC( CHDNAmmoCrate )
-	DEFINE_THINKFUNC( Think ),
-END_DATADESC()
 
 
 void CHDNAmmoCrate::Precache( void )

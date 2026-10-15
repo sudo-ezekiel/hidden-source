@@ -17,9 +17,14 @@
 //-----------------------------------------------------------------------------
 bool PlayerHasMegaPhysCannon();
 
-// Hidden has no weapon_physcannon, so the PhysCannon* functions are gone; only the
-// player pickup controller remains.
+// force the physcannon to drop an object (if carried)
+void PhysCannonForceDrop( CBaseCombatWeapon *pActiveWeapon, CBaseEntity *pOnlyIfHoldingThis );
+void PhysCannonBeginUpgrade( CBaseAnimating *pAnim );
+
 bool PlayerPickupControllerIsHoldingEntity( CBaseEntity *pPickupController, CBaseEntity *pHeldEntity );
 float PlayerPickupGetHeldObjectMass( CBaseEntity *pPickupControllerEntity, IPhysicsObject *pHeldObject );
+float PhysCannonGetHeldObjectMass( CBaseCombatWeapon *pActiveWeapon, IPhysicsObject *pHeldObject );
+
+CBaseEntity *PhysCannonGetHeldEntity( CBaseCombatWeapon *pActiveWeapon );
 
 #endif // WEAPON_PHYSCANNON_H
