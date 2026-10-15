@@ -1522,6 +1522,7 @@ BEGIN_DATADESC_NO_BASE( CBaseEntity )
 	DEFINE_THINKFUNC( ShadowCastDistThink ),
 
 	DEFINE_FIELD( m_hEffectEntity, FIELD_EHANDLE ),
+	DEFINE_PHYSPTR( m_pConstraint ),
 
 	//DEFINE_FIELD( m_DamageModifiers, FIELD_?? ), // can't save?
 	// DEFINE_FIELD( m_fDataObjectTypes, FIELD_INTEGER ),
@@ -5020,6 +5021,32 @@ void CBaseEntity::SetAbsVelocity( const Vector &vecAbsVelocity )
 	Vector vNew;
 	VectorIRotate( relVelocity, pMoveParent->EntityToWorldTransform(), vNew );
 	m_vecVelocity = vNew;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: puts the entity back where it spawned, for a round restart
+//-----------------------------------------------------------------------------
+void CBaseEntity::Reset( void )
+{
+	if ( GetAbsOrigin() != m_vecSpawnOrigin )
+	{
+		AddEffects( EF_NOINTERP );
+		UTIL_SetOrigin( this, m_vecSpawnOrigin );
+	}
+
+	if ( GetAbsAngles() != m_angSpawnAngles )
+	{
+		SetAbsAngles( m_angSpawnAngles );
+	}
+
+	SetAbsVelocity( vec3_origin );
+
+	IPhysicsObject *pPhysics = VPhysicsGetObject();
+	if ( pPhysics )
+	{
+		pPhysics->SetVelocity( &vec3_origin, NULL );
+		pPhysics->SetPosition( GetAbsOrigin(), ( IsPlayer() || GetSolid() == SOLID_BBOX ) ? vec3_angle : GetAbsAngles(), true );
+	}
 }
 
 // FIXME: While we're using (dPitch, dYaw, dRoll) as our local angular velocity

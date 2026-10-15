@@ -311,8 +311,8 @@ inline CBaseEntity *GetContainingEntity( edict_t *pent );
 //-----------------------------------------------------------------------------
 struct thinkfunc_t
 {
-	string_t	m_iszContext;
 	BASEPTR		m_pfnThink;
+	string_t	m_iszContext;
 	int			m_nNextThinkTick;
 	int			m_nLastThinkTick;
 
@@ -689,6 +689,17 @@ public:
 	// returns the edict index the entity requires when used in save/restore (eg players, world)
 	// -1 means it doesn't require any special index
 	virtual int RequiredEdictIndex( void ) { return -1; } 
+
+	// Hidden: where the entity spawned, so Reset() can put it back between rounds.
+	// REBUILD: the names of these four members are not in the binary (offsets 0x4 to 0x23).
+	Vector				m_vecSpawnOrigin;
+	QAngle				m_angSpawnAngles;
+	int					m_iSpawnUnknown;	// REBUILD: 4 bytes at 0x1c, use not found yet
+	// Hidden: saved with DEFINE_PHYSPTR( m_pConstraint ), last in the datadesc
+	IPhysicsConstraint	*m_pConstraint;
+
+	// Hidden: put a map entity back where it spawned (round restart)
+	void Reset( void );
 
 	// interface function pts
 	void (CBaseEntity::*m_pfnMoveDone)(void);
@@ -1140,6 +1151,9 @@ public:
 	void					SetWaterLevel( int nLevel );
 	int						GetWaterType() const;
 	void					SetWaterType( int nType );
+
+	virtual bool			PhysicsSplash( const Vector &centerPoint, const Vector &normal, float rawSpeed, float scaledSpeed ) { return false; }
+	virtual void			Splash() {}
 
 	void					ClearSolidFlags( void );	
 	void					RemoveSolidFlags( int flags );
