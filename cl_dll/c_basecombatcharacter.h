@@ -77,6 +77,7 @@ private:
 
 	CHandle<C_BaseCombatWeapon>		m_hMyWeapons[MAX_WEAPONS];
 	CHandle< C_BaseCombatWeapon > m_hActiveWeapon;
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0xd4c; client.dll's C_BaseCombatCharacter is 0xd50 bytes
 private:
 	C_BaseCombatCharacter( const C_BaseCombatCharacter & ); // not defined, not accessible
 

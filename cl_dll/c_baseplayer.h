@@ -497,6 +497,9 @@ public:
 
 	float GetLaggedMovementValue( void ){ return m_flLaggedMovementValue;	}
 	bool  ShouldGoSouth( Vector vNPCForward, Vector vNPCRight ); //Such a bad name.
+
+private:
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x11b4; client.dll's C_BasePlayer is 0x11b8 bytes
 };
 
 EXTERN_RECV_TABLE(DT_BasePlayer);
