@@ -211,10 +211,12 @@ void CTeamplayRules::ClientDisconnected( edict_t *pClient )
 	CBasePlayer *pPlayer = (CBasePlayer *)CBaseEntity::Instance( pClient );
 	if ( pPlayer )
 	{
+		pPlayer->SetConnected( PlayerDisconnecting );
+
 		// Remove the player from his team
 		if ( pPlayer->GetTeam() )
 		{
-			pPlayer->ChangeTeam(0,true);
+			pPlayer->ChangeTeam( 0 );
 		}
 	}
 
@@ -266,18 +268,16 @@ void CTeamplayRules::ClientSettingsChanged( CBasePlayer *pPlayer )
 	// Note, not using FStrEq so that this is case sensitive
 	if ( pPlayer->pl.netname != NULL_STRING && 
 		 STRING(pPlayer->pl.netname)[0] != 0 && 
-		 Q_strcmp( STRING(pPlayer->pl.netname), name ) )
+		Q_strcmp( STRING(pPlayer->pl.netname), name ) )
 	{
-		char text[256];
-		Q_snprintf( text,sizeof(text), "%s changed name to %s\n", STRING(pPlayer->pl.netname), name );
-
-		UTIL_ClientPrintAll( HUD_PRINTTALK, text );
-
-		KeyValues * event = new KeyValues( "player_changename" );
-		event->SetInt( "userid", pPlayer->GetUserID() );
-		event->SetString( "oldname", STRING(pPlayer->pl.netname) );
-		event->SetString( "newname", name );
-		gameeventmanager->FireEvent( event );
+		IGameEvent * event = gameeventmanager->CreateEvent( "player_changename" );
+		if ( event )
+		{
+			event->SetInt( "userid", pPlayer->GetUserID() );
+			event->SetString( "oldname", STRING(pPlayer->pl.netname) );
+			event->SetString( "newname", name );
+			gameeventmanager->FireEvent( event );
+		}
 		
 		pPlayer->pl.netname = AllocPooledString( name );
 	}
@@ -300,12 +300,15 @@ void CTeamplayRules::DeathNotice( CBasePlayer *pVictim, const CTakeDamageInfo &i
 		{
 			if ( (pk != pVictim) && (PlayerRelationship( pVictim, pk ) == GR_TEAMMATE) )
 			{
-				KeyValues * event = new KeyValues( "player_death" );
-				event->SetInt("killer", pk->GetUserID() );
-				event->SetInt("victim", pVictim->GetUserID() );
-				event->SetInt("priority", 10 );
-				
-				gameeventmanager->FireEvent( event );
+				IGameEvent * event = gameeventmanager->CreateEvent( "player_death" );
+				if ( event )
+				{
+					event->SetInt("killer", pk->GetUserID() );
+					event->SetInt("victim", pVictim->GetUserID() );
+					event->SetInt("priority", 7 );	// HLTV event priority, not transmitted
+					
+					gameeventmanager->FireEvent( event );
+				}
 				return;
 			}
 		}

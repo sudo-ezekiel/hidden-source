@@ -1,4 +1,4 @@
-//========= Copyright © 1996-2005, Valve Corporation, All rights reserved. ============//
+//========= Copyright Â© 1996-2005, Valve Corporation, All rights reserved. ============//
 //
 // Purpose: 
 //
@@ -17,6 +17,7 @@
 
 class IServer;
 class IHLTVDirector;
+class IGameEvent;
 struct netadr_s;
 
 //-----------------------------------------------------------------------------
@@ -41,7 +42,7 @@ public:
 	virtual bool	IsMasterProxy( void ) = 0; // true, if this is the HLTV master proxy
 	virtual bool	IsDemoPlayback( void ) = 0; // true if this is a HLTV demo
 
-	virtual void	FireDirectorCommand(KeyValues *cmd) = 0; // send a director command to all specs
+	virtual void	BroadcastEvent(IGameEvent *event) = 0; // send a director command to all specs
 };
 
 #endif

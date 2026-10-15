@@ -118,11 +118,18 @@ enum
 };
 
 
+enum PlayerConnectedState
+{
+	PlayerConnected,
+	PlayerDisconnecting,
+	PlayerDisconnected,
+};
+
 extern bool gInitHUD;
 extern ConVar *sv_cheats;
 
 class CBasePlayer;
-class CPlayerInfo : public IPlayerInfo
+class CPlayerInfo : public IBotController, public IPlayerInfo
 {
 public:
 	CPlayerInfo () { m_pParent = NULL; } 
@@ -140,8 +147,48 @@ public:
 	virtual bool		IsConnected();
 	virtual int			GetArmorValue();
 
+	virtual bool IsHLTV();
+	virtual bool IsPlayer();
+	virtual bool IsFakeClient();
+	virtual bool IsDead();
+	virtual bool IsInAVehicle();
+	virtual bool IsObserver();
+	virtual const Vector GetAbsOrigin();
+	virtual const QAngle GetAbsAngles();
+	virtual const Vector GetPlayerMins();
+	virtual const Vector GetPlayerMaxs();
+	virtual const char *GetWeaponName();
+	virtual const char *GetModelName();
+	virtual const int GetHealth();
+	virtual const int GetMaxHealth();
+
+	// bot specific functions	
+	virtual void SetAbsOrigin( Vector & vec );
+	virtual void SetAbsAngles( QAngle & ang );
+	virtual void RemoveAllItems( bool removeSuit );
+	virtual void SetActiveWeapon( const char *WeaponName );
+	virtual void SetLocalOrigin( const Vector& origin );
+	virtual const Vector GetLocalOrigin( void );
+	virtual void SetLocalAngles( const QAngle& angles );
+	virtual const QAngle GetLocalAngles( void );
+	virtual void PostClientMessagesSent( void );
+	virtual bool IsEFlagSet( int nEFlagMask );
+
+	virtual void RunPlayerMove( CBotCmd *ucmd );
+	virtual void SetLastUserCommand( const CBotCmd &cmd );
+
+	virtual CBotCmd GetLastUserCommand();
+
 private:
 	CBasePlayer *m_pParent; 
+};
+
+
+// Hidden: one entry per sonic grenade or shockwave that stunned this player
+struct StunTracker
+{
+	CBasePlayer				*pAttacker;
+	float					flExpireTime;
 };
 
 
@@ -163,6 +210,7 @@ public:
 
 	// IPlayerInfo passthrough (because we can't do multiple inheritance)
 	IPlayerInfo *GetPlayerInfo() { return &m_PlayerInfo; }
+	IBotController *GetBotController() { return &m_PlayerInfo; }
 
 	virtual void			UpdateOnRemove( void );
 
@@ -195,6 +243,7 @@ public:
 	virtual void			Spawn( void );
 	virtual void			Activate( void );
 	virtual void			SharedSpawn(); // Shared between client and server.
+	virtual CBaseEntity		*EntSelectSpawnPoint( void );
 
 	virtual void			InitialSpawn( void );
 	virtual void			InitHUD( void ) {}
@@ -242,12 +291,13 @@ public:
 	
 	virtual int				OnTakeDamage_Alive( const CTakeDamageInfo &info );
 	virtual void			Event_Killed( const CTakeDamageInfo &info );
-	void					Event_Dying( void );
+	virtual void			Event_Dying( const CTakeDamageInfo &info );
 
 	bool					IsHLTV( void ) const { return pl.hltv; }
 	virtual	bool			IsPlayer( void ) const { return true; }			// Spectators return TRUE for this, use IsObserver to seperate cases
 	virtual bool			IsNetClient( void ) { return true; }		// Bots should return FALSE for this, they can't receive NET messages
 																			// Spectators should return TRUE for this
+	virtual bool			IsFakeClient( void );
 
 	// Get the client index (entindex-1).
 	int						GetClientIndex()	{ return ENTINDEX( edict() ) - 1; }
@@ -282,6 +332,83 @@ public:
 	virtual void			RemoveAllItems( bool removeSuit );
 	bool					IsDead() const;
 
+	// Hidden: player state. The getters and setters below are virtual in the original, in this order.
+	virtual void			SetZoom( bool bZoom ) { m_bZoom = bZoom; }
+
+	// Loadout chosen in the menus (the "new" values) and the one in use this round
+	virtual void			SetEquipment( int iEquipment ) { m_iNewEquipment = iEquipment; }
+	virtual int				GetEquipment( void ) { return ( GetTeamNumber() == 3 ) ? -2 : m_iEquipment; }	// REBUILD: 3 is the Hidden's team
+	virtual int				GetNewEquipment( void ) { return m_iNewEquipment; }
+	virtual void			SetPrimary( int iPrimary ) { m_iNewPrimary = iPrimary; }
+	virtual int				GetPrimary( void ) { return m_iPrimary; }
+	virtual int				GetNewPrimary( void ) { return m_iNewPrimary; }
+	virtual void			SetSecondary( int iSecondary ) { m_iNewSecondary = iSecondary; }
+	virtual int				GetSecondary( void ) { return m_iSecondary; }
+	virtual int				GetNewSecondary( void ) { return m_iNewSecondary; }
+	virtual void			SetReady( bool bReady ) { m_bReady = bReady; }
+	virtual bool			IsReady( void ) { return m_bReady; }
+	virtual void			SetPrimaryBool( bool bHas ) { m_bHasPrimary = bHas; }
+	virtual bool			HasPrimary( void ) { return m_bHasPrimary; }
+	virtual void			SetSecondaryBool( bool bHas ) { m_bHasSecondary = bHas; }
+	virtual bool			HasSecondary( void ) { return m_bHasSecondary; }
+	virtual void			SetEquipmentBool( bool bHas ) { m_bHasEquipment = bHas; }
+	virtual bool			HasEquipment( void ) { return m_bHasEquipment; }
+
+	// Opting out of being picked as the Hidden
+	virtual void			SetNoHidden( bool bNoHidden ) { m_bNoHidden = bNoHidden; }
+	virtual bool			GetNoHidden( void ) { return m_bNoHidden; }
+	virtual void			SetHadHidden( bool bHadHidden ) { m_bHadHidden = bHadHidden; }
+	virtual bool			GetHadHidden( void ) { return m_bHadHidden; }
+
+	virtual void			ChangeClass( int iClass );
+	virtual int				GetClass( void );
+	virtual int				GetNewClass( void );
+	virtual void			UpdatePlayerInfo( void );
+
+	virtual void			SetSafe( bool bSafe );
+	virtual bool			GetSafe( void );
+
+	virtual float			GetStamina( void ) { return m_flStamina; }
+	virtual void			SetStamina( float flAmount );
+
+	virtual void			SetRadio( float flDelay ) { m_flRadioTime = gpGlobals->curtime + flDelay; }
+	virtual float			GetRadio( void ) { return m_flRadioTime; }
+
+	virtual bool			RequestedAmmo( void ) { return m_bRequestAmmo; }
+	virtual void			SetAmmoRequest( bool bRequest ) { m_bRequestAmmo = bRequest; }
+	virtual void			SetAmmoRecieved( void ) { m_bAmmoRecieved = true; }
+	virtual bool			GetAmmoRecieved( void ) { return m_bAmmoRecieved; }
+
+	// Laser aiming module and night vision
+	virtual bool			LAMIsOn( void ) { return m_bLAM; }
+	virtual void			LaserTurnOn( void ) { m_bLAM = true; }
+	virtual void			LaserTurnOff( void ) { m_bLAM = false; }
+	virtual bool			NightVisionEnabled( void ) { return m_bNightVision; }
+	virtual void			SetNightVision( bool bEnabled ) { m_bNightVision = bEnabled; }
+
+	virtual bool			IsBoosted( void ) { return m_bBoosted; }
+	virtual void			SetBoosted( bool bBoosted ) { m_bBoosted = bBoosted; }
+	virtual void			SetBoost( int iBoost ) { if ( iBoost == 0 ) m_iBoost = 0; else m_iBoost += iBoost; }
+	virtual int				GetBoost( void ) { return m_iBoost; }
+	virtual float			GetBoostTimer( void ) { return m_flBoostTime; }
+	virtual void			Boost( void );
+
+	// The Hidden's aura vision
+	virtual bool			IsViewing( void ) { return m_bAura; }
+	virtual void			SetAura( bool bAura ) { m_bAura = bAura; }
+
+	// Stun (sonic grenade and shockwave)
+	virtual bool			IsStunned( void ) { return m_bStunned; }
+	virtual void			CancelStun( void ) { m_bStunned = false; }
+	virtual void			Stun( CBasePlayer *pAttacker );
+	virtual void			UpdateStun( void );
+	virtual void			Shockwave( float flBlur, float flDuration );
+
+	const char				*GetCurrentLocation( void );
+	bool					SetCurrentLocation( char *pszLocation );
+	void					SetSpawnBool( bool bSpawn );
+	void					SetSpawnTimer( int iTime, int iStart );
+
 	bool					HasPhysicsFlag( unsigned int flag ) { return (m_afPhysicsFlags & flag) != 0; }
 
 	// Weapon stuff
@@ -313,7 +440,7 @@ public:
 	void					UpdatePlayerSound ( void );
 	virtual void			UpdateStepSound( surfacedata_t *psurface, const Vector &vecOrigin, const Vector &vecVelocity );
 	virtual void			PlayStepSound( Vector &vecOrigin, surfacedata_t *psurface, float fvol, bool force );
-	virtual void			DeathSound ( void );
+	virtual void			DeathSound( const CTakeDamageInfo &info );
 
 	Class_T					Classify ( void );
 	virtual void			SetAnimation( PLAYER_ANIM playerAnim );
@@ -340,7 +467,6 @@ public:
 	virtual void			ResetObserverMode(); // resets all observer related settings
 
 	virtual void			CreateCorpse( void ) { }
-	virtual CBaseEntity		*EntSelectSpawnPoint( void );
 
 	// Vehicles
 	bool					IsInAVehicle( void ) const;
@@ -421,7 +547,7 @@ public:
 	void					RunNullCommand();
 
 	// Team Handling
-	virtual void			ChangeTeam( int iTeamNum, bool bDisconnecting = false );
+	virtual void			ChangeTeam( int iTeamNum );
 
 	// say/sayteam allowed?
 	virtual bool			CanSpeak( void ) { return true; }
@@ -435,7 +561,12 @@ public:
 
 	virtual void DoMuzzleFlash();
 
-	CNavArea *GetLastKnownArea( void ) const		{ return m_lastNavArea; }	// return the last nav area the player occupied - NULL if unknown
+	surfacedata_t *GetSurfaceData( void ) { return m_pSurfaceData; }
+
+	CNavArea *GetLastKnownArea( void ) const		{ return m_lastNavArea; }		// return the last nav area the player occupied - NULL if unknown
+	const char *GetLastKnownPlaceName( void ) const	{ return m_szLastPlaceName; }	// return the last nav place name the player occupied
+
+	virtual void			CheckChatText( char *p, int bufsize ) {}
 
 public:
 	// Player Physics Shadow
@@ -463,7 +594,8 @@ public:
 	// Accessor methods
 	int		FragCount() const		{ return m_iFrags; }
 	int		DeathCount() const		{ return m_iDeaths;}
-	bool	IsConnected() const		{ return m_bConnected; }
+	bool	IsConnected() const		{ return m_iConnected != PlayerDisconnected; }
+	bool	IsDisconnecting() const	{ return m_iConnected == PlayerDisconnecting; }
 	bool	IsSuitEquipped() const	{ return m_Local.m_bWearingSuit; }
 	int		ArmorValue() const		{ return m_ArmorValue; }
 	bool	HUDNeedsRestart() const { return m_fInitHUD; }
@@ -485,7 +617,7 @@ public:
 	void	SetArmorValue( int value );
 	void	IncrementArmorValue( int nCount, int nMaxValue = -1 );
 
-	void	SetConnected( bool bConnected ) { m_bConnected = bConnected; }
+	void	SetConnected( PlayerConnectedState iConnected ) { m_iConnected = iConnected; }
 	virtual void EquipSuit( void );
 	void	SetMaxSpeed( float flMaxSpeed ) { m_flMaxspeed = flMaxSpeed; }
 
@@ -555,6 +687,51 @@ private:
 
 public:
 	
+	// Hidden: player state data. Names of networked members come from the send tables;
+	// REBUILD marks names that are not in the binary.
+	CNetworkVar( bool, m_bSafety );
+	CNetworkVar( float, m_flStamina );
+	CNetworkVar( bool, m_bZoom );
+	CNetworkVar( int, m_iNewClass );
+	CNetworkVar( int, m_iWeighting );			// chance of being picked as the Hidden
+	int						m_iWeightMax;		// REBUILD: name; top of this player's range in CHiddenSelector::SelectWeightedHidden
+	int						m_iWeightMin;		// REBUILD: name; bottom of the range, -1 when not eligible
+	int						m_iClass;			// REBUILD: name
+	int						m_iNewEquipment;	// REBUILD: name
+	CNetworkVar( bool, m_bNoHidden );
+	CNetworkVar( int, m_iPrimary );
+	int						m_iNewPrimary;		// REBUILD: name
+	CNetworkVar( int, m_iSecondary );
+	int						m_iNewSecondary;	// REBUILD: name
+	CNetworkVar( int, m_iEquipment );
+	int						m_iUnknown7e4;		// REBUILD: 4 bytes at 0x7e4, no use found
+	bool					m_bHadHidden;		// REBUILD: name
+	bool					m_bHasPrimary;		// REBUILD: name
+	bool					m_bHasSecondary;	// REBUILD: name
+	bool					m_bHasEquipment;	// REBUILD: name
+	bool					m_bReady;			// REBUILD: name
+	int						m_iCharacterBody;	// REBUILD: name; copied to m_nBody on spawn
+	int						m_iCharacterSkin;	// REBUILD: name; IRIS character slot (0-8), copied to m_nSkin on spawn
+	CNetworkVar( bool, m_bStunned );
+	CNetworkVar( bool, m_bAura );
+	float					m_flShockwaveEnd;	// REBUILD: name
+	float					m_flNextStunThink;	// REBUILD: name
+	CNetworkVar( float, m_flBlur );
+	int						m_iUnknown808;		// REBUILD: 4 bytes at 0x808, no use found
+	CNetworkVar( bool, m_bNightVision );
+	CNetworkVar( bool, m_bLAM );
+	CNetworkVar( bool, m_bRequestAmmo );
+	CUtlVector<StunTracker>	m_StunTrackers;		// REBUILD: name; who stunned us, until when
+	float					m_flBoostTime;		// REBUILD: name
+	int						m_iBoost;			// REBUILD: name
+	float					m_flRadioTime;		// REBUILD: name
+	bool					m_bBoosted;			// REBUILD: name
+	bool					m_bAmmoRecieved;	// REBUILD: name
+	CUtlVector<CBaseEntity *>	m_ObserverTargets;	// REBUILD: name; used by FindNextObserverTarget and InitialSpawn
+	int						m_iSpawnTimer;		// REBUILD: name
+	bool					m_bSpawn;			// REBUILD: name
+	CNetworkString( m_CurrentLocation, 25 );
+
 	// Used by gamemovement to check if the entity is stuck.
 	int m_StuckLast;
 	
@@ -719,7 +896,7 @@ private:
 	// char					m_szTeamName[TEAM_NAME_LENGTH];
 
 	// Multiplayer handling
-	bool					m_bConnected;		// True if the player's connected
+	PlayerConnectedState	m_iConnected;
 
 	// from edict_t
 	// CBasePlayer doesn't send this but CCSPlayer does.
@@ -742,6 +919,8 @@ protected:
 	CUserCmd				m_LastCmd;
 	CUserCmd				*m_pCurrentCommand;
 
+	float					m_flStepSoundTime;	// time to check for next footstep sound
+
 private:
 
 // Replicated to all clients
@@ -751,7 +930,6 @@ private:
 	float					m_flWaterJumpTime;  // used to be called teleport_time
 	Vector					m_vecWaterJumpVel;
 	int						m_nImpulse;
-	float					m_flStepSoundTime;	// time to check for next footstep sound
 	float					m_flSwimSoundTime;
 	Vector					m_vecLadderNormal;
 
@@ -805,9 +983,17 @@ private:
 
 	// last known navigation area of player - NULL if unknown
 	CNavArea *m_lastNavArea;
+	CNetworkString( m_szLastPlaceName, MAX_PLACE_NAME_LENGTH );
 
 	char m_szNetworkIDString[MAX_NETWORKID_LENGTH];
 	CPlayerInfo m_PlayerInfo;
+
+	// Texture names and surface data, used by CGameMovement
+	int				m_surfaceProps;
+	surfacedata_t*	m_pSurfaceData;
+	float			m_surfaceFriction;
+	char			m_chTextureType;
+	char			m_chPreviousTextureType;	// Separate from m_chTextureType. This is cleared if the player's not on the ground.
 
 public:
 

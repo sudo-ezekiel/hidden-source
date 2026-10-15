@@ -719,11 +719,14 @@ void CGameRules::ClientSettingsChanged( CBasePlayer *pPlayer )
 
 		UTIL_ClientPrintAll( HUD_PRINTTALK, text );
 
-		KeyValues * event = new KeyValues( "player_changename" );
-		event->SetInt( "userid", pPlayer->GetUserID() );
-		event->SetString( "oldname", STRING(pPlayer->pl.netname) );
-		event->SetString( "newname", name );
-		gameeventmanager->FireEvent( event );
+		IGameEvent * event = gameeventmanager->CreateEvent( "player_changename" );
+		if ( event )
+		{
+			event->SetInt( "userid", pPlayer->GetUserID() );
+			event->SetString( "oldname", STRING(pPlayer->pl.netname) );
+			event->SetString( "newname", name );
+			gameeventmanager->FireEvent( event );
+		}
 		
 		pPlayer->pl.netname = AllocPooledString( name );
 	}

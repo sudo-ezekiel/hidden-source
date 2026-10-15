@@ -1149,7 +1149,7 @@ void CBaseCombatCharacter::Event_Killed( const CTakeDamageInfo &info )
 	}
 }
 
-void CBaseCombatCharacter::Event_Dying( void )
+void CBaseCombatCharacter::Event_Dying( const CTakeDamageInfo &info )
 {
 }
 
@@ -1819,7 +1819,7 @@ int CBaseCombatCharacter::OnTakeDamage( const CTakeDamageInfo &info )
 			
 			if ( bGibbed == false )
 			{
-				Event_Dying();
+				Event_Dying( info );
 			}
 		}
 		return retVal;

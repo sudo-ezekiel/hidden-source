@@ -45,9 +45,6 @@ void CPlayerMove::StartCommand( CBasePlayer *player, CUserCmd *cmd )
 	player->m_pCurrentCommand = cmd;
 	CBaseEntity::SetPredictionRandomSeed( cmd );
 	CBaseEntity::SetPredictionPlayer( player );
-	
-	// Move other players back to history positions based on local player's lag
-	lagcompensation->StartLagCompensation( player, cmd );
 
 #if defined (HL2_DLL)
 	// pull out backchannel data and move this out
@@ -77,9 +74,6 @@ void CPlayerMove::StartCommand( CBasePlayer *player, CUserCmd *cmd )
 void CPlayerMove::FinishCommand( CBasePlayer *player )
 {
 	VPROF( "CPlayerMove::FinishCommand" );
-
-	// Restore other players to current positions
-	lagcompensation->FinishLagCompensation( player );
 
 	player->m_pCurrentCommand = NULL;
 	CBaseEntity::SetPredictionRandomSeed( NULL );
@@ -352,9 +346,6 @@ void CPlayerMove::RunCommand ( CBasePlayer *player, CUserCmd *ucmd, IMoveHelper 
 		}
 	}
 
-	// Assume the player isn't standing on any moving object
-	player->m_Local.m_vecClientBaseVelocity.Init();
-
 	// Update player input button states
 	player->UpdateButtonState( ucmd->buttons );
 
@@ -365,11 +356,11 @@ void CPlayerMove::RunCommand ( CBasePlayer *player, CUserCmd *ucmd, IMoveHelper 
 	// Copy from command to player unless game .dll has set angle using fixangle
 	if ( player->pl.fixangle == FIXANGLE_NONE )
 	{
-		player->pl.v_angle = ucmd->viewangles;
+		player->pl.v_angle.GetForModify() = ucmd->viewangles;
 	}
 	else if( player->pl.fixangle == FIXANGLE_RELATIVE )
 	{
-		player->pl.v_angle = ucmd->viewangles + player->pl.anglechange;
+		player->pl.v_angle.GetForModify() = ucmd->viewangles + player->pl.anglechange;
 	}
 
 	// Call standard client pre-think
@@ -377,12 +368,6 @@ void CPlayerMove::RunCommand ( CBasePlayer *player, CUserCmd *ucmd, IMoveHelper 
 
 	// Call Think if one is set
 	RunThink( player, TICK_INTERVAL );
-
-	// If conveyor, or think, set basevelocity, then send to client asap too.
-	if ( VectorLength( player->GetBaseVelocity() ) > 0.0 )
-	{
-		player->m_Local.m_vecClientBaseVelocity = player->GetBaseVelocity();
-	}
 
 	// Setup input.
 	SetupMove( player, ucmd, moveHelper, g_pMoveData );
@@ -404,7 +389,14 @@ void CPlayerMove::RunCommand ( CBasePlayer *player, CUserCmd *ucmd, IMoveHelper 
 	// Let server invoke any needed impact functions
 	moveHelper->ProcessImpacts();
 
+	// Hidden: other players are moved back to their history positions only around
+	// post-think, where the weapons fire
+	lagcompensation->StartLagCompensation( player, ucmd );
+
 	RunPostThink( player );
+
+	// Restore other players to current positions
+	lagcompensation->FinishLagCompensation( player );
 
 	FinishCommand( player );
 

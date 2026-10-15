@@ -240,7 +240,7 @@ public:
 	// returns true if gibs were spawned
 	virtual bool			Event_Gibbed( const CTakeDamageInfo &info );
 	// Character entered the dying state without being gibbed (only fired once)
-	virtual void			Event_Dying( void );
+	virtual void			Event_Dying( const CTakeDamageInfo &info );
 	// character died and should become a ragdoll now
 	// return true if converted to a ragdoll, false to use AI death
 	virtual bool			BecomeRagdoll( const CTakeDamageInfo &info, const Vector &forceVector );

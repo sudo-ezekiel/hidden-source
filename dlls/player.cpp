@@ -307,6 +307,10 @@ BEGIN_DATADESC( CBasePlayer )
 	DEFINE_FIELD( m_vNewVPhysicsPosition, FIELD_VECTOR ),
 	DEFINE_FIELD( m_vNewVPhysicsVelocity, FIELD_VECTOR ),
 
+	// Hidden
+	DEFINE_FIELD( m_bSafety, FIELD_BOOLEAN ),
+	DEFINE_FIELD( m_CurrentLocation, FIELD_STRING ),
+
 	// Function Pointers
 	DEFINE_FUNCTION( PlayerDeathThink ),
 
@@ -460,6 +464,31 @@ CBasePlayer::CBasePlayer( )
 	m_PlayerInfo.SetParent( this );
 
 	ResetObserverMode();
+
+	m_surfaceProps = 0;
+	m_pSurfaceData = NULL;
+	m_surfaceFriction = 1.0f;
+	m_chTextureType = 0;
+	m_chPreviousTextureType = 0;
+
+	// Hidden
+	m_bSafety = false;
+	Q_memset( m_CurrentLocation.GetForModify(), 0, sizeof( m_CurrentLocation ) );
+	m_iNewClass = 2;
+	m_bSpawn = false;
+	m_iNewPrimary = -1;
+	m_iCharacterSkin = -1;
+	m_iCharacterBody = -1;
+	m_iPrimary = -1;
+	m_iNewSecondary = -1;
+	m_iSecondary = -1;
+	m_iNewEquipment = -1;
+	m_iEquipment = -1;
+	m_bReady = false;
+	m_bNoHidden = false;
+	m_bHadHidden = true;
+
+	DevMsg( 1, "Primary [%i] Secondary [%i] Equipment [%i]\n", m_iNewPrimary, m_iNewSecondary, m_iNewEquipment );
 }
 
 CBasePlayer::~CBasePlayer( )
@@ -586,7 +615,7 @@ bool CBasePlayer::WantsLagCompensationOnEntity( const CBasePlayer *pPlayer, cons
 //-----------------------------------------------------------------------------
 void CBasePlayer::SnapEyeAngles( const QAngle &viewAngles )
 {
-	pl.v_angle = viewAngles;
+	pl.v_angle.GetForModify() = viewAngles;
 	pl.fixangle = FIXANGLE_ABSOLUTE;
 }
 
@@ -621,25 +650,32 @@ int TrainSpeed(int iSpeed, int iMax)
 	return iRet;
 }
 
-void CBasePlayer::DeathSound( void )
+void CBasePlayer::DeathSound( const CTakeDamageInfo &info )
 {
-	// temporarily using pain sounds for death sounds
-
 	// Did we die from falling?
 	if ( m_bitsDamageType & DMG_FALL )
 	{
 		// They died in the fall. Play a splat sound.
 		EmitSound( "Player.FallGib" );
 	}
+	else if ( GetTeamNumber() == TEAM_IRIS )
+	{
+		// Hidden: the knife kills have their own death sounds
+		if ( info.GetDamageType() == DMG_SLASH )
+		{
+			if ( info.GetDamage() <= 100 )
+				EmitSound( "Player.KnifeSlash.Death" );
+			else
+				EmitSound( "Player.KnifePigstick.Death" );
+		}
+		else
+		{
+			EmitSound( "Player.FriendlyFire.Death" );
+		}
+	}
 	else
 	{
-		EmitSound( "Player.Death" );
-	}
-
-	// play one of the suit death alarms
-	if ( IsSuitEquipped() )
-	{
-		UTIL_EmitGroupnameSuit(edict(), "HEV_DEAD");
+		EmitSound( "Hidden.Death" );
 	}
 }
 
@@ -1294,6 +1330,11 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 	if ( !BaseClass::OnTakeDamage_Alive( info ) )
 		return 0;
 
+	CBaseEntity * attacker = info.GetAttacker();
+
+	if ( !attacker )
+		return 0;
+
 	Vector vecDir = vec3_origin;
 	if ( info.GetInflictor() )
 	{
@@ -1302,7 +1343,7 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 	}
 
 	if ( info.GetInflictor() && (GetMoveType() == MOVETYPE_WALK) && 
-		(!info.GetAttacker() || !info.GetAttacker()->IsSolidFlagSet(FSOLID_TRIGGER)) )
+		( !attacker->IsSolidFlagSet(FSOLID_TRIGGER)) )
 	{
 		Vector force = vecDir * -DamageForce( WorldAlignSize(), info.GetBaseDamage() );
 		if ( force.z > 250.0f )
@@ -1314,23 +1355,77 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 
 	// fire global game event
 
-	KeyValues * event = new KeyValues( "player_hurt" );
-	event->SetInt("userid", GetUserID() );
-	event->SetInt("health", max(0, m_iHealth) );
-
-	CBaseEntity * attacker = info.GetAttacker();
-
-	if ( attacker->IsPlayer() )
+	IGameEvent * event = gameeventmanager->CreateEvent( "player_hurt" );
+	if ( event )
 	{
-		CBasePlayer *player = ToBasePlayer( attacker );
-		event->SetInt("attacker", player->GetUserID() ); // hurt by other player
-	}
-	else
-	{
-		event->SetInt("attacker", 0 ); // hurt by "world"
+		event->SetInt("userid", GetUserID() );
+		event->SetInt("health", max(0, m_iHealth) );
+		event->SetFloat("damage", info.GetDamage() );
+		event->SetInt("priority", 5 );	// HLTV event priority, not transmitted
+
+		if ( attacker->IsPlayer() )
+		{
+			CBasePlayer *player = ToBasePlayer( attacker );
+			event->SetInt("attacker", player->GetUserID() ); // hurt by other player
+
+			// Hidden: the weapon name without its "weapon_" prefix, for the log
+			const char *weaponName = "world";
+			if ( player->GetActiveWeapon() )
+			{
+				weaponName = player->GetActiveWeapon()->GetDeathNoticeName();
+				if ( Q_strncmp( weaponName, "weapon_", 7 ) == 0 )
+				{
+					weaponName += 7;
+				}
+			}
+
+			// Hidden: tells the client whether the Hidden was involved
+			if ( player->GetTeamNumber() == TEAM_HIDDEN || GetTeamNumber() == TEAM_HIDDEN )
+				event->SetBool("hidden", true );
+			else
+				event->SetBool("hidden", false );
+
+			CTeam *attackerTeam = player->GetTeam();
+			CTeam *team = GetTeam();
+
+			UTIL_LogPrintf( "\"%s<%i><%s><%s>\" hurt \"%s<%i><%s><%s>\" for \"<%i>\" with \"%s\"\n",
+				player->GetPlayerName(),
+				player->GetUserID(),
+				player->GetNetworkIDString(),
+				attackerTeam ? attackerTeam->GetName() : "",
+				GetPlayerName(),
+				GetUserID(),
+				GetNetworkIDString(),
+				team ? team->GetName() : "",
+				(int)info.GetDamage(),
+				weaponName );
+
+			// Hidden: damage to the other team raises the attacker's chance of being the next
+			// Hidden, damage to a team mate lowers it (see CHiddenSelector)
+			float flWeighting;
+			if ( GetTeamNumber() == player->GetTeamNumber() )
+				flWeighting = -info.GetDamage();
+			else
+				flWeighting = info.GetDamage();
+
+			player->m_iWeighting.GetForModify() += (int)flWeighting;
+			DevMsg( 1, "weighting : %i\n", player->m_iWeighting.Get() );
+		}
+		else
+		{
+			event->SetInt("attacker", 0 ); // hurt by "world"
+			event->SetBool("hidden", false );
+			event->SetString("weapon", "world" );
+		}
+
+		gameeventmanager->FireEvent( event );
 	}
 
-	gameeventmanager->FireEvent( event );
+	// Hidden: IRIS pain sound
+	if ( GetTeamNumber() == TEAM_IRIS )
+	{
+		EmitSound( "IRIS.Damage" );
+	}
 	
 	// Insert a combat sound so that nearby NPCs hear battle
 	if ( attacker->IsNPC() )
@@ -1397,11 +1492,11 @@ void CBasePlayer::Event_Killed( const CTakeDamageInfo &info )
 	BaseClass::Event_Killed( info );
 }
 
-void CBasePlayer::Event_Dying()
+void CBasePlayer::Event_Dying( const CTakeDamageInfo &info )
 {
 	// NOT GIBBED, RUN THIS CODE
 
-	DeathSound();
+	DeathSound( info );
 
 	// The dead body rolls out of the vehicle.
 	if ( IsInAVehicle() )
@@ -1418,7 +1513,7 @@ void CBasePlayer::Event_Dying()
 
 	SetThink(&CBasePlayer::PlayerDeathThink);
 	SetNextThink( gpGlobals->curtime + 0.1f );
-	BaseClass::Event_Dying();
+	BaseClass::Event_Dying( info );
 }
 
 
@@ -2213,21 +2308,22 @@ void CBasePlayer::ObserverUse( bool bIsPressed )
 
 	m_bIsRecording = !m_bIsRecording;
 
-	KeyValues * event = new KeyValues( "hltv_cameraman" );
-	event->SetInt("index", entindex() );
-	event->SetInt("mode", m_bIsRecording ? GetObserverMode() : 0 );
+	IGameEvent * event = gameeventmanager->CreateEvent( "hltv_cameraman" );
+	if ( event )
+	{
+		event->SetInt("index", entindex() );
+		event->SetBool("active", m_bIsRecording );
 
-	HLTVDirector()->AddDirectorCommand( gpGlobals->tickcount, event );
-
-	event->deleteThis();
+		gameeventmanager->FireEvent( event );
+	}
 					
 	if ( m_bIsRecording )
 	{
-		ClientPrint( this, HUD_PRINTTALK, "Recording..." );
+		ClientPrint( this, HUD_PRINTTALK, "Recording...ON" );
 	}
 	else
 	{
-		ClientPrint( this, HUD_PRINTTALK, "Recording..." );
+		ClientPrint( this, HUD_PRINTTALK, "Recording...OFF" );
 	}
 
 	/* UTIL_SayText( "Spectator can not USE anything", this );
@@ -2977,7 +3073,9 @@ void CBasePlayer::PlayerRunCommand(CUserCmd *ucmd, IMoveHelper *moveHelper)
 
 	if ( pl.fixangle == FIXANGLE_NONE)
 	{
-		VectorCopy ( ucmd->viewangles, pl.v_angle );
+		// REBUILD: the original copies into a temporary here, so this has no effect;
+		// CPlayerMove::RunCommand sets the angles. Exact original line unknown.
+		VectorCopy ( ucmd->viewangles, (QAngle)pl.v_angle );
 	}
 
 	// Handle FL_FROZEN.
@@ -2990,7 +3088,7 @@ void CBasePlayer::PlayerRunCommand(CUserCmd *ucmd, IMoveHelper *moveHelper)
 		ucmd->upmove = 0;
 		ucmd->buttons = 0;
 		ucmd->impulse = 0;
-		VectorCopy ( pl.v_angle, ucmd->viewangles );
+		VectorCopy ( pl.v_angle.GetForModify(), ucmd->viewangles );
 	}
 
 	PlayerMove()->RunCommand(this, ucmd, moveHelper);
@@ -3970,6 +4068,7 @@ Vector CBasePlayer::GetSmoothedVelocity( void )
 
 
 CBaseEntity	*g_pLastSpawn = NULL;
+CBaseEntity	*g_pLastHiddenSpawn = NULL;
 
 
 //-----------------------------------------------------------------------------
@@ -4005,95 +4104,28 @@ EntSelectSpawnPoint
 
 Returns the entity to spawn at
 
-USES AND SETS GLOBAL g_pLastSpawn
+Hidden: the Hidden and IRIS each walk through their own spawn entities in turn.
+USES AND SETS GLOBALS g_pLastSpawn AND g_pLastHiddenSpawn
 ============
 */
 CBaseEntity *CBasePlayer::EntSelectSpawnPoint()
 {
-	CBaseEntity *pSpot;
-	edict_t		*player;
+	const char *pszSpawnPoint = "info_hidden_spawn";
+	CBaseEntity **ppLastSpawn = &g_pLastHiddenSpawn;
 
-	player = edict();
-
-// choose a info_player_deathmatch point
-	if (g_pGameRules->IsCoOp())
+	if ( GetTeamNumber() != TEAM_HIDDEN )
 	{
-		pSpot = gEntList.FindEntityByClassname( g_pLastSpawn, "info_player_coop");
-		if ( pSpot )
-			goto ReturnSpot;
-		pSpot = gEntList.FindEntityByClassname( g_pLastSpawn, "info_player_start");
-		if ( pSpot ) 
-			goto ReturnSpot;
-	}
-	else if ( g_pGameRules->IsDeathmatch() )
-	{
-		pSpot = g_pLastSpawn;
-		// Randomize the start spot
-		for ( int i = random->RandomInt(1,5); i > 0; i-- )
-			pSpot = gEntList.FindEntityByClassname( pSpot, "info_player_deathmatch" );
-		if ( !pSpot )  // skip over the null point
-			pSpot = gEntList.FindEntityByClassname( pSpot, "info_player_deathmatch" );
-
-		CBaseEntity *pFirstSpot = pSpot;
-
-		do 
-		{
-			if ( pSpot )
-			{
-				// check if pSpot is valid
-				if ( g_pGameRules->IsSpawnPointValid( pSpot, this ) )
-				{
-					if ( pSpot->GetLocalOrigin() == vec3_origin )
-					{
-						pSpot = gEntList.FindEntityByClassname( pSpot, "info_player_deathmatch" );
-						continue;
-					}
-
-					// if so, go to pSpot
-					goto ReturnSpot;
-				}
-			}
-			// increment pSpot
-			pSpot = gEntList.FindEntityByClassname( pSpot, "info_player_deathmatch" );
-		} while ( pSpot != pFirstSpot ); // loop if we're not back to the start
-
-		// we haven't found a place to spawn yet,  so kill any guy at the first spawn point and spawn there
-		if ( pSpot )
-		{
-			CBaseEntity *ent = NULL;
-			for ( CEntitySphereQuery sphere( pSpot->GetAbsOrigin(), 128 ); (ent = sphere.GetCurrentEntity()) != NULL; sphere.NextEntity() )
-			{
-				// if ent is a client, kill em (unless they are ourselves)
-				if ( ent->IsPlayer() && !(ent->edict() == player) )
-					ent->TakeDamage( CTakeDamageInfo( GetContainingEntity(INDEXENT(0)), GetContainingEntity(INDEXENT(0)), 300, DMG_GENERIC ) );
-			}
-			goto ReturnSpot;
-		}
+		pszSpawnPoint = "info_marine_spawn";
+		ppLastSpawn = &g_pLastSpawn;
 	}
 
-	// If startspot is set, (re)spawn there.
-	if ( !gpGlobals->startspot || !strlen(STRING(gpGlobals->startspot)))
-	{
-		pSpot = FindPlayerStart( "info_player_start" );
-		if ( pSpot )
-			goto ReturnSpot;
-	}
-	else
-	{
-		pSpot = gEntList.FindEntityByName( NULL, gpGlobals->startspot, NULL );
-		if ( pSpot )
-			goto ReturnSpot;
-	}
+	*ppLastSpawn = gEntList.FindEntityByClassname( *ppLastSpawn, pszSpawnPoint );
+	if ( *ppLastSpawn )
+		return *ppLastSpawn;
 
-ReturnSpot:
-	if ( !pSpot  )
-	{
-		Warning( "PutClientInServer: no info_player_start on level\n");
-		return CBaseEntity::Instance( INDEXENT( 0 ) );
-	}
-
-	g_pLastSpawn = pSpot;
-	return pSpot;
+	// past the last one, start again from the first
+	*ppLastSpawn = gEntList.FindEntityByClassname( NULL, pszSpawnPoint );
+	return *ppLastSpawn;
 }
 
 //-----------------------------------------------------------------------------
@@ -4101,7 +4133,27 @@ ReturnSpot:
 //-----------------------------------------------------------------------------
 void CBasePlayer::InitialSpawn( void )
 {
-	m_bConnected = true;
+	m_iConnected = PlayerConnected;
+
+	// Hidden: collect the spectator cameras, falling back to the Hidden's spawn point
+	CBaseEntity *pFirstCamera = gEntList.FindEntityByClassname( NULL, "info_spectator" );
+	CBaseEntity *pCamera = pFirstCamera;
+	do
+	{
+		pCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
+		if ( pCamera )
+			m_ObserverTargets.AddToTail( pCamera );
+	} while ( pCamera != pFirstCamera );
+
+	DevMsg( 1, "Camera Count : %i\n", m_ObserverTargets.Count() );
+
+	if ( m_ObserverTargets.Count() == 0 )
+	{
+		pCamera = gEntList.FindEntityByClassname( pCamera, "info_hidden_spawn" );
+		if ( !pCamera )
+			pCamera = gEntList.FindEntityByClassname( NULL, "info_hidden_spawn" );
+		m_ObserverTargets.AddToTail( pCamera );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -4418,7 +4470,7 @@ void CBasePlayer::CommitSuicide()
 	// have the player kill themself
 	m_iHealth = 0;
 	Event_Killed( CTakeDamageInfo( this, this, 0, DMG_NEVERGIB ) );
-	Event_Dying();
+	Event_Dying( CTakeDamageInfo( this, this, 0, DMG_NEVERGIB ) );
 }
 
 //==============================================
@@ -5980,7 +6032,7 @@ CBaseEntity *CBasePlayer::HasNamedPlayerItem( const char *pszItemName )
 // Purpose: Put the player in the specified team
 //-----------------------------------------------------------------------------
 
-void CBasePlayer::ChangeTeam( int iTeamNum, bool bDisconnecting )
+void CBasePlayer::ChangeTeam( int iTeamNum )
 {
 	if ( !GetGlobalTeam( iTeamNum ) )
 	{
@@ -5997,13 +6049,16 @@ void CBasePlayer::ChangeTeam( int iTeamNum, bool bDisconnecting )
 	// Immediately tell all clients that he's changing team. This has to be done
 	// first, so that all user messages that follow as a result of the team change
 	// come after this one, allowing the client to be prepared for them.
-	KeyValues * event = new KeyValues( "player_team" );
-	event->SetInt("userid", GetUserID() );
-	event->SetInt("team", iTeamNum );
-	event->SetInt("oldteam", GetTeamNumber() );
-	event->SetInt("disconnect", bDisconnecting);
+	IGameEvent * event = gameeventmanager->CreateEvent( "player_team" );
+	if ( event )
+	{
+		event->SetInt("userid", GetUserID() );
+		event->SetInt("team", iTeamNum );
+		event->SetInt("oldteam", GetTeamNumber() );
+		event->SetInt("disconnect", IsDisconnecting());
 
-	gameeventmanager->FireEvent( event );
+		gameeventmanager->FireEvent( event );
+	}
 
 	// Remove him from his current team
 	if ( GetTeam() )
@@ -6018,6 +6073,191 @@ void CBasePlayer::ChangeTeam( int iTeamNum, bool bDisconnecting )
 	}
 
 	BaseClass::ChangeTeam( iTeamNum );
+}
+
+
+//================================================================================
+// HIDDEN: PLAYER STATE
+//================================================================================
+
+//-----------------------------------------------------------------------------
+// Purpose: The map location shown on the HUD (set by trigger_location)
+//-----------------------------------------------------------------------------
+const char *CBasePlayer::GetCurrentLocation( void )
+{
+	return m_CurrentLocation;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Returns true if the location changed
+//-----------------------------------------------------------------------------
+bool CBasePlayer::SetCurrentLocation( char *pszLocation )
+{
+	if ( strcmp( m_CurrentLocation, pszLocation ) == 0 )
+		return false;
+
+	Q_strncpy( m_CurrentLocation.GetForModify(), pszLocation, 25 );
+	return true;
+}
+
+bool CBasePlayer::GetSafe( void )
+{
+	return m_bSafety;
+}
+
+void CBasePlayer::SetSafe( bool bSafe )
+{
+	m_bSafety = bSafe;
+}
+
+int CBasePlayer::GetClass( void )
+{
+	return m_iClass;
+}
+
+int CBasePlayer::GetNewClass( void )
+{
+	return m_iNewClass;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Picks the class used from the next spawn; -1 clears it, anything but
+//			0 or 1 picks one at random
+//-----------------------------------------------------------------------------
+void CBasePlayer::ChangeClass( int iClass )
+{
+	if ( iClass == -1 )
+	{
+		m_iClass = -1;
+		m_iNewClass = -1;
+	}
+	else if ( iClass != 0 && iClass != 1 )
+	{
+		m_iNewClass = random->RandomInt( 0, 3 );
+	}
+	else
+	{
+		m_iNewClass = iClass;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Applies the class and loadout chosen in the menus
+//-----------------------------------------------------------------------------
+void CBasePlayer::UpdatePlayerInfo( void )
+{
+	if ( m_iNewClass != -1 )
+		ChangeTeam( TEAM_IRIS );
+
+	m_iClass = m_iNewClass;
+	m_iEquipment = m_iNewEquipment;
+	m_iPrimary = m_iNewPrimary;
+	m_iSecondary = m_iNewSecondary;
+}
+
+void CBasePlayer::SetSpawnBool( bool bSpawn )
+{
+	m_bSpawn = bSpawn;
+}
+
+void CBasePlayer::SetSpawnTimer( int iTime, int iStart )
+{
+	m_iSpawnTimer = iTime - iStart;
+	m_bSpawn = ( m_iSpawnTimer > 9 );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Stamina changes only while it stays within 0 to 100
+//-----------------------------------------------------------------------------
+void CBasePlayer::SetStamina( float flAmount )
+{
+	float flStamina = m_flStamina + flAmount;
+	if ( flStamina <= 100 && flStamina >= 0 )
+		m_flStamina = flStamina;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Ten seconds of extra speed
+//-----------------------------------------------------------------------------
+void CBasePlayer::Boost( void )
+{
+	m_flBoostTime = gpGlobals->curtime + 10.0f;
+	m_flMaxspeed = 250;
+	SetBoosted( true );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Stunned by a sonic grenade; each stun lasts ten seconds and
+//			deepens the blur
+//-----------------------------------------------------------------------------
+void CBasePlayer::Stun( CBasePlayer *pAttacker )
+{
+	StunTracker tracker;
+	tracker.pAttacker = pAttacker;
+	tracker.flExpireTime = gpGlobals->curtime + 10.0f;
+	m_StunTrackers.AddToTail( tracker );
+
+	if ( !IsStunned() )
+	{
+		m_bStunned = true;
+		m_flBlur = 6.0f;
+		m_flNextStunThink = gpGlobals->curtime + 0.2f;
+	}
+
+	if ( m_flBlur < 6.0f )
+		m_flBlur = 6.0f;
+
+	if ( m_flBlur < 10.0f )
+		m_flBlur += 1.0f;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Every 0.2 seconds: the Hidden takes damage from each stun on it,
+//			the blur fades, and expired stuns are dropped
+//-----------------------------------------------------------------------------
+void CBasePlayer::UpdateStun( void )
+{
+	if ( m_flNextStunThink < gpGlobals->curtime )
+	{
+		if ( GetTeamNumber() == TEAM_HIDDEN )
+		{
+			for ( int i = 0; i < m_StunTrackers.Count(); i++ )
+			{
+				CBasePlayer *pAttacker = m_StunTrackers[i].pAttacker;
+				TakeDamage( CTakeDamageInfo( pAttacker, pAttacker, GetAbsVelocity(), GetAbsOrigin(), 0.3f, DMG_DIRECT ) );
+			}
+		}
+
+		m_flNextStunThink = gpGlobals->curtime + 0.2f;
+
+		if ( m_flBlur > 1.0f )
+			m_flBlur -= ( 1.0f / m_flBlur ) * m_flBlur * 0.2f;
+
+		for ( int i = 0; i < m_StunTrackers.Count(); i++ )
+		{
+			if ( m_StunTrackers[i].flExpireTime < gpGlobals->curtime )
+				m_StunTrackers.Remove( i );
+		}
+	}
+
+	if ( m_flShockwaveEnd < gpGlobals->curtime && m_StunTrackers.Count() == 0 )
+		m_bStunned = false;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Caught in a shockwave: stunned for flDuration more seconds
+//-----------------------------------------------------------------------------
+void CBasePlayer::Shockwave( float flBlur, float flDuration )
+{
+	m_flShockwaveEnd = max( m_flShockwaveEnd, gpGlobals->curtime ) + flDuration;
+	m_bStunned = true;
+
+	if ( m_flBlur > 1.0f && m_flBlur < 10.0f && IsStunned() )
+		m_flBlur += flBlur;
+	else
+		m_flBlur = flBlur;
+
+	m_flNextStunThink = gpGlobals->curtime + 0.2f;
 }
 
 
@@ -6303,6 +6543,7 @@ void SendProxy_CropFlagsToPlayerFlagBitsLength( const SendProp *pProp, const voi
 
 	BEGIN_SEND_TABLE_NOBASE(CPlayerState, DT_PlayerState)
 		SendPropInt		(SENDINFO(deadflag),	1, SPROP_UNSIGNED ),
+		SendPropQAngles	(SENDINFO(v_angle), 13, SPROP_CHANGES_OFTEN ),
 	END_SEND_TABLE()
 
 // -------------------------------------------------------------------------------- //
@@ -6335,7 +6576,6 @@ void SendProxy_CropFlagsToPlayerFlagBitsLength( const SendProp *pProp, const voi
 		SendPropVector		( SENDINFO( m_vecBaseVelocity ), 20, 0, -1000, 1000 ),
 
 		SendPropArray		( SendPropEHandle( SENDINFO_ARRAY( m_hViewModel ) ), m_hViewModel ),
-		SendPropArray		( SendPropEHandle( SENDINFO_ARRAY( m_hObserverViewModel ) ), m_hObserverViewModel ),
 
 		SendPropEHandle		( SENDINFO( m_hConstraintEntity)),
 		SendPropVector		( SENDINFO( m_vecConstraintCenter), 0, SPROP_NOSCALE ),
@@ -6344,9 +6584,6 @@ void SendProxy_CropFlagsToPlayerFlagBitsLength( const SendProp *pProp, const voi
 		SendPropFloat		( SENDINFO( m_flConstraintSpeedFactor ), 0, SPROP_NOSCALE ),
 
 		SendPropFloat		( SENDINFO( m_flDeathTime ), 0, SPROP_NOSCALE ),
-
-		SendPropInt			( SENDINFO( m_iObserverMode ), 3, SPROP_UNSIGNED ),
-		SendPropEHandle		( SENDINFO( m_hObserverTarget ) ),
 
 		SendPropInt			( SENDINFO( m_nWaterLevel ), 2, SPROP_UNSIGNED ),
 		SendPropFloat		( SENDINFO( m_flLaggedMovementValue ), 0, SPROP_NOSCALE ),
@@ -6367,6 +6604,31 @@ void SendProxy_CropFlagsToPlayerFlagBitsLength( const SendProp *pProp, const voi
 		SendPropInt		(SENDINFO(m_lifeState), 3, SPROP_UNSIGNED ),
 		SendPropFloat	(SENDINFO(m_flMaxspeed), 12, SPROP_ROUNDDOWN, 0.0f, 2048.0f ),  // CL
 		SendPropInt		(SENDINFO(m_fFlags), PLAYER_FLAG_BITS, SPROP_UNSIGNED|SPROP_CHANGES_OFTEN, SendProxy_CropFlagsToPlayerFlagBitsLength ),
+
+		// Hidden: spectators see what the player they follow sees, so these go to everyone
+		SendPropInt		(SENDINFO(m_iObserverMode), 3, SPROP_UNSIGNED ),
+		SendPropEHandle	(SENDINFO(m_hObserverTarget) ),
+		SendPropArray	( SendPropEHandle( SENDINFO_ARRAY( m_hObserverViewModel ) ), m_hObserverViewModel ),
+
+		SendPropString	(SENDINFO(m_szLastPlaceName) ),
+
+		// Hidden: player state
+		SendPropBool	(SENDINFO(m_bSafety) ),
+		SendPropFloat	(SENDINFO(m_flStamina) ),
+		SendPropInt		(SENDINFO(m_iPrimary) ),
+		SendPropInt		(SENDINFO(m_iSecondary) ),
+		SendPropInt		(SENDINFO(m_iEquipment) ),
+		SendPropBool	(SENDINFO(m_bStunned) ),
+		SendPropBool	(SENDINFO(m_bAura) ),
+		SendPropFloat	(SENDINFO(m_flBlur) ),
+		SendPropBool	(SENDINFO(m_bNightVision) ),
+		SendPropBool	(SENDINFO(m_bLAM) ),
+		SendPropBool	(SENDINFO(m_bZoom) ),
+		SendPropInt		(SENDINFO(m_iNewClass) ),
+		SendPropBool	(SENDINFO(m_bNoHidden) ),
+		SendPropBool	(SENDINFO(m_bRequestAmmo) ),
+		SendPropInt		(SENDINFO(m_iWeighting) ),
+		SendPropString	(SENDINFO(m_CurrentLocation) ),
 
 		// Data that only gets sent to the local player.
 		SendPropDataTable( "localdata", 0, &REFERENCE_SEND_TABLE(DT_LocalPlayerExclusive), SendProxy_SendLocalDataTable ),
@@ -6869,6 +7131,11 @@ bool CBasePlayer::IsBot()
 	return (GetFlags() & FL_FAKECLIENT) != 0;
 }
 
+bool CBasePlayer::IsFakeClient()
+{
+	return (GetFlags() & FL_FAKECLIENT) != 0;
+}
+
 void CBasePlayer::EquipSuit( void )
 { 
 	m_Local.m_bWearingSuit = true; 
@@ -7056,3 +7323,292 @@ int	CPlayerInfo::GetArmorValue()
 	return m_pParent->ArmorValue(); 
 }
 
+bool CPlayerInfo::IsHLTV() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->IsHLTV(); 
+}
+
+bool CPlayerInfo::IsPlayer() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->IsPlayer(); 
+}
+
+bool CPlayerInfo::IsFakeClient() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->IsFakeClient(); 
+}
+
+bool CPlayerInfo::IsDead() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->IsDead(); 
+}
+
+bool CPlayerInfo::IsInAVehicle() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->IsInAVehicle(); 
+}
+
+bool CPlayerInfo::IsObserver() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->IsObserver(); 
+}
+
+const Vector CPlayerInfo::GetAbsOrigin() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->GetAbsOrigin(); 
+}
+
+const QAngle CPlayerInfo::GetAbsAngles() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->GetAbsAngles(); 
+}
+
+const Vector CPlayerInfo::GetPlayerMins() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->GetPlayerMins(); 
+}
+
+const Vector CPlayerInfo::GetPlayerMaxs() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->GetPlayerMaxs(); 
+}
+
+const char *CPlayerInfo::GetWeaponName() 
+{ 
+	Assert( m_pParent );
+	CBaseCombatWeapon *weap = m_pParent->GetActiveWeapon();
+	if ( !weap )
+	{
+		return NULL;
+	}
+	return weap->GetName();
+}
+
+const char *CPlayerInfo::GetModelName() 
+{ 
+	Assert( m_pParent );
+	return STRING( m_pParent->GetModelName() ); 
+}
+
+const int CPlayerInfo::GetHealth() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->GetHealth(); 
+}
+
+const int CPlayerInfo::GetMaxHealth() 
+{ 
+	Assert( m_pParent );
+	return m_pParent->GetMaxHealth(); 
+}
+
+
+
+
+
+void CPlayerInfo::SetAbsOrigin( Vector & vec ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		m_pParent->SetAbsOrigin(vec); 
+	}
+}
+
+void CPlayerInfo::SetAbsAngles( QAngle & ang ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		m_pParent->SetAbsAngles(ang); 
+	}
+}
+
+void CPlayerInfo::RemoveAllItems( bool removeSuit ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		m_pParent->RemoveAllItems(removeSuit); 
+	}
+}
+
+void CPlayerInfo::SetActiveWeapon( const char *WeaponName ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		CBaseCombatWeapon *weap = m_pParent->Weapon_Create( WeaponName );
+		if ( weap )
+		{
+			m_pParent->Weapon_Equip(weap); 
+			m_pParent->Weapon_Switch(weap); 
+		}
+	}
+}
+
+void CPlayerInfo::SetLocalOrigin( const Vector& origin ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		m_pParent->SetLocalOrigin(origin); 
+	}
+}
+
+const Vector CPlayerInfo::GetLocalOrigin( void ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		Vector origin = m_pParent->GetLocalOrigin();
+		return origin; 
+	}
+	else
+	{
+		return Vector( 0, 0, 0 );
+	}
+}
+
+void CPlayerInfo::SetLocalAngles( const QAngle& angles ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		m_pParent->SetLocalAngles( angles ); 
+	}
+}
+
+const QAngle CPlayerInfo::GetLocalAngles( void ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		return m_pParent->GetLocalAngles(); 
+	}
+	else
+	{
+		return QAngle();
+	}
+}
+
+void CPlayerInfo::PostClientMessagesSent( void ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		m_pParent->PostClientMessagesSent(); 
+	}
+}
+
+bool CPlayerInfo::IsEFlagSet( int nEFlagMask ) 
+{ 
+	Assert( m_pParent );
+	if ( m_pParent->IsBot() )
+	{
+		return m_pParent->IsEFlagSet(nEFlagMask); 
+	}
+	return false;
+}
+
+void CPlayerInfo::RunPlayerMove( CBotCmd *ucmd ) 
+{ 
+	if ( m_pParent->IsBot() )
+	{
+		Assert( m_pParent );
+		CUserCmd cmd;
+		cmd.buttons = ucmd->buttons;
+		cmd.command_number = ucmd->command_number;
+		cmd.forwardmove = ucmd->forwardmove;
+		cmd.hasbeenpredicted = ucmd->hasbeenpredicted;
+		cmd.impulse = ucmd->impulse;
+		cmd.mousedx = ucmd->mousedx;
+		cmd.mousedy = ucmd->mousedy;
+		cmd.random_seed = ucmd->random_seed;
+		cmd.sidemove = ucmd->sidemove;
+		cmd.tick_count = ucmd->tick_count;
+		cmd.upmove = ucmd->upmove;
+		cmd.viewangles = ucmd->viewangles;
+		cmd.weaponselect = ucmd->weaponselect;
+		cmd.weaponsubtype = ucmd->weaponsubtype;
+
+		// Store off the globals.. they're gonna get whacked
+		float flOldFrametime = gpGlobals->frametime;
+		float flOldCurtime = gpGlobals->curtime;
+
+		m_pParent->SetTimeBase( gpGlobals->curtime );
+
+		MoveHelperServer()->SetHost( m_pParent );
+		m_pParent->PlayerRunCommand( &cmd, MoveHelperServer() );
+
+		// save off the last good usercmd
+		m_pParent->SetLastUserCommand( cmd );
+
+		// Clear out any fixangle that has been set
+		m_pParent->pl.fixangle = FIXANGLE_NONE;
+
+		// Restore the globals..
+		gpGlobals->frametime = flOldFrametime;
+		gpGlobals->curtime = flOldCurtime;
+	}
+}
+
+void CPlayerInfo::SetLastUserCommand( const CBotCmd &ucmd ) 
+{ 
+	if ( m_pParent->IsBot() )
+	{
+		Assert( m_pParent );
+		CUserCmd cmd;
+		cmd.buttons = ucmd.buttons;
+		cmd.command_number = ucmd.command_number;
+		cmd.forwardmove = ucmd.forwardmove;
+		cmd.hasbeenpredicted = ucmd.hasbeenpredicted;
+		cmd.impulse = ucmd.impulse;
+		cmd.mousedx = ucmd.mousedx;
+		cmd.mousedy = ucmd.mousedy;
+		cmd.random_seed = ucmd.random_seed;
+		cmd.sidemove = ucmd.sidemove;
+		cmd.tick_count = ucmd.tick_count;
+		cmd.upmove = ucmd.upmove;
+		cmd.viewangles = ucmd.viewangles;
+		cmd.weaponselect = ucmd.weaponselect;
+		cmd.weaponsubtype = ucmd.weaponsubtype;
+
+		m_pParent->SetLastUserCommand(cmd); 
+	}
+}
+
+
+CBotCmd CPlayerInfo::GetLastUserCommand()
+{
+	CBotCmd cmd;
+	const CUserCmd *ucmd = m_pParent->GetLastUserCommand();
+	if ( ucmd )
+	{
+		cmd.buttons = ucmd->buttons;
+		cmd.command_number = ucmd->command_number;
+		cmd.forwardmove = ucmd->forwardmove;
+		cmd.hasbeenpredicted = ucmd->hasbeenpredicted;
+		cmd.impulse = ucmd->impulse;
+		cmd.mousedx = ucmd->mousedx;
+		cmd.mousedy = ucmd->mousedy;
+		cmd.random_seed = ucmd->random_seed;
+		cmd.sidemove = ucmd->sidemove;
+		cmd.tick_count = ucmd->tick_count;
+		cmd.upmove = ucmd->upmove;
+		cmd.viewangles = ucmd->viewangles;
+		cmd.weaponselect = ucmd->weaponselect;
+		cmd.weaponsubtype = ucmd->weaponsubtype;
+	}
+	return cmd;
+}

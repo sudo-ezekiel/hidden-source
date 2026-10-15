@@ -65,6 +65,7 @@
 #include "saverestore_stringtable.h"
 #include "util.h"
 #include "vstdlib/ICommandLine.h"
+#include "engine/iserverplugin.h"
 
 #ifdef CSTRIKE_DLL // BOTPORT: TODO: move these ifdefs out
 #include "bot/bot.h"
@@ -88,10 +89,11 @@ IEngineSound *enginesound = NULL;
 ISpatialPartition *partition = NULL;
 IVModelInfo *modelinfo = NULL;
 IEngineTrace *enginetrace = NULL;
-IGameEventManager *gameeventmanager = NULL;
+IGameEventManager2 *gameeventmanager = NULL;
 IVEngineCache *engineCache = NULL;
 IVDebugOverlay * debugoverlay = NULL;
 ISoundEmitterSystemBase *soundemitterbase = NULL;
+IServerPluginHelpers *serverpluginhelpers = NULL;
 
 IGameSystem *SoundEmitterSystem();
 bool SceneCacheInit();
@@ -400,9 +402,10 @@ bool CServerGameDLL::DLLInit(CreateInterfaceFn engineFactory,
 		(modelinfo = (IVModelInfo *)engineFactory(VMODELINFO_SERVER_INTERFACE_VERSION, NULL)) == NULL ||
 		(enginetrace = (IEngineTrace *)engineFactory(INTERFACEVERSION_ENGINETRACE_SERVER,NULL)) == NULL ||
 		(filesystem = (IFileSystem *)fileSystemFactory(FILESYSTEM_INTERFACE_VERSION,NULL)) == NULL ||
-		(gameeventmanager = (IGameEventManager *)engineFactory(INTERFACEVERSION_GAMEEVENTSMANAGER,NULL)) == NULL ||
+		(gameeventmanager = (IGameEventManager2 *)engineFactory(INTERFACEVERSION_GAMEEVENTSMANAGER2,NULL)) == NULL ||
 		(engineCache = (IVEngineCache*)engineFactory(VENGINE_CACHE_INTERFACE_VERSION, NULL )) == NULL ||
-		(soundemitterbase = (ISoundEmitterSystemBase *)engineFactory(SOUNDEMITTERSYSTEM_INTERFACE_VERSION, NULL)) == NULL
+		(soundemitterbase = (ISoundEmitterSystemBase *)engineFactory(SOUNDEMITTERSYSTEM_INTERFACE_VERSION, NULL)) == NULL ||
+		(serverpluginhelpers = (IServerPluginHelpers *)engineFactory(INTERFACEVERSION_ISERVERPLUGINHELPERS, NULL)) == NULL
 	)
 	{
 		return false;
