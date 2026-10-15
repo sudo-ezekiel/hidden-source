@@ -1865,6 +1865,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 				RelativePath="nav_area.h">
 			</File>
 			<File
+				RelativePath="nav_colors.cpp">
+			</File>
+			<File
+				RelativePath="nav_colors.h">
+			</File>
+			<File
 				RelativePath="nav_edit.cpp">
 			</File>
 			<File
@@ -1872,6 +1878,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 			</File>
 			<File
 				RelativePath="nav_generate.cpp">
+			</File>
+			<File
+				RelativePath="nav_ladder.cpp">
+			</File>
+			<File
+				RelativePath="nav_ladder.h">
 			</File>
 			<File
 				RelativePath="nav_mesh.cpp">

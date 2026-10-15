@@ -12,6 +12,16 @@
 #include "cbase.h"
 #include "nav_mesh.h"
 
+#ifdef CSTRIKE_DLL
+#include "cs_shareddefs.h"
+#include "nav_pathfind.h"
+#endif
+
+
+//--------------------------------------------------------------------------------------------------------------
+/// The current version of the nav file format
+const int NavCurrentVersion = 9;
+
 //--------------------------------------------------------------------------------------------------------------
 //
 // The 'place directory' is used to save and load places from
@@ -51,11 +61,11 @@ public:
 
 		if (i < 0)
 		{
-			assert( false && "PlaceDirectory::GetIndex failure" );
+			Assert( false && "PlaceDirectory::GetIndex failure" );
 			return 0;
 		}
 
-		return (IndexType)i;
+		return (IndexType)(i+1);
 	}
 
 	/// add the place to the directory if not already known
@@ -64,7 +74,7 @@ public:
 		if (place == UNDEFINED_PLACE)
 			return;
 
-		assert( place < 1000 );
+		Assert( place < 1000 );
 
 		if (IsKnown( place ))
 			return;
@@ -80,9 +90,9 @@ public:
 
 		int i = entry-1;
 
-		if (i > m_directory.Count())
+		if (i >= m_directory.Count())
 		{
-			assert( false && "PlaceDirectory::IndexToPlace: Invalid entry" );
+			Assert( false && "PlaceDirectory::IndexToPlace: Invalid entry" );
 			return UNDEFINED_PLACE;
 		}
 
@@ -115,7 +125,7 @@ public:
 		IndexType count;
 		filesystem->Read( &count, sizeof(IndexType), file );
 
-		m_directory.EnsureCount( count );
+		m_directory.RemoveAll();
 
 		// read each entry
 		char placeName[256];
@@ -187,7 +197,7 @@ void CNavArea::Save( FileHandle_t file, unsigned int version ) const
 	filesystem->Write( &m_id, sizeof(unsigned int), file );
 
 	// save attribute flags
-	filesystem->Write( &m_attributeFlags, sizeof(unsigned char), file );
+	filesystem->Write( &m_attributeFlags, sizeof(unsigned short), file );
 
 	// save extent of area
 	filesystem->Write( &m_extent, 6*sizeof(float), file );
@@ -336,6 +346,30 @@ void CNavArea::Save( FileHandle_t file, unsigned int version ) const
 	PlaceDirectory::IndexType entry = placeDirectory.GetIndex( GetPlace() );
 	filesystem->Write( &entry, sizeof(entry), file );
 
+	// write out ladder info
+	int i;
+	for ( i=0; i<CNavLadder::NUM_LADDER_DIRECTIONS; ++i )
+	{
+		// save number of encounter paths for this area
+		unsigned int count = m_ladder[i].Count();
+		filesystem->Write( &count, sizeof(unsigned int), file );
+
+		NavLadderConnect ladder;
+		FOR_EACH_LL( m_ladder[i], it )
+		{
+			ladder = m_ladder[i][it];
+
+			unsigned int id = ladder.ladder->GetID();
+			filesystem->Write( &id, sizeof( id ), file );
+		}
+	}
+
+	// save earliest occupy times
+	for( i=0; i<MAX_NAV_TEAMS; ++i )
+	{
+		// no spot in the map should take longer than this to reach
+		filesystem->Write( &m_earliestOccupyTime[i], sizeof(m_earliestOccupyTime[i]), file );
+	}
 }
 
 //--------------------------------------------------------------------------------------------------------------
@@ -352,7 +386,16 @@ void CNavArea::Load( FileHandle_t file, unsigned int version )
 		m_nextID = m_id+1;
 
 	// load attribute flags
-	filesystem->Read( &m_attributeFlags, sizeof(unsigned char), file );
+	if ( version <= 8 )
+	{
+		unsigned char flags = 0;
+		filesystem->Read( &flags, sizeof(unsigned char), file );
+		m_attributeFlags = flags;
+	}
+	else
+	{
+		filesystem->Read( &m_attributeFlags, sizeof(unsigned short), file );
+	}
 
 	// load extent of area
 	filesystem->Read( &m_extent, 6*sizeof(float), file );
@@ -380,7 +423,11 @@ void CNavArea::Load( FileHandle_t file, unsigned int version )
 			result = filesystem->Read( &connect.id, sizeof(unsigned int), file );
 			Assert( result == sizeof(unsigned int) );
 
-			m_connect[d].AddToTail( connect );
+			// don't allow self-referential connections
+			if ( connect.id != m_id )
+			{
+				m_connect[d].AddToTail( connect );
+			}
 		}
 	}
 
@@ -401,8 +448,9 @@ void CNavArea::Load( FileHandle_t file, unsigned int version )
 			filesystem->Read( &pos, 3 * sizeof(float), file );
 
 			// create new hiding spot and put on master list
-			HidingSpot *spot = new HidingSpot( &pos, HidingSpot::IN_COVER );
-
+			HidingSpot *spot = TheNavMesh->CreateHidingSpot();
+			spot->SetPosition( pos );
+			spot->SetFlags( HidingSpot::IN_COVER );
 			m_hidingSpotList.AddToTail( spot );
 		}
 	}
@@ -412,7 +460,7 @@ void CNavArea::Load( FileHandle_t file, unsigned int version )
 		for( int h=0; h<hidingSpotCount; ++h )
 		{
 			// create new hiding spot and put on master list
-			HidingSpot *spot = new HidingSpot;
+			HidingSpot *spot = TheNavMesh->CreateHidingSpot();
 
 			spot->Load( file, version );
 			
@@ -520,6 +568,47 @@ void CNavArea::Load( FileHandle_t file, unsigned int version )
 
 	// convert entry to actual Place
 	SetPlace( placeDirectory.IndexToPlace( entry ) );
+
+	if ( version < 7 )
+		return;
+
+	// load ladder data
+	for ( int dir=0; dir<CNavLadder::NUM_LADDER_DIRECTIONS; ++dir )
+	{
+		filesystem->Read( &count, sizeof(unsigned int), file );
+		{
+			for( unsigned int i=0; i<count; ++i )
+			{
+				NavLadderConnect connect;
+				filesystem->Read( &connect.id, sizeof(unsigned int), file );
+
+				bool alreadyConnected = false;
+				for ( int j=0; j<m_ladder[dir].Count(); ++j )
+				{
+					if ( m_ladder[dir][j].id == connect.id )
+					{
+						alreadyConnected = true;
+						break;
+					}
+				}
+
+				if ( !alreadyConnected )
+				{
+					m_ladder[dir].AddToTail( connect );
+				}
+			}
+		}
+	}
+
+	if ( version < 8 )
+		return;
+
+	// load earliest occupy times
+	for( int i=0; i<MAX_NAV_TEAMS; ++i )
+	{
+		// no spot in the map should take longer than this to reach
+		filesystem->Read( &m_earliestOccupyTime[i], sizeof(m_earliestOccupyTime[i]), file );
+	}
 }
 
 //--------------------------------------------------------------------------------------------------------------
@@ -530,6 +619,27 @@ void CNavArea::Load( FileHandle_t file, unsigned int version )
 NavErrorType CNavArea::PostLoad( void )
 {
 	NavErrorType error = NAV_OK;
+
+	for ( int dir=0; dir<CNavLadder::NUM_LADDER_DIRECTIONS; ++dir )
+	{
+		FOR_EACH_LL( m_ladder[dir], it )
+		{
+			NavLadderConnect& connect = m_ladder[dir][it];
+
+			unsigned int id = connect.id;
+
+			if ( TheNavMesh->GetLadders().Find( connect.ladder ) == TheNavMesh->GetLadders().InvalidIndex() )
+			{
+				connect.ladder = TheNavMesh->GetLadderByID( id );
+			}
+
+			if (id && connect.ladder == NULL)
+			{
+				Msg( "CNavArea::PostLoad: Corrupt navigation ladder data. Cannot connect Navigation Areas.\n" );
+				error = NAV_CORRUPT_DATA;
+			}
+		}
+	}
 
 	// connect areas together
 	for( int d=0; d<NUM_DIRECTIONS; d++ )
@@ -542,10 +652,10 @@ NavErrorType CNavArea::PostLoad( void )
 			connect->area = TheNavMesh->GetNavAreaByID( id );
 			if (id && connect->area == NULL)
 			{
-				Error( "CNavArea::PostLoad: Corrupt navigation data. Cannot connect Navigation Areas.\n" );
+				Msg( "CNavArea::PostLoad: Corrupt navigation data. Cannot connect Navigation Areas.\n" );
 				error = NAV_CORRUPT_DATA;
 			}
-		}		
+		}
 	}
 
 	// resolve approach area IDs
@@ -554,21 +664,21 @@ NavErrorType CNavArea::PostLoad( void )
 		m_approach[a].here.area = TheNavMesh->GetNavAreaByID( m_approach[a].here.id );
 		if (m_approach[a].here.id && m_approach[a].here.area == NULL)
 		{
-			Error( "CNavArea::PostLoad: Corrupt navigation data. Missing Approach Area (here).\n" );
+			Msg( "CNavArea::PostLoad: Corrupt navigation data. Missing Approach Area (here).\n" );
 			error = NAV_CORRUPT_DATA;
 		}
 
 		m_approach[a].prev.area = TheNavMesh->GetNavAreaByID( m_approach[a].prev.id );
 		if (m_approach[a].prev.id && m_approach[a].prev.area == NULL)
 		{
-			Error( "CNavArea::PostLoad: Corrupt navigation data. Missing Approach Area (prev).\n" );
+			Msg( "CNavArea::PostLoad: Corrupt navigation data. Missing Approach Area (prev).\n" );
 			error = NAV_CORRUPT_DATA;
 		}
 
 		m_approach[a].next.area = TheNavMesh->GetNavAreaByID( m_approach[a].next.id );
 		if (m_approach[a].next.id && m_approach[a].next.area == NULL)
 		{
-			Error( "CNavArea::PostLoad: Corrupt navigation data. Missing Approach Area (next).\n" );
+			Msg( "CNavArea::PostLoad: Corrupt navigation data. Missing Approach Area (next).\n" );
 			error = NAV_CORRUPT_DATA;
 		}
 	}
@@ -582,14 +692,14 @@ NavErrorType CNavArea::PostLoad( void )
 		e->from.area = TheNavMesh->GetNavAreaByID( e->from.id );
 		if (e->from.area == NULL)
 		{
-			Error( "CNavArea::PostLoad: Corrupt navigation data. Missing \"from\" Navigation Area for Encounter Spot.\n" );
+			Msg( "CNavArea::PostLoad: Corrupt navigation data. Missing \"from\" Navigation Area for Encounter Spot.\n" );
 			error = NAV_CORRUPT_DATA;
 		}
 
 		e->to.area = TheNavMesh->GetNavAreaByID( e->to.id );
 		if (e->to.area == NULL)
 		{
-			Error( "CNavArea::PostLoad: Corrupt navigation data. Missing \"to\" Navigation Area for Encounter Spot.\n" );
+			Msg( "CNavArea::PostLoad: Corrupt navigation data. Missing \"to\" Navigation Area for Encounter Spot.\n" );
 			error = NAV_CORRUPT_DATA;
 		}
 
@@ -601,8 +711,8 @@ NavErrorType CNavArea::PostLoad( void )
 			ComputePortal( e->from.area, e->fromDir, &e->path.from, &halfWidth );
 
 			const float eyeHeight = HalfHumanHeight;
-			e->path.from.z = e->from.area->GetZ( &e->path.from ) + eyeHeight;
-			e->path.to.z = e->to.area->GetZ( &e->path.to ) + eyeHeight;
+			e->path.from.z = e->from.area->GetZ( e->path.from ) + eyeHeight;
+			e->path.to.z = e->to.area->GetZ( e->path.to ) + eyeHeight;
 		}
 
 		// resolve HidingSpot IDs
@@ -613,7 +723,7 @@ NavErrorType CNavArea::PostLoad( void )
 			order->spot = GetHidingSpotByID( order->id );
 			if (order->spot == NULL)
 			{
-				Error( "CNavArea::PostLoad: Corrupt navigation data. Missing Hiding Spot\n" );
+				Msg( "CNavArea::PostLoad: Corrupt navigation data. Missing Hiding Spot\n" );
 				error = NAV_CORRUPT_DATA;
 			}
 		}
@@ -633,6 +743,141 @@ NavErrorType CNavArea::PostLoad( void )
 	}
 
 	return error;
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Determine the earliest time this hiding spot can be reached by either team
+ */
+void CNavArea::ComputeEarliestOccupyTimes( void )
+{
+#ifdef CSTRIKE_DLL
+	/// @todo Derive cstrike-specific navigation classes
+
+	for( int i=0; i<MAX_NAV_TEAMS; ++i )
+	{
+		// no spot in the map should take longer than this to reach
+		m_earliestOccupyTime[i] = 120.0f;
+	}
+
+	if (nav_quicksave.GetBool())
+		return;
+
+	// maximum player speed in units/second
+	const float playerSpeed = 240.0f;
+
+	ShortestPathCost cost;
+	CBaseEntity *spot;
+
+	// determine the shortest time it will take a Terrorist to reach this area
+	int team = TEAM_TERRORIST % MAX_NAV_TEAMS;
+	for( spot = gEntList.FindEntityByClassname( NULL, "info_player_terrorist" );
+		 spot;
+		 spot = gEntList.FindEntityByClassname( spot, "info_player_terrorist" ) )
+	{
+		float travelDistance = NavAreaTravelDistance( spot->GetAbsOrigin(), m_center, cost );
+		if (travelDistance < 0.0f)
+			continue;
+
+		float travelTime = travelDistance / playerSpeed;
+		if (travelTime < m_earliestOccupyTime[ team ])
+		{
+			m_earliestOccupyTime[ team ] = travelTime;
+		}
+	}
+
+
+	// determine the shortest time it will take a CT to reach this area
+	team = TEAM_CT % MAX_NAV_TEAMS;
+	for( spot = gEntList.FindEntityByClassname( NULL, "info_player_counterterrorist" );
+		 spot;
+		 spot = gEntList.FindEntityByClassname( spot, "info_player_counterterrorist" ) )
+	{
+		float travelDistance = NavAreaTravelDistance( spot->GetAbsOrigin(), m_center, cost );
+		if (travelDistance < 0.0f)
+			continue;
+
+		float travelTime = travelDistance / playerSpeed;
+		if (travelTime < m_earliestOccupyTime[ team ])
+		{
+			m_earliestOccupyTime[ team ] = travelTime;
+		}
+	}
+
+#else
+	for( int i=0; i<MAX_NAV_TEAMS; ++i )
+	{
+		m_earliestOccupyTime[i] = 0.0f;
+	}
+#endif
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Determine if this area is a "battlefront" area - where two rushing teams first meet.
+ */
+void CNavMesh::ComputeBattlefrontAreas( void )
+{
+#if 0
+#ifdef CSTRIKE_DLL
+	ShortestPathCost cost;
+	CBaseEntity *tSpawn, *ctSpawn;
+
+	for( tSpawn = gEntList.FindEntityByClassname( NULL, "info_player_terrorist" );
+		 tSpawn;
+		 tSpawn = gEntList.FindEntityByClassname( tSpawn, "info_player_terrorist" ) )
+	{
+		CNavArea *tArea = TheNavMesh->GetNavArea( tSpawn->GetAbsOrigin() );
+		if (tArea == NULL)
+			continue;
+
+		for( ctSpawn = gEntList.FindEntityByClassname( NULL, "info_player_counterterrorist" );
+			 ctSpawn;
+			 ctSpawn = gEntList.FindEntityByClassname( ctSpawn, "info_player_counterterrorist" ) )
+		{
+			CNavArea *ctArea = TheNavMesh->GetNavArea( ctSpawn->GetAbsOrigin() );
+
+			if (ctArea == NULL)
+				continue;
+
+			if (tArea == ctArea)
+			{
+				m_isBattlefront = true;
+				return;
+			}
+
+			// build path between these two spawn points - assume if path fails, it at least got close
+			// (ie: imagine spawn points that you jump down from - can't path to)
+			CNavArea *goalArea = NULL;
+			NavAreaBuildPath( tArea, ctArea, NULL, cost, &goalArea );
+
+			if (goalArea == NULL)
+				continue;
+
+
+/**
+ * @todo Need to enumerate ALL paths between all pairs of spawn points to find all battlefront areas
+ */
+
+			// find the area with the earliest overlapping occupy times
+			CNavArea *battlefront = NULL;
+			float earliestTime = 999999.9f;
+
+			const float epsilon = 1.0f;
+			CNavArea *area;
+			for( area = goalArea; area; area = area->GetParent() )
+			{
+				if (fabs(area->GetEarliestOccupyTime( TEAM_TERRORIST ) - area->GetEarliestOccupyTime( TEAM_CT )) < epsilon)
+				{
+				}
+				
+			}
+		}
+	}
+#endif
+#endif
 }
 
 
@@ -679,11 +924,43 @@ inline void COM_FixSlashes( char *pname )
 #endif
 }
 
+static void WarnIfMeshNeedsAnalysis( void )
+{
+	// Quick check to warn about needing to analyze: nav_strip, nav_delete, etc set
+	// every CNavArea's m_approachCount to 0, and delete their m_spotEncounterList.
+	// So, if no area has either, odds are good we need an analyze.
+	{
+		bool hasApproachAreas = false;
+		bool hasSpotEncounters = false;
+
+		FOR_EACH_LL( TheNavAreaList, it )
+		{
+			CNavArea *area = TheNavAreaList[ it ];
+			if ( area->GetApproachInfoCount() )
+			{
+				hasApproachAreas = true;
+			}
+
+			if ( area->GetSpotEncounterCount() )
+			{
+				hasSpotEncounters = true;
+			}
+		}
+
+		if ( !hasApproachAreas || !hasSpotEncounters )
+		{
+			Warning( "The nav mesh needs a full nav_analyze\n" );
+		}
+	}
+}
+
 /**
  * Store Navigation Mesh to a file
  */
 bool CNavMesh::Save( void ) const
 {
+	WarnIfMeshNeedsAnalysis();
+
 	const char *filename = GetFilename();
 	if (filename == NULL)
 		return false;
@@ -692,6 +969,14 @@ bool CNavMesh::Save( void ) const
 	// Store the NAV file
 	//
 	COM_FixSlashes( const_cast<char *>(filename) );
+
+	// get size of source bsp file for later (before we open the nav file for writing, in
+	// case of failure)
+	char *bspFilename = GetBspFilename( filename );
+	if (bspFilename == NULL)
+	{
+		return false;
+	}
 
 	FileHandle_t file = filesystem->Open( filename, "wb" );
 
@@ -711,16 +996,16 @@ bool CNavMesh::Save( void ) const
 	// 4 = Includes size of source bsp file to verify nav data correlation
 	// ---- Beta Release at V4 -----
 	// 5 = Added Place info
-	unsigned int version = 5;
+	// ---- Conversion to Src ------
+	// 6 = Added Ladder info
+	// 7 = Areas store ladder ID's so ladders can have one-way connections
+	// 8 = Added earliest occupy times (2 floats) to each area
+	// 9 = Promoted CNavArea's attribute flags to a short
+	unsigned int version = NavCurrentVersion;
 	filesystem->Write( &version, sizeof(unsigned int), file );
 
-
-	// get size of source bsp file and store it in the nav file
+	// store the size of source bsp file in the nav file
 	// so we can test if the bsp changed since the nav file was made
-	char *bspFilename = GetBspFilename( filename );
-	if (bspFilename == NULL)
-		return false;
-
 	unsigned int bspSize = filesystem->Size( bspFilename );
 	DevMsg( "Size of bsp file '%s' is %u bytes.\n", bspFilename, bspSize );
 
@@ -750,24 +1035,143 @@ bool CNavMesh::Save( void ) const
 	//
 	// Store navigation areas
 	//
-
-	// store number of areas
-	unsigned int count = TheNavAreaList.Count();
-	filesystem->Write( &count, sizeof(unsigned int), file );
-
-	// store each area
-	FOR_EACH_LL( TheNavAreaList, it )
 	{
-		CNavArea *area = TheNavAreaList[ it ];
+		// store number of areas
+		unsigned int count = TheNavAreaList.Count();
+		filesystem->Write( &count, sizeof(unsigned int), file );
 
-		area->Save( file, version );
+		// store each area
+		FOR_EACH_LL( TheNavAreaList, it )
+		{
+			CNavArea *area = TheNavAreaList[ it ];
+
+			area->Save( file, version );
+		}
+	}
+
+	//
+	// Store ladders
+	//
+	{
+		// store number of ladders
+		unsigned int count = m_ladderList.Count();
+		filesystem->Write( &count, sizeof(unsigned int), file );
+
+		// store each ladder
+		FOR_EACH_LL( m_ladderList, it )
+		{
+			CNavLadder *ladder = m_ladderList[ it ];
+
+			ladder->Save( file, version );
+		}
 	}
 
 	filesystem->Flush( file );
 	filesystem->Close( file );
 
+	unsigned int navSize = filesystem->Size( filename );
+	DevMsg( "Size of nav file '%s' is %u bytes.\n", filename, navSize );
+
 	return true;
 }
+
+
+//--------------------------------------------------------------------------------------------------------------
+static NavErrorType CheckNavFile( const char *bspFilename )
+{
+	if ( !bspFilename )
+		return NAV_CANT_ACCESS_FILE;
+
+	char bspPathname[256];
+	char filename[256];
+	Q_strncpy( bspPathname, "maps/", sizeof( bspPathname ) );
+	Q_strncat( bspPathname, bspFilename, sizeof( bspPathname ), COPY_ALL_CHARACTERS );
+	Q_strncpy( filename, bspPathname, sizeof( filename ) );
+	Q_SetExtension( filename, ".nav", sizeof( filename ) );
+
+	bool navIsInBsp = false;
+	FileHandle_t file = filesystem->Open( filename, "rb", "MOD" );	// this ignores .nav files embedded in the .bsp ...
+	if ( !file )
+	{
+		navIsInBsp = true;
+		file = filesystem->Open( filename, "rb", "GAME" );	// ... and this looks for one if it's the only one around.
+	}
+
+	if (!file)
+	{
+		return NAV_CANT_ACCESS_FILE;
+	}
+
+	// check magic number
+	int result;
+	unsigned int magic;
+	result = filesystem->Read( &magic, sizeof(unsigned int), file );
+	if (!result || magic != NAV_MAGIC_NUMBER)
+	{
+		filesystem->Close( file );
+		return NAV_INVALID_FILE;
+	}
+
+	// read file version number
+	unsigned int version;
+	result = filesystem->Read( &version, sizeof(unsigned int), file );
+	if (!result || version > NavCurrentVersion || version < 4)
+	{
+		filesystem->Close( file );
+		return NAV_BAD_FILE_VERSION;
+	}
+
+	// get size of source bsp file and verify that the bsp hasn't changed
+	unsigned int saveBspSize;
+	filesystem->Read( &saveBspSize, sizeof(unsigned int), file );
+
+	// verify size
+	unsigned int bspSize = filesystem->Size( bspPathname );
+
+	if (bspSize != saveBspSize && !navIsInBsp)
+	{
+		return NAV_FILE_OUT_OF_DATE;
+	}
+
+	return NAV_OK;
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavCheckFileConsistency( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	FileFindHandle_t findHandle;
+	const char *bspFilename = filesystem->FindFirstEx( "maps/*.bsp", "MOD", &findHandle );
+	while ( bspFilename )
+	{
+		switch ( CheckNavFile( bspFilename ) )
+		{
+		case NAV_CANT_ACCESS_FILE:
+			Warning( "Missing nav file for %s\n", bspFilename );
+			break;
+		case NAV_INVALID_FILE:
+			Warning( "Invalid nav file for %s\n", bspFilename );
+			break;
+		case NAV_BAD_FILE_VERSION:
+			Warning( "Old nav file for %s\n", bspFilename );
+			break;
+		case NAV_FILE_OUT_OF_DATE:
+			Warning( "The nav file for %s is built from an old version of the map\n", bspFilename );
+			break;
+		case NAV_OK:
+			Msg( "The nav file for %s is up-to-date\n", bspFilename );
+			break;
+		}
+
+		bspFilename = filesystem->FindNext( findHandle );
+	}
+	filesystem->FindClose( findHandle );
+}
+static ConCommand nav_check_file_consistency( "nav_check_file_consistency", CommandNavCheckFileConsistency, "Scans the maps directory and reports any missing/out-of-date navigation files.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 /**
@@ -785,7 +1189,13 @@ NavErrorType CNavMesh::Load( void )
 	char filename[256];
 	Q_snprintf( filename, sizeof( filename ), "maps\\%s.nav", STRING( gpGlobals->mapname ) );
 
-	FileHandle_t file = filesystem->Open( filename, "rb" );
+	bool navIsInBsp = false;
+	FileHandle_t file = filesystem->Open( filename, "rb", "MOD" );	// this ignores .nav files embedded in the .bsp ...
+	if ( !file )
+	{
+		navIsInBsp = true;
+		file = filesystem->Open( filename, "rb", "GAME" );	// ... and this looks for one if it's the only one around.
+	}
 
 	if (!file)
 	{
@@ -798,7 +1208,7 @@ NavErrorType CNavMesh::Load( void )
 	result = filesystem->Read( &magic, sizeof(unsigned int), file );
 	if (!result || magic != NAV_MAGIC_NUMBER)
 	{
-		Error( "Invalid navigation file '%s'.\n", filename );
+		Msg( "Invalid navigation file '%s'.\n", filename );
 		filesystem->Close( file );
 		return NAV_INVALID_FILE;
 	}
@@ -806,9 +1216,9 @@ NavErrorType CNavMesh::Load( void )
 	// read file version number
 	unsigned int version;
 	result = filesystem->Read( &version, sizeof(unsigned int), file );
-	if (!result || version > 5)
+	if (!result || version > NavCurrentVersion)
 	{
-		Error( "Unknown navigation file version.\n" );
+		Msg( "Unknown navigation file version.\n" );
 		filesystem->Close( file );
 		return NAV_BAD_FILE_VERSION;
 	}
@@ -829,9 +1239,18 @@ NavErrorType CNavMesh::Load( void )
 
 		unsigned int bspSize = filesystem->Size( bspFilename );
 
-		if (bspSize != saveBspSize)
+		if (bspSize != saveBspSize && !navIsInBsp)
 		{
-			Warning( "The Navigation Mesh was built using a different version of this map.\n" );
+			if ( engine->IsDedicatedServer() )
+			{
+				// Warning doesn't print to the dedicated server console, so we'll use Msg instead
+				Msg( "The Navigation Mesh was built using a different version of this map.\n" );
+			}
+			else
+			{
+				Warning( "The Navigation Mesh was built using a different version of this map.\n" );
+			}
+			m_isFromCurrentMap = false;
 		}
 	}
 
@@ -843,6 +1262,7 @@ NavErrorType CNavMesh::Load( void )
 
 	// get number of areas
 	unsigned int count;
+	unsigned int i;
 	result = filesystem->Read( &count, sizeof(unsigned int), file );
 
 	Extent extent;
@@ -852,27 +1272,27 @@ NavErrorType CNavMesh::Load( void )
 	extent.hi.y = -9999999999.9f;
 
 	// load the areas and compute total extent
-	for( unsigned int i=0; i<count; ++i )
+	for( i=0; i<count; ++i )
 	{
 		CNavArea *area = new CNavArea;
 		area->Load( file, version );
 		TheNavAreaList.AddToTail( area );
 
-		const Extent *areaExtent = area->GetExtent();
+		const Extent &areaExtent = area->GetExtent();
 
 		// check validity of nav area
-		if (areaExtent->lo.x >= areaExtent->hi.x || areaExtent->lo.y >= areaExtent->hi.y)
+		if (areaExtent.lo.x >= areaExtent.hi.x || areaExtent.lo.y >= areaExtent.hi.y)
 			Warning( "WARNING: Degenerate Navigation Area #%d at ( %g, %g, %g )\n", 
 						area->GetID(), area->m_center.x, area->m_center.y, area->m_center.z );
 
-		if (areaExtent->lo.x < extent.lo.x)
-			extent.lo.x = areaExtent->lo.x;
-		if (areaExtent->lo.y < extent.lo.y)
-			extent.lo.y = areaExtent->lo.y;
-		if (areaExtent->hi.x > extent.hi.x)
-			extent.hi.x = areaExtent->hi.x;
-		if (areaExtent->hi.y > extent.hi.y)
-			extent.hi.y = areaExtent->hi.y;
+		if (areaExtent.lo.x < extent.lo.x)
+			extent.lo.x = areaExtent.lo.x;
+		if (areaExtent.lo.y < extent.lo.y)
+			extent.lo.y = areaExtent.lo.y;
+		if (areaExtent.hi.x > extent.hi.x)
+			extent.hi.x = areaExtent.hi.x;
+		if (areaExtent.hi.y > extent.hi.y)
+			extent.hi.y = areaExtent.hi.y;
 	}
 
 	// add the areas to the grid
@@ -884,6 +1304,26 @@ NavErrorType CNavMesh::Load( void )
 	}
 
 
+	//
+	// Set up all the ladders
+	//
+	if (version >= 6)
+	{
+		result = filesystem->Read( &count, sizeof(unsigned int), file );
+
+		// load the ladders
+		for( i=0; i<count; ++i )
+		{
+			CNavLadder *ladder = new CNavLadder;
+			ladder->Load( file, version );
+			m_ladderList.AddToTail( ladder );
+		}
+	}
+	else
+	{
+		BuildLadders();
+	}
+
 	// allow areas to connect to each other, etc
 	FOR_EACH_LL( TheNavAreaList, pit )
 	{
@@ -891,15 +1331,31 @@ NavErrorType CNavMesh::Load( void )
 		area->PostLoad();
 	}
 
-	//
-	// Set up all the ladders
-	//
-	BuildLadders();
+	// allow hiding spots to compute information
+	FOR_EACH_LL( TheHidingSpotList, hit )
+	{
+		HidingSpot *spot = TheHidingSpotList[ hit ];
+		spot->PostLoad();
+	}
+
+	if ( version < 8 )
+	{
+		// Old nav meshes need to compute earliest occupy times
+		FOR_EACH_LL( TheNavAreaList, nit )
+		{
+			CNavArea *area = TheNavAreaList[ nit ];
+			area->ComputeEarliestOccupyTimes();
+		}
+	}
+
+	ComputeBattlefrontAreas();
 
 	// the Navigation Mesh has been successfully loaded
 	m_isLoaded = true;
 
 	filesystem->Close( file );
+
+	WarnIfMeshNeedsAnalysis();
 
 	return NAV_OK;
 }

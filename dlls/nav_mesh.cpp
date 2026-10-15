@@ -13,6 +13,8 @@
 #include "filesystem.h"
 #include "nav_mesh.h"
 #include "nav_node.h"
+#include "fmtstr.h"
+#include "tier0/vprof.h"
 
 #define DrawLine( from, to, duration, red, green, blue )		NDebugOverlay::Line( from, to, red, green, blue, true, 0.1f )
 
@@ -22,11 +24,11 @@
  */
 CNavMesh *TheNavMesh = NULL;
 
-ConVar nav_edit( "nav_edit", "0", 0, "Set to one to interactively edit the Navigation Mesh. Set to zero to leave edit mode." );
-ConVar nav_quicksave( "nav_quicksave", "1", 0, "Set to one to skip the time consuming phases of the analysis.  Useful for data collection and testing." );
-ConVar nav_show_approach_points( "nav_show_approach_points", "0", 0, "Show Approach Points in the Navigation Mesh." );
-ConVar nav_show_danger( "nav_show_danger", "0", 0, "Show current 'danger' levels." );
-
+ConVar nav_edit( "nav_edit", "0", FCVAR_GAMEDLL | FCVAR_CHEAT, "Set to one to interactively edit the Navigation Mesh. Set to zero to leave edit mode." );
+ConVar nav_quicksave( "nav_quicksave", "0", FCVAR_GAMEDLL | FCVAR_CHEAT, "Set to one to skip the time consuming phases of the analysis.  Useful for data collection and testing." );
+ConVar nav_show_approach_points( "nav_show_approach_points", "0", FCVAR_GAMEDLL | FCVAR_CHEAT, "Show Approach Points in the Navigation Mesh." );
+ConVar nav_show_danger( "nav_show_danger", "0", FCVAR_GAMEDLL | FCVAR_CHEAT, "Show current 'danger' levels." );
+ConVar nav_show_player_counts( "nav_show_player_counts", "0", FCVAR_GAMEDLL | FCVAR_CHEAT, "Show current player counts in each area." );
 
 
 //--------------------------------------------------------------------------------------------------------------
@@ -68,13 +70,26 @@ void CNavMesh::Reset( void )
 	m_currentNode = NULL;
 	ClearWalkableSeeds();
 
-	m_editCmd = EDIT_NONE;
+	m_isFromCurrentMap = true;
+	m_isEditing = false;
 	m_navPlace = UNDEFINED_PLACE;
 	m_markedArea = NULL;
-	EditReset(); // reset static vars
+	m_selectedArea = NULL;
+
+	m_lastSelectedArea = NULL;
+	m_isCreatingNavArea = false;
+	m_isPlaceMode = false;
+	m_isPlacePainting = false;
+
+	m_climbableSurface = false;
+	m_isCreatingLadder = false;
+	m_markedLadder = NULL;
+	m_selectedLadder = NULL;
 
 	if (m_spawnName)
+	{
 		delete [] m_spawnName;
+	}
 
 	m_spawnName = NULL;
 
@@ -116,6 +131,7 @@ void CNavMesh::DestroyNavigationMesh( void )
 		delete node;
 	}
 	CNavNode::m_list = NULL;
+	CNavNode::m_listLength = 0;
 
 	// destroy the grid
 	if (m_grid)
@@ -133,8 +149,20 @@ void CNavMesh::DestroyNavigationMesh( void )
 
 	m_areaCount = 0;
 
-	m_isLoaded = false;
+	// Reset the next area and ladder IDs to 1
+	CNavArea::CompressIDs();
+	CNavLadder::CompressIDs();
 
+	m_markedArea = NULL;
+	m_selectedArea = NULL;
+	m_lastSelectedArea = NULL;
+	m_isCreatingNavArea = false;
+	m_climbableSurface = false;
+	m_isCreatingLadder = false;
+	m_markedLadder = NULL;
+	m_selectedLadder = NULL;
+
+	m_isLoaded = false;
 }
 
 
@@ -144,18 +172,42 @@ void CNavMesh::DestroyNavigationMesh( void )
  */
 void CNavMesh::Update( void )
 {
+	VPROF( "CNavMesh::Update" );
+
 	if (IsGenerating())
-		UpdateGeneration();
+	{
+		UpdateGeneration( 0.005 );
+		return; // don't bother trying to draw stuff while we're generating
+	}
 
 	if (nav_edit.GetBool())
-		UpdateEditMode();
+	{
+		if (m_isEditing == false)
+		{
+			OnEditModeStart();
+			m_isEditing = true;
+		}
 
-	/// @todo Remove this nasty, nasty mechanism of issuing editing commands
-	m_editCmd = EDIT_NONE;
-
+		DrawEditMode();
+	}
+	else
+	{
+		if (m_isEditing)
+		{
+			OnEditModeEnd();
+			m_isEditing = false;
+		}
+	}
 
 	if (nav_show_danger.GetBool())
+	{
 		DrawDanger();
+	}
+
+	if (nav_show_player_counts.GetBool())
+	{
+		DrawPlayerCounts();
+	}
 
 	// draw any walkable seeds that have been marked
 	FOR_EACH_LL( m_walkableSeedList, it )
@@ -204,12 +256,12 @@ void CNavMesh::AllocateGrid( float minX, float maxX, float minY, float maxY )
 void CNavMesh::AddNavArea( CNavArea *area )
 {
 	// add to grid
-	const Extent *extent = area->GetExtent();
+	const Extent &extent = area->GetExtent();
 
-	int loX = WorldToGridX( extent->lo.x );
-	int loY = WorldToGridY( extent->lo.y );
-	int hiX = WorldToGridX( extent->hi.x );
-	int hiY = WorldToGridY( extent->hi.y );
+	int loX = WorldToGridX( extent.lo.x );
+	int loY = WorldToGridY( extent.lo.y );
+	int hiX = WorldToGridX( extent.hi.x );
+	int hiY = WorldToGridY( extent.hi.y );
 
 	for( int y = loY; y <= hiY; ++y )
 	{
@@ -248,12 +300,12 @@ void CNavMesh::AddNavArea( CNavArea *area )
 void CNavMesh::RemoveNavArea( CNavArea *area )
 {
 	// add to grid
-	const Extent *extent = area->GetExtent();
+	const Extent &extent = area->GetExtent();
 
-	int loX = WorldToGridX( extent->lo.x );
-	int loY = WorldToGridY( extent->lo.y );
-	int hiX = WorldToGridX( extent->hi.x );
-	int hiY = WorldToGridY( extent->hi.y );
+	int loX = WorldToGridX( extent.lo.x );
+	int loY = WorldToGridY( extent.lo.y );
+	int hiX = WorldToGridX( extent.hi.x );
+	int hiY = WorldToGridY( extent.hi.y );
 
 	for( int y = loY; y <= hiY; ++y )
 	{
@@ -293,38 +345,38 @@ void CNavMesh::RemoveNavArea( CNavArea *area )
 /**
  * Given a position, return the nav area that IsOverlapping and is *immediately* beneath it
  */
-CNavArea *CNavMesh::GetNavArea( const Vector *pos, float beneathLimit ) const
+CNavArea *CNavMesh::GetNavArea( const Vector &pos, float beneathLimit ) const
 {
 	if (m_grid == NULL)
 		return NULL;
 
 	// get list in cell that contains position
-	int x = WorldToGridX( pos->x );
-	int y = WorldToGridY( pos->y );
+	int x = WorldToGridX( pos.x );
+	int y = WorldToGridY( pos.y );
 	NavAreaList *list = &m_grid[ x + y*m_gridSizeX ];
 
 
 	// search cell list to find correct area
 	CNavArea *use = NULL;
 	float useZ = -99999999.9f;
-	Vector testPos = *pos + Vector( 0, 0, 5 );
+	Vector testPos = pos + Vector( 0, 0, 5 );
 
 	FOR_EACH_LL( (*list), it )
 	{
 		CNavArea *area = (*list)[ it ];
 
 		// check if position is within 2D boundaries of this area
-		if (area->IsOverlapping( &testPos ))
+		if (area->IsOverlapping( testPos ))
 		{
 			// project position onto area to get Z
-			float z = area->GetZ( &testPos );
+			float z = area->GetZ( testPos );
 
 			// if area is above us, skip it
 			if (z > testPos.z)
 				continue;
 
 			// if area is too far below us, skip it
-			if (z < pos->z - beneathLimit)
+			if (z < pos.z - beneathLimit)
 				continue;
 
 			// if area is higher than the one we have, use this instead
@@ -346,13 +398,15 @@ CNavArea *CNavMesh::GetNavArea( const Vector *pos, float beneathLimit ) const
  * and at the same height, or beneath it.
  * Used to find initial area if we start off of the mesh.
  */
-CNavArea *CNavMesh::GetNearestNavArea( const Vector *pos, bool anyZ ) const
+CNavArea *CNavMesh::GetNearestNavArea( const Vector &pos, bool anyZ, float maxDist ) const
 {
+	VPROF( "CNavMesh::GetNearestNavArea" );
+
 	if (m_grid == NULL)
 		return NULL;
 
 	CNavArea *close = NULL;
-	float closeDistSq = 99999999.9f;
+	float closeDistSq = maxDist * maxDist;
 
 	// quick check
 	close = GetNavArea( pos );
@@ -363,8 +417,8 @@ CNavArea *CNavMesh::GetNearestNavArea( const Vector *pos, bool anyZ ) const
 
 	// ensure source position is well behaved
 	Vector source;
-	source.x = pos->x;
-	source.y = pos->y;
+	source.x = pos.x;
+	source.y = pos.y;
 	if (GetGroundHeight( pos, &source.z ) == false)
 	{
 		return NULL;
@@ -380,7 +434,7 @@ CNavArea *CNavMesh::GetNearestNavArea( const Vector *pos, bool anyZ ) const
 		CNavArea *area = TheNavAreaList[ it ];
 
 		Vector areaPos;
-		area->GetClosestPointOnArea( &source, &areaPos );
+		area->GetClosestPointOnArea( source, &areaPos );
 
 		float distSq = (areaPos - source).LengthSqr();
 
@@ -430,9 +484,30 @@ CNavArea *CNavMesh::GetNavAreaByID( unsigned int id ) const
 
 //--------------------------------------------------------------------------------------------------------------
 /**
+ * Given an ID, return the associated ladder
+ */
+CNavLadder *CNavMesh::GetLadderByID( unsigned int id ) const
+{
+	if (id == 0)
+		return NULL;
+
+	FOR_EACH_LL( m_ladderList, it )
+	{
+		CNavLadder *ladder = m_ladderList[it];
+		if ( ladder->GetID() == id )
+		{
+			return ladder;
+		}
+	}
+
+	return NULL;
+}
+
+//--------------------------------------------------------------------------------------------------------------
+/**
  * Return radio chatter place for given coordinate
  */
-unsigned int CNavMesh::GetPlace( const Vector *pos ) const
+unsigned int CNavMesh::GetPlace( const Vector &pos ) const
 {
 	CNavArea *area = GetNearestNavArea( pos, true );
 
@@ -489,11 +564,15 @@ void CNavMesh::LoadPlaceDatabase( void )
 		// remove trailing newline
 		if (buffer[ length-1 ] == '\n')
 			buffer[ length-1 ] = '\000';
+		if (buffer[ length-2 ] == '\r')
+			buffer[ length-2 ] = '\000';
 
 		m_placeName[ i ] = new char [ strlen(buffer)+1 ];
 		strcpy( m_placeName[ i ], buffer );
 		++i;
 	}
+
+	filesystem->Close( file );
 }
 
 //--------------------------------------------------------------------------------------------------------------
@@ -503,7 +582,7 @@ void CNavMesh::LoadPlaceDatabase( void )
  */
 const char *CNavMesh::PlaceToName( Place place ) const
 {
-	if (place > 1 && place <= m_placeCount)
+	if (place >= 1 && place <= m_placeCount)
 		return m_placeName[ (int)place - 1 ];
 
 	return NULL;
@@ -567,6 +646,41 @@ Place CNavMesh::PartialNameToPlace( const char *name ) const
 
 //--------------------------------------------------------------------------------------------------------------
 /**
+ * Given a partial place name, fill in possible place names for ConCommand autocomplete
+ */
+int CNavMesh::PlaceNameAutocomplete( char const *partial, char commands[ COMMAND_COMPLETION_MAXITEMS ][ COMMAND_COMPLETION_ITEM_LENGTH ] )
+{
+	int numMatches = 0;
+	partial += Q_strlen( "nav_use_place " );
+	int partialLength = Q_strlen( partial );
+
+	for( unsigned int i=0; i<m_placeCount; ++i )
+	{
+		if ( !Q_strnicmp( m_placeName[i], partial, partialLength ) )
+		{
+			// Add the place name to the autocomplete array
+			Q_snprintf( commands[ numMatches++ ], COMMAND_COMPLETION_ITEM_LENGTH, "nav_use_place %s", m_placeName[i] );
+
+			// Make sure we don't try to return too many place names
+			if ( numMatches == COMMAND_COMPLETION_MAXITEMS )
+				return numMatches;
+		}
+	}
+
+	return numMatches;
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+typedef const char * SortStringType;
+int StringSort (const SortStringType *s1, const SortStringType *s2)
+{
+	return strcmp( *s1, *s2 );
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+/**
  * Output a list of names to the console
  */
 void CNavMesh::PrintAllPlaces( void ) const
@@ -577,17 +691,26 @@ void CNavMesh::PrintAllPlaces( void ) const
 		return;
 	}
 
-	int i=0;
-	for( unsigned int it=0; it<m_placeCount; ++it )
-	{
-		if (NameToPlace( m_placeName[ it ] ) == GetNavPlace())
-			Msg( "--> %-26s", m_placeName[ it ] );
-		else
-			Msg( "%-30s", m_placeName[ it ] );
+	unsigned int i;
 
-		if (++i % 3 == 0)
+	CUtlVector< SortStringType > placeNames;
+	for ( i=0; i<m_placeCount; ++i )
+	{
+		placeNames.AddToTail( m_placeName[i] );
+	}
+	placeNames.Sort( StringSort );
+
+	for( i=0; i<(unsigned int)placeNames.Count(); ++i )
+	{
+		if (NameToPlace( placeNames[i] ) == GetNavPlace())
+			Msg( "--> %-26s", placeNames[i] );
+		else
+			Msg( "%-30s", placeNames[i] );
+
+		if ((i+1) % 3 == 0)
 			Msg( "\n" );
 	}
+
 	Msg( "\n" );
 }
 
@@ -597,12 +720,12 @@ void CNavMesh::PrintAllPlaces( void ) const
  * Return the ground height below this point in "height".
  * Return false if position is invalid (outside of map, in a solid area, etc).
  */
-bool CNavMesh::GetGroundHeight( const Vector *pos, float *height, Vector *normal ) const
+bool CNavMesh::GetGroundHeight( const Vector &pos, float *height, Vector *normal ) const
 {
 	Vector to;
-	to.x = pos->x;
-	to.y = pos->y;
-	to.z = pos->z - 9999.9f;
+	to.x = pos.x;
+	to.y = pos.y;
+	to.z = pos.z - 9999.9f;
 
 	float offset;
 	Vector from;
@@ -623,7 +746,7 @@ bool CNavMesh::GetGroundHeight( const Vector *pos, float *height, Vector *normal
 
 	for( offset = 1.0f; offset < maxOffset; offset += inc )
 	{
-		from = *pos + Vector( 0, 0, offset );
+		from = pos + Vector( 0, 0, offset );
 
 		UTIL_TraceLine( from, to, MASK_PLAYERSOLID_BRUSHONLY, ignore, COLLISION_GROUP_NONE, &result );
 
@@ -689,16 +812,16 @@ bool CNavMesh::GetGroundHeight( const Vector *pos, float *height, Vector *normal
  * This function is much faster, but less tolerant. Make sure the give position is "well behaved".
  * Return false if position is invalid (outside of map, in a solid area, etc).
  */
-bool CNavMesh::GetSimpleGroundHeight( const Vector *pos, float *height, Vector *normal ) const
+bool CNavMesh::GetSimpleGroundHeight( const Vector &pos, float *height, Vector *normal ) const
 {
 	Vector to;
-	to.x = pos->x;
-	to.y = pos->y;
-	to.z = pos->z - 9999.9f;
+	to.x = pos.x;
+	to.y = pos.y;
+	to.z = pos.z - 9999.9f;
 
 	trace_t result;
 
-	UTIL_TraceLine( *pos, to, MASK_PLAYERSOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &result );
+	UTIL_TraceLine( pos, to, MASK_PLAYERSOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &result );
 
 	if (result.startsolid)
 		return false;
@@ -721,9 +844,9 @@ void CNavMesh::DrawDanger( void ) const
 	{
 		CNavArea *area = TheNavAreaList[ it ];
 
-		Vector center = *area->GetCenter();
+		Vector center = area->GetCenter();
 		Vector top;
-		center.z = area->GetZ( &center );
+		center.z = area->GetZ( center );
 
 		float danger = area->GetDanger( 0 );
 		if (danger > 0.1f)
@@ -745,11 +868,48 @@ void CNavMesh::DrawDanger( void ) const
 	}
 }
 
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Zero player counts in all areas
+ */
+void CNavMesh::ClearPlayerCounts( void )
+{
+	FOR_EACH_LL( TheNavAreaList, it )
+	{
+		CNavArea *area = TheNavAreaList[ it ];
+
+		area->ClearPlayerCount();
+	}
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Show current player counts for debugging.
+ * NOTE: Assumes two teams.
+ */
+void CNavMesh::DrawPlayerCounts( void ) const
+{
+	CFmtStr msg;
+
+	FOR_EACH_LL( TheNavAreaList, it )
+	{
+		CNavArea *area = TheNavAreaList[ it ];
+
+		if (area->GetPlayerCount() > 0)
+		{
+			NDebugOverlay::Text( area->GetCenter(), msg.sprintf( "%d (%d/%d)", area->GetPlayerCount(), area->GetPlayerCount(1), area->GetPlayerCount(2) ), false, 0.1f );
+		}
+	}
+}
+
+
 //--------------------------------------------------------------------------------------------------------------
 /**
  * Increase the danger of nav areas containing and near the given position
  */
-void CNavMesh::IncreaseDangerNearby( int teamID, float amount, CNavArea *startArea, const Vector *pos, float maxRadius )
+void CNavMesh::IncreaseDangerNearby( int teamID, float amount, CNavArea *startArea, const Vector &pos, float maxRadius )
 {
 	if (startArea == NULL)
 		return;
@@ -778,7 +938,7 @@ void CNavMesh::IncreaseDangerNearby( int teamID, float amount, CNavArea *startAr
 				if (!adjArea->IsMarked())
 				{
 					// compute distance from danger source
-					float cost = (*adjArea->GetCenter() - *pos).Length();
+					float cost = (adjArea->GetCenter() - pos).Length();
 					if (cost <= maxRadius)
 					{
 						adjArea->AddToOpenList();
@@ -796,105 +956,262 @@ void CNavMesh::IncreaseDangerNearby( int teamID, float amount, CNavArea *startAr
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavDelete( void )
 {
-	TheNavMesh->Edit( EDIT_DELETE );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavDelete();
 }
-static ConCommand nav_delete( "nav_delete", CommandNavDelete, "Deletes the currently highlighted Area.", FCVAR_GAMEDLL );
+static ConCommand nav_delete( "nav_delete", CommandNavDelete, "Deletes the currently highlighted Area.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavSplit( void )
 {
-	TheNavMesh->Edit( EDIT_SPLIT );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavSplit();
 }
-static ConCommand nav_split( "nav_split", CommandNavSplit, "To split an Area into two, align the split line using your cursor and invoke the split command.", FCVAR_GAMEDLL );
+static ConCommand nav_split( "nav_split", CommandNavSplit, "To split an Area into two, align the split line using your cursor and invoke the split command.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavMakeSniperSpots( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavMakeSniperSpots();
+}
+static ConCommand nav_make_sniper_spots( "nav_make_sniper_spots", CommandNavMakeSniperSpots, "Chops the marked area into disconnected sub-areas suitable for sniper spots.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavMerge( void )
 {
-	TheNavMesh->Edit( EDIT_MERGE );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavMerge();
 }
-static ConCommand nav_merge( "nav_merge", CommandNavMerge, "To merge two Areas into one, mark the first Area, highlight the second by pointing your cursor at it, and invoke the merge command.", FCVAR_GAMEDLL );
+static ConCommand nav_merge( "nav_merge", CommandNavMerge, "To merge two Areas into one, mark the first Area, highlight the second by pointing your cursor at it, and invoke the merge command.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavMark( void )
 {
-	TheNavMesh->Edit( EDIT_MARK );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavMark();
 }
-static ConCommand nav_mark( "nav_mark", CommandNavMark, "Marks the Area under the cursor for manipulation by subsequent editing commands.", FCVAR_GAMEDLL );
+static ConCommand nav_mark( "nav_mark", CommandNavMark, "Marks the Area or Ladder under the cursor for manipulation by subsequent editing commands.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavUnmark( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavUnmark();
+}
+static ConCommand nav_unmark( "nav_unmark", CommandNavUnmark, "Clears the marked Area or Ladder.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavBeginArea( void )
 {
-	TheNavMesh->Edit( EDIT_BEGIN_AREA );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavBeginArea();
 }
-static ConCommand nav_begin_area( "nav_begin_area", CommandNavBeginArea, "Defines a corner of a new Area. To complete the Area, drag the opposite corner to the desired location and issue a 'nav_end_area' command.", FCVAR_GAMEDLL );
+static ConCommand nav_begin_area( "nav_begin_area", CommandNavBeginArea, "Defines a corner of a new Area or Ladder. To complete the Area or Ladder, drag the opposite corner to the desired location and issue a 'nav_end_area' command.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavEndArea( void )
 {
-	TheNavMesh->Edit( EDIT_END_AREA );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavEndArea();
 }
-static ConCommand nav_end_area( "nav_end_area", CommandNavEndArea, "Defines the second corner of a new Area and creates it.", FCVAR_GAMEDLL );
+static ConCommand nav_end_area( "nav_end_area", CommandNavEndArea, "Defines the second corner of a new Area or Ladder and creates it.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavConnect( void )
 {
-	TheNavMesh->Edit( EDIT_CONNECT );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavConnect();
 }
-static ConCommand nav_connect( "nav_connect", CommandNavConnect, "To connect two Areas, mark the first Area, highlight the second Area, then invoke the connect command. Note that this creates a ONE-WAY connection from the first to the second Area. To make a two-way connection, also connect the second area to the first.", FCVAR_GAMEDLL );
+static ConCommand nav_connect( "nav_connect", CommandNavConnect, "To connect two Areas, mark the first Area, highlight the second Area, then invoke the connect command. Note that this creates a ONE-WAY connection from the first to the second Area. To make a two-way connection, also connect the second area to the first.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavDisconnect( void )
 {
-	TheNavMesh->Edit( EDIT_DISCONNECT );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavDisconnect();
 }
-static ConCommand nav_disconnect( "nav_disconnect", CommandNavDisconnect, "To disconnect two Areas, mark an Area, highlight a second Area, then invoke the disconnect command. This will remove all connections between the two Areas.", FCVAR_GAMEDLL );
+static ConCommand nav_disconnect( "nav_disconnect", CommandNavDisconnect, "To disconnect two Areas, mark an Area, highlight a second Area, then invoke the disconnect command. This will remove all connections between the two Areas.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavSplice( void )
 {
-	TheNavMesh->Edit( EDIT_SPLICE );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavSplice();
 }
-static ConCommand nav_splice( "nav_splice", CommandNavSplice, "To splice, mark an area, highlight a second area, then invoke the splice command to create a new, connected area between them.", FCVAR_GAMEDLL );
+static ConCommand nav_splice( "nav_splice", CommandNavSplice, "To splice, mark an area, highlight a second area, then invoke the splice command to create a new, connected area between them.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavCrouch( void )
 {
-	TheNavMesh->Edit( EDIT_ATTRIB_CROUCH );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_CROUCH );
 }
-static ConCommand nav_crouch( "nav_crouch", CommandNavCrouch, "Toggles the 'must crouch in this area' flag used by the AI system.", FCVAR_GAMEDLL );
+static ConCommand nav_crouch( "nav_crouch", CommandNavCrouch, "Toggles the 'must crouch in this area' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavPrecise( void )
 {
-	TheNavMesh->Edit( EDIT_ATTRIB_PRECISE );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_PRECISE );
 }
-static ConCommand nav_precise( "nav_precise", CommandNavPrecise, "Toggles the 'dont avoid obstacles' flag used by the AI system.", FCVAR_GAMEDLL );
+static ConCommand nav_precise( "nav_precise", CommandNavPrecise, "Toggles the 'dont avoid obstacles' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavJump( void )
 {
-	TheNavMesh->Edit( EDIT_ATTRIB_JUMP );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_JUMP );
 }
-static ConCommand nav_jump( "nav_jump", CommandNavJump, "Toggles the 'traverse this area by jumping' flag used by the AI system.", FCVAR_GAMEDLL );
+static ConCommand nav_jump( "nav_jump", CommandNavJump, "Toggles the 'traverse this area by jumping' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavNoJump( void )
 {
-	TheNavMesh->Edit( EDIT_ATTRIB_NO_JUMP );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_NO_JUMP );
 }
-static ConCommand nav_no_jump( "nav_no_jump", CommandNavNoJump, "Toggles the 'dont jump in this area' flag used by the AI system.", FCVAR_GAMEDLL );
+static ConCommand nav_no_jump( "nav_no_jump", CommandNavNoJump, "Toggles the 'dont jump in this area' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavStop( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_STOP );
+}
+static ConCommand nav_stop( "nav_stop", CommandNavStop, "Toggles the 'must stop when entering this area' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavWalk( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_WALK );
+}
+static ConCommand nav_walk( "nav_walk", CommandNavWalk, "Toggles the 'traverse this area by walking' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavRun( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_RUN );
+}
+static ConCommand nav_run( "nav_run", CommandNavRun, "Toggles the 'traverse this area by running' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavAvoid( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_AVOID );
+}
+static ConCommand nav_avoid( "nav_avoid", CommandNavAvoid, "Toggles the 'avoid this area when possible' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavTransient( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_TRANSIENT );
+}
+static ConCommand nav_transient( "nav_transient", CommandNavTransient, "Toggles the 'area is transient and may become blocked' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavDontHide( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_DONT_HIDE );
+}
+static ConCommand nav_dont_hide( "nav_dont_hide", CommandNavDontHide, "Toggles the 'area is not suitable for hiding spots' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavStand( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavToggleAttribute( NAV_MESH_STAND );
+}
+static ConCommand nav_stand( "nav_stand", CommandNavStand, "Toggles the 'stand while hiding' flag used by the AI system.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavStrip( void )
 {
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	TheNavMesh->StripNavigationAreas();
 }
-static ConCommand nav_strip( "nav_strip", CommandNavStrip, "Strips all Hiding Spots, Approach Points, and Encounter Spots from the current Area.", FCVAR_GAMEDLL );
+static ConCommand nav_strip( "nav_strip", CommandNavStrip, "Strips all Hiding Spots, Approach Points, and Encounter Spots from the current Area.", FCVAR_GAMEDLL | FCVAR_CHEAT );
 
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavSave( void )
 {
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	if (TheNavMesh->Save())
 	{
 		Msg( "Navigation map '%s' saved.\n", TheNavMesh->GetFilename() );
@@ -905,21 +1222,36 @@ void CommandNavSave( void )
 		Msg( "ERROR: Cannot save navigation map '%s'.\n", (filename) ? filename : "(null)" );
 	}
 }
-static ConCommand nav_save( "nav_save", CommandNavSave, "Saves the current Navigation Mesh to disk.", FCVAR_GAMEDLL );
+static ConCommand nav_save( "nav_save", CommandNavSave, "Saves the current Navigation Mesh to disk.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavLoad( void )
 {
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	if (TheNavMesh->Load() != NAV_OK)
 	{
 		Msg( "ERROR: Navigation Mesh load failed.\n" );
 	}
 }
-static ConCommand nav_load( "nav_load", CommandNavLoad, "Loads the Navigation Mesh for the current map.", FCVAR_GAMEDLL );
+static ConCommand nav_load( "nav_load", CommandNavLoad, "Loads the Navigation Mesh for the current map.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+static int PlaceNameAutocompleteCallback( char const *partial, char commands[ COMMAND_COMPLETION_MAXITEMS ][ COMMAND_COMPLETION_ITEM_LENGTH ] )
+{
+	return TheNavMesh->PlaceNameAutocomplete( partial, commands );
+}
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavUsePlace( void )
 {
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	if (engine->Cmd_Argc() == 1)
 	{
 		// no arguments = list all available places
@@ -941,74 +1273,247 @@ void CommandNavUsePlace( void )
 		}
 	}
 }
-static ConCommand nav_use_place( "nav_use_place", CommandNavUsePlace, "If used without arguments, all available Places will be listed. If a Place argument is given, the current Place is set.", FCVAR_GAMEDLL );
+static ConCommand nav_use_place( "nav_use_place", CommandNavUsePlace, "If used without arguments, all available Places will be listed. If a Place argument is given, the current Place is set.", FCVAR_GAMEDLL | FCVAR_CHEAT, PlaceNameAutocompleteCallback );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavPlaceReplace( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	if (engine->Cmd_Argc() != 3)
+	{
+		// no arguments
+		Msg( "Usage: nav_place_replace <OldPlace> <NewPlace>\n" );
+	}
+	else
+	{
+		// two arguments - replace the first place with the second
+		Place oldPlace = TheNavMesh->PartialNameToPlace( engine->Cmd_Argv( 1 ) );
+		Place newPlace = TheNavMesh->PartialNameToPlace( engine->Cmd_Argv( 2 ) );
+
+		if ( oldPlace == UNDEFINED_PLACE || newPlace == UNDEFINED_PLACE )
+		{
+			Msg( "Ambiguous\n" );
+		}
+		else
+		{
+			FOR_EACH_LL( TheNavAreaList, it )
+			{
+				CNavArea *area = TheNavAreaList[it];
+				if ( area->GetPlace() == oldPlace )
+				{
+					area->SetPlace( newPlace );
+				}
+			}
+		}
+	}
+}
+static ConCommand nav_place_replace( "nav_place_replace", CommandNavPlaceReplace, "Replaces all instances of the first place with the second place.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavPlaceList( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	CUtlVector< Place > placeDirectory;
+
+	FOR_EACH_LL( TheNavAreaList, nit )
+	{
+		CNavArea *area = TheNavAreaList[ nit ];
+
+		Place place = area->GetPlace();
+
+		if ( place )
+		{
+			if ( !placeDirectory.HasElement( place ) )
+			{
+				placeDirectory.AddToTail( place );
+			}
+		}
+	}
+
+	Msg( "Map uses %d place names:\n", placeDirectory.Count() );
+	for ( int i=0; i<placeDirectory.Count(); ++i )
+	{
+		Msg( "    %s\n", TheNavMesh->PlaceToName( placeDirectory[i] ) );
+	}
+}
+static ConCommand nav_place_list( "nav_place_list", CommandNavPlaceList, "Lists all place names used in the map.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavTogglePlaceMode( void )
 {
-	TheNavMesh->Edit( EDIT_TOGGLE_PLACE_MODE );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavTogglePlaceMode();
 }
-static ConCommand nav_toggle_place_mode( "nav_toggle_place_mode", CommandNavTogglePlaceMode, "Toggle the editor into and out of Place mode. Place mode allows labelling of Area with Place names.", FCVAR_GAMEDLL );
+static ConCommand nav_toggle_place_mode( "nav_toggle_place_mode", CommandNavTogglePlaceMode, "Toggle the editor into and out of Place mode. Place mode allows labelling of Area with Place names.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavSetPlaceMode( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	bool on = true;
+	if ( engine->Cmd_Argc() == 2 )
+	{
+		on = (atoi( engine->Cmd_Argv( 1 ) ) != 0);
+	}
+
+	if ( on != TheNavMesh->IsPlaceMode() )
+	{
+		TheNavMesh->CommandNavTogglePlaceMode();
+	}
+}
+static ConCommand nav_set_place_mode( "nav_set_place_mode", CommandNavSetPlaceMode, "Sets the editor into or out of Place mode. Place mode allows labelling of Area with Place names.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavPlaceFloodFill( void )
 {
-	TheNavMesh->Edit( EDIT_PLACE_FLOODFILL );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavPlaceFloodFill();
 }
-static ConCommand nav_place_floodfill( "nav_place_floodfill", CommandNavPlaceFloodFill, "Sets the Place of the Area under the cursor to the curent Place, and 'flood-fills' the Place to all adjacent Areas. Flood-filling stops when it hits an Area with the same Place, or a different Place than that of the initial Area.", FCVAR_GAMEDLL );
+static ConCommand nav_place_floodfill( "nav_place_floodfill", CommandNavPlaceFloodFill, "Sets the Place of the Area under the cursor to the curent Place, and 'flood-fills' the Place to all adjacent Areas. Flood-filling stops when it hits an Area with the same Place, or a different Place than that of the initial Area.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavPlacePick( void )
 {
-	TheNavMesh->Edit( EDIT_PLACE_PICK );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavPlacePick();
 }
-static ConCommand nav_place_pick( "nav_place_pick", CommandNavPlacePick, "Sets the current Place to the Place of the Area under the cursor.", FCVAR_GAMEDLL );
+static ConCommand nav_place_pick( "nav_place_pick", CommandNavPlacePick, "Sets the current Place to the Place of the Area under the cursor.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavTogglePlacePainting( void )
 {
-	TheNavMesh->Edit( EDIT_TOGGLE_PLACE_PAINTING );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavTogglePlacePainting();
 }
-static ConCommand nav_toggle_place_painting( "nav_toggle_place_painting", CommandNavTogglePlacePainting, "Toggles Place Painting mode. When Place Painting, pointing at an Area will 'paint' it with the current Place.", FCVAR_GAMEDLL );
+static ConCommand nav_toggle_place_painting( "nav_toggle_place_painting", CommandNavTogglePlacePainting, "Toggles Place Painting mode. When Place Painting, pointing at an Area will 'paint' it with the current Place.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavMarkUnnamed( void )
 {
-	TheNavMesh->Edit( EDIT_MARK_UNNAMED );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavMarkUnnamed();
 }
-static ConCommand nav_mark_unnamed( "nav_mark_unnamed", CommandNavMarkUnnamed, "Mark an Area with no Place name. Useful for finding stray areas missed when Place Painting.", FCVAR_GAMEDLL );
+static ConCommand nav_mark_unnamed( "nav_mark_unnamed", CommandNavMarkUnnamed, "Mark an Area with no Place name. Useful for finding stray areas missed when Place Painting.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavCornerSelect( void )
 {
-	TheNavMesh->Edit( EDIT_SELECT_CORNER );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavCornerSelect();
 }
-static ConCommand nav_corner_select( "nav_corner_select", CommandNavCornerSelect, "Select a corner of the currently marked Area. Use multiple times to access all four corners.", FCVAR_GAMEDLL );
+static ConCommand nav_corner_select( "nav_corner_select", CommandNavCornerSelect, "Select a corner of the currently marked Area. Use multiple times to access all four corners.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavCornerRaise( void )
 {
-	TheNavMesh->Edit( EDIT_RAISE_CORNER );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavCornerRaise();
 }
-static ConCommand nav_corner_raise( "nav_corner_raise", CommandNavCornerRaise, "Raise the selected corner of the currently marked Area.", FCVAR_GAMEDLL );
+static ConCommand nav_corner_raise( "nav_corner_raise", CommandNavCornerRaise, "Raise the selected corner of the currently marked Area.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavCornerLower( void )
 {
-	TheNavMesh->Edit( EDIT_LOWER_CORNER );
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavCornerLower();
 }
-static ConCommand nav_corner_lower( "nav_corner_lower", CommandNavCornerLower, "Lower the selected corner of the currently marked Area.", FCVAR_GAMEDLL );
+static ConCommand nav_corner_lower( "nav_corner_lower", CommandNavCornerLower, "Lower the selected corner of the currently marked Area.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavCornerPlaceOnGround( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavCornerPlaceOnGround();
+}
+static ConCommand nav_corner_place_on_ground( "nav_corner_place_on_ground", CommandNavCornerPlaceOnGround, "Places the selected corner of the currently marked Area on the ground.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavWarpToMark( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavWarpToMark();
+}
+static ConCommand nav_warp_to_mark( "nav_warp_to_mark", CommandNavWarpToMark, "Warps the player to the marked area.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavLadderFlip( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->CommandNavLadderFlip();
+}
+static ConCommand nav_ladder_flip( "nav_ladder_flip", CommandNavLadderFlip, "Flips the selected ladder's direction.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavGenerate( void )
 {
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	TheNavMesh->BeginGeneration();
 }
-static ConCommand nav_generate( "nav_generate", CommandNavGenerate, "Generate a Navigation Mesh for the current map and save it to disk.", FCVAR_GAMEDLL );
+static ConCommand nav_generate( "nav_generate", CommandNavGenerate, "Generate a Navigation Mesh for the current map and save it to disk.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavAnalyze( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	TheNavMesh->BeginAnalysis();
+}
+static ConCommand nav_analyze( "nav_analyze", CommandNavAnalyze, "Re-analyze the current Navigation Mesh and save it to disk.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavMarkWalkable( void )
 {
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	Vector pos;
 
 	if (nav_edit.GetBool())
@@ -1035,7 +1540,7 @@ void CommandNavMarkWalkable( void )
 	pos.y = TheNavMesh->SnapToGrid( pos.y );
 
 	Vector normal;
-	if (TheNavMesh->GetGroundHeight( &pos, &pos.z, &normal ) == false)
+	if (TheNavMesh->GetGroundHeight( pos, &pos.z, &normal ) == false)
 	{
 		Msg( "ERROR: Invalid ground position.\n" );
 		return;
@@ -1045,15 +1550,31 @@ void CommandNavMarkWalkable( void )
 
 	Msg( "Walkable position marked.\n" );
 }
-static ConCommand nav_mark_walkable( "nav_mark_walkable", CommandNavMarkWalkable, "Mark the current location as a walkable position. These positions are used as seed locations when sampling the map to generate a Navigation Mesh.", FCVAR_GAMEDLL );
+static ConCommand nav_mark_walkable( "nav_mark_walkable", CommandNavMarkWalkable, "Mark the current location as a walkable position. These positions are used as seed locations when sampling the map to generate a Navigation Mesh.", FCVAR_GAMEDLL | FCVAR_CHEAT );
 
 
 //--------------------------------------------------------------------------------------------------------------
 void CommandNavClearWalkableMarks( void )
 {
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
 	TheNavMesh->ClearWalkableSeeds();
 }
-static ConCommand nav_clear_walkable_marks( "nav_clear_walkable_marks", CommandNavClearWalkableMarks, "Erase any previously placed walkable positions.", FCVAR_GAMEDLL );
+static ConCommand nav_clear_walkable_marks( "nav_clear_walkable_marks", CommandNavClearWalkableMarks, "Erase any previously placed walkable positions.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
+
+//--------------------------------------------------------------------------------------------------------------
+void CommandNavCompressID( void )
+{
+	if ( !UTIL_IsCommandIssuedByServerAdmin() )
+		return;
+
+	CNavArea::CompressIDs();
+	CNavLadder::CompressIDs();
+}
+static ConCommand nav_compress_id( "nav_compress_id", CommandNavCompressID, "Re-orders area and ladder ID's so they are continuous.", FCVAR_GAMEDLL | FCVAR_CHEAT );
+
 
 //--------------------------------------------------------------------------------------------------------------
 /**
@@ -1067,6 +1588,9 @@ void CNavMesh::DestroyLadders( void )
 	}
 
 	m_ladderList.RemoveAll();
+
+	m_markedLadder = NULL;
+	m_selectedLadder = NULL;
 }
 
 //--------------------------------------------------------------------------------------------------------------
@@ -1089,6 +1613,18 @@ HidingSpotList TheHidingSpotList;
 unsigned int HidingSpot::m_nextID = 1;
 unsigned int HidingSpot::m_masterMarker = 0;
 
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Hiding Spot factory
+ */
+HidingSpot *CNavMesh::CreateHidingSpot( void ) const
+{
+	return new HidingSpot;
+}
+
+
+//--------------------------------------------------------------------------------------------------------------
 void CNavMesh::DestroyHidingSpots( void )
 {
 	// remove all hiding spot references from the nav areas
@@ -1113,29 +1649,18 @@ void CNavMesh::DestroyHidingSpots( void )
 //--------------------------------------------------------------------------------------------------------------
 //--------------------------------------------------------------------------------------------------------------
 /**
- * For use when loading from a file
+ * Construct a Hiding Spot.  Assign a unique ID which may be overwritten if loaded.
  */
 HidingSpot::HidingSpot( void )
 {
 	m_pos = Vector( 0, 0, 0 );
-	m_id = 0;
-	m_flags = 0;
-
-	TheHidingSpotList.AddToTail( this );
-}
-
-//--------------------------------------------------------------------------------------------------------------
-/**
- * For use when generating - assigns unique ID
- */
-HidingSpot::HidingSpot( const Vector *pos, int flags )
-{
-	m_pos = *pos;
 	m_id = m_nextID++;
-	m_flags = (unsigned char)flags;
+	m_flags = 0;
+	m_area = NULL;
 
 	TheHidingSpotList.AddToTail( this );
 }
+
 
 //--------------------------------------------------------------------------------------------------------------
 void HidingSpot::Save( FileHandle_t file, unsigned int version ) const
@@ -1144,6 +1669,7 @@ void HidingSpot::Save( FileHandle_t file, unsigned int version ) const
 	filesystem->Write( &m_pos, 3 * sizeof(float), file );
 	filesystem->Write( &m_flags, sizeof(unsigned char), file );
 }
+
 
 //--------------------------------------------------------------------------------------------------------------
 void HidingSpot::Load( FileHandle_t file, unsigned int version )
@@ -1156,6 +1682,22 @@ void HidingSpot::Load( FileHandle_t file, unsigned int version )
 	if (m_id >= m_nextID)
 		m_nextID = m_id+1;
 }
+
+
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Hiding Spot post-load processing
+ */
+NavErrorType HidingSpot::PostLoad( void )
+{
+	// set our area
+	m_area = TheNavMesh->GetNavArea( m_pos + Vector( 0, 0, HalfHumanHeight ) );
+
+	AssertMsg( m_area, UTIL_VarArgs("A Hiding Spot is off of the Nav Mesh at (%.0f %.0f %.0f)", m_pos.x, m_pos.y, m_pos.z) );
+
+	return NAV_OK;
+}
+
 
 //--------------------------------------------------------------------------------------------------------------
 /**
@@ -1173,4 +1715,5 @@ HidingSpot *GetHidingSpotByID( unsigned int id )
 
 	return NULL;
 }
+
 
