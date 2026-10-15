@@ -37,8 +37,8 @@
 // padding for the derived class's members and MSVC does not, so a base class whose members end 4
 // bytes short of a multiple of 8 gets the 4 bytes as an explicit REBUILD_MSVC_TAIL_PAD member
 // (REBUILD_MSVC_TAIL_PAD_BYTES when the members end on an odd boundary).
-// In an MSVC build both macros are empty. Which member gives MSVC the 8-byte alignment is not
-// known yet; confirm it when the original compiler is available.
+// In an MSVC build both macros are empty. MSVC 7.1 gives the 8-byte alignment through BASEPTR and
+// ENTITYFUNCPTR: 16-byte member function pointers (the class is incomplete here), aligned to 8.
 #ifdef __GNUC__
 #define REBUILD_MSVC_ALIGN8				__attribute__(( aligned( 8 ) ))
 #define REBUILD_MSVC_TAIL_PAD( name )	int name;
@@ -205,10 +205,12 @@ struct PredictionContext
 //-----------------------------------------------------------------------------
 // Purpose: think contexts
 //-----------------------------------------------------------------------------
+// REBUILD: m_pfnThink first, as in Valve's 2006 SDK: client.dll's GetIndexForThinkContext reads
+// the context at +0x10 and the ticks at +0x14 and +0x18 of each 0x20-byte entry.
 struct thinkfunc_t
 {
-	string_t	m_iszContext;
 	BASEPTR		m_pfnThink;
+	string_t	m_iszContext;
 	int			m_nNextThinkTick;
 	int			m_nLastThinkTick;
 };
