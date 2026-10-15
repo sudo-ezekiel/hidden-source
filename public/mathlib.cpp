@@ -260,10 +260,10 @@ float FASTCALL _3DNow_VectorNormalize (Vector& vec)
         		: "=y" (radius), "=y" (c), "=y" (d)
         		: "y" (a), "0" (b), "1" (c), "2" (d)
         	);
-        	__asm __volatile__( "femms" );
-
       		memcpy(&vec[0],&c,sizeof(c));
       		memcpy(&vec[2],&d,sizeof(d));		
+        	__asm __volatile__( "femms" );
+
 #else
 #error
 #endif
