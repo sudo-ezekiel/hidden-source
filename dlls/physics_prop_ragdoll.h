@@ -103,7 +103,7 @@ public:
 
 	// Hidden: the health left in a corpse, which the Hidden's knife feeds on
 	int				GetHealth( void );
-	void			SetHealth( int iHealth );	// adds iHealth to the corpse's health
+	void			SetHealth( int healthValue );	// adds healthValue to the corpse's health
 
 	DECLARE_DATADESC();
 

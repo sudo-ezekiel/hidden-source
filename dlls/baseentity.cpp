@@ -348,8 +348,8 @@ CBaseEntity::CBaseEntity( bool bServerOnly )
 	SetCheckUntouch( false );
 	SetModelIndex( 0 );
 	SetModelName( NULL_STRING );
-	m_bSpawnAnglesSet = false;
-	m_bSpawnOriginSet = false;
+	m_flStoredAngle = false;
+	m_flStoredOrigin = false;
 
 	SetCollisionBounds( vec3_origin, vec3_origin );
 	ClearFlags();
@@ -4915,10 +4915,10 @@ void CBaseEntity::SetAbsOrigin( const Vector& absOrigin )
 		return;
 
 	// Hidden: remember the first origin for Reset()
-	if ( !m_bSpawnOriginSet )
+	if ( !m_flStoredOrigin )
 	{
-		m_bSpawnOriginSet = true;
-		m_vecSpawnOrigin = absOrigin;
+		m_flStoredOrigin = true;
+		m_vStoreOrigin = absOrigin;
 	}
 
 	// All children are invalid, but we are not
@@ -4964,10 +4964,10 @@ void CBaseEntity::SetAbsAngles( const QAngle& absAngles )
 		return;
 
 	// Hidden: remember the first angles for Reset()
-	if ( !m_bSpawnAnglesSet )
+	if ( !m_flStoredAngle )
 	{
-		m_bSpawnAnglesSet = true;
-		m_angSpawnAngles = absAngles;
+		m_flStoredAngle = true;
+		m_aStoreAngle = absAngles;
 	}
 
 	// All children are invalid, but we are not
@@ -5044,15 +5044,15 @@ void CBaseEntity::SetAbsVelocity( const Vector &vecAbsVelocity )
 //-----------------------------------------------------------------------------
 void CBaseEntity::Reset( void )
 {
-	if ( m_vecSpawnOrigin != GetAbsOrigin() )
+	if ( m_vStoreOrigin != GetAbsOrigin() )
 	{
 		AddEffects( EF_NOINTERP );
-		UTIL_SetOrigin( this, m_vecSpawnOrigin );
+		UTIL_SetOrigin( this, m_vStoreOrigin );
 	}
 
-	if ( m_angSpawnAngles != GetAbsAngles() )
+	if ( m_aStoreAngle != GetAbsAngles() )
 	{
-		SetAbsAngles( m_angSpawnAngles );
+		SetAbsAngles( m_aStoreAngle );
 	}
 
 	SetAbsVelocity( vec3_origin );

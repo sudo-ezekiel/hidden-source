@@ -68,7 +68,7 @@ bool CTutorialGameRules::ClientCommand( const char *pcmd, CBaseEntity *pEdict )
 {
 	// Start the round as soon as the player picks a character
 	if ( pEdict->IsPlayer() && FStrEq( pcmd, "enter" ) )
-		m_flIntermissionEnd = gpGlobals->curtime;
+		m_flIntermissionEndTime = gpGlobals->curtime;
 
 	return BaseClass::ClientCommand( pcmd, pEdict );
 }

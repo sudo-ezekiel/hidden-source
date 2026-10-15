@@ -101,7 +101,7 @@ void COverRunGameRules::SurvivalThink( void )
 {
 	GameThink();
 
-	int iTimeLeft = GetRoundTimerRemain() - m_pSurvivor->m_iSpawnTimer;
+	int iTimeLeft = GetRoundTimerRemain() - m_pSurvivor->m_iTimer;
 	if ( m_iSurvivalTime != iTimeLeft && m_pSurvivor->IsAlive() )
 	{
 		m_iSurvivalTime = iTimeLeft;
@@ -119,7 +119,7 @@ void COverRunGameRules::SurvivalThink( void )
 bool COverRunGameRules::HiddenWins( void )
 {
 	bool bWins = false;
-	if ( m_iMarines <= 0 )
+	if ( m_iMarineCount <= 0 )
 	{
 		UTIL_ClientPrintAll( HUD_PRINTCENTER, "I.R.I.S. Eliminated" );
 		bWins = true;
@@ -224,7 +224,7 @@ void COverRunGameRules::RespawnHiddens( void )
 		if ( !m_DeadPlayers[i] || !m_DeadPlayers[i]->m_bSpawn )
 			continue;
 
-		int iTimeLeft = GetRoundTimerRemain() - m_DeadPlayers[i]->m_iSpawnTimer;
+		int iTimeLeft = GetRoundTimerRemain() - m_DeadPlayers[i]->m_iTimer;
 		if ( iTimeLeft < 0 )
 			iTimeLeft = 0;
 
@@ -297,7 +297,7 @@ void COverRunGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInf
 	// Hiddens keep coming back, the base class counted this one out
 	int iTeam = pVictim->GetTeamNumber();
 	if ( iTeam == TEAM_HIDDEN )
-		m_iHiddens++;
+		m_iHiddenCount++;
 
 	if ( !m_pSurvivor )
 	{
@@ -312,7 +312,7 @@ void COverRunGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInf
 		pVictim->SetSpawnTimer( GetRoundTimerRemain(), iWait );
 		m_DeadPlayers.AddToTail( pVictim );
 
-		if ( m_iMarines == 1 )
+		if ( m_iMarineCount == 1 )
 		{
 			int iSurvivalTime = hdn_survivaltime.GetInt();
 			SetSurvivingMarine();

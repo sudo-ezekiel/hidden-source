@@ -79,16 +79,16 @@ public:
 	CBludgeonWeaponSDKBase( const CBludgeonWeaponSDKBase & );
 
 protected:
-	void			ImpactEffect( trace_t &trace );
+	void			ImpactEffect( trace_t &tr );
 
 private:
-	void			ImpactWater( const Vector &start, const Vector &end );
+	void			ImpactWater( const Vector &vStart, const Vector &vEnd );
 	void			Swing( int bIsSecondary );
-	void			Hit( trace_t &traceHit, Activity nHitActivity );
-	void			ChooseIntersectionPointAndActivity( trace_t &hitTrace, const Vector &mins, const Vector &maxs, CSDKPlayer *pOwner );
+	void			Hit( trace_t &tr, Activity hitActivity );
+	void			ChooseIntersectionPointAndActivity( trace_t &tr, const Vector &mins, const Vector &maxs, CSDKPlayer *pPlayer );
 
-	bool			m_bPigsticking;		// REBUILD: name. Set when the pigstick starts, cleared when its swing lands.
-	float			m_flPigstickTime;	// REBUILD: name. When the pigstick swing lands.
+	bool			m_bHitDelayed;		// set when the pigstick starts, cleared when its swing lands
+	float			m_flDelayedHit;		// when the pigstick swing lands
 };
 
 #endif // HDN_BLUDGEONWEAPON_SDKBASE_H

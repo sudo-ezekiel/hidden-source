@@ -112,6 +112,20 @@ void CWeaponPistol::SetSafe()
 	BaseClass::SetSafe();
 }
 
+bool CWeaponPistol::Deploy()
+{
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	pPlayer->m_iShotsFired = 0;
+
+	if ( pPlayer && pPlayer->GetSafe() )
+	{
+		SendWeaponAnim( ACT_VM_LOWERED );
+		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
+	}
+
+	return BaseClass::Deploy();
+}
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
@@ -128,48 +142,6 @@ bool CWeaponPistol::Holster( CBaseCombatWeapon *pSwitchingTo )
 #endif
 
 	return BaseClass::Holster( pSwitchingTo );
-}
-
-void CWeaponPistol::WeaponIdle()
-{
-	if (m_flTimeWeaponIdle > gpGlobals->curtime)
-		return;
-
-	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
-	if ( !pPlayer )
-		return;
-
-	if ( pPlayer->GetSafe() )
-	{
-		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
-	}
-	// only idle if the slid isn't back
-	else if ( m_iClip1 != 0 )
-	{
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
-		SendWeaponAnim( ACT_VM_IDLE );
-	}
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
-void CWeaponPistol::ItemPreFrame( void )
-{
-	UpdatePenaltyTime();
-
-	BaseClass::ItemPreFrame();
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
-void CWeaponPistol::ItemBusyFrame( void )
-{
-	UpdatePenaltyTime();
-
-	BaseClass::ItemBusyFrame();
 }
 
 bool CWeaponPistol::Reload()
@@ -203,72 +175,6 @@ bool CWeaponPistol::Reload()
 	pPlayer->m_iShotsFired = 0;
 
 	return true;
-}
-
-bool CWeaponPistol::Deploy()
-{
-	CSDKPlayer *pPlayer = GetPlayerOwner();
-	pPlayer->m_iShotsFired = 0;
-
-	if ( pPlayer && pPlayer->GetSafe() )
-	{
-		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
-	}
-
-	return BaseClass::Deploy();
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: Allows firing as fast as button is pressed
-//-----------------------------------------------------------------------------
-void CWeaponPistol::ItemPostFrame( void )
-{
-	BaseClass::ItemPostFrame();
-
-	if ( m_bInReload )
-		return;
-	
-	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
-
-	if ( pOwner == NULL )
-		return;
-
-	if ( pOwner->GetSafe() )
-		return;
-
-	//Allow a refire as fast as the player can click
-	if ( ( ( pOwner->m_nButtons & IN_ATTACK ) == false ) && ( m_flSoonestPrimaryAttack < gpGlobals->curtime ) )
-	{
-		m_flNextPrimaryAttack = gpGlobals->curtime - 0.1f;
-	}
-	else if ( ( pOwner->m_nButtons & IN_ATTACK ) && ( m_flNextPrimaryAttack < gpGlobals->curtime ) && ( m_iClip1 <= 0 ) )
-	{
-		// Dry fire
-		WeaponSound( EMPTY );
-		SendWeaponAnim( ACT_VM_DRYFIRE );
-		
-		m_flSoonestPrimaryAttack	= gpGlobals->curtime + PISTOL_FASTEST_DRY_REFIRE_TIME;
-		m_flNextPrimaryAttack		= gpGlobals->curtime + SequenceDuration();
-	}
-}
-
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
-void CWeaponPistol::UpdatePenaltyTime( void )
-{
-	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
-
-	if ( pOwner == NULL )
-		return;
-
-	// Check our penalty time decay
-	if ( ( ( pOwner->m_nButtons & IN_ATTACK ) == false ) && ( m_flSoonestPrimaryAttack < gpGlobals->curtime ) )
-	{
-		m_flAccuracyPenalty -= gpGlobals->frametime;
-		m_flAccuracyPenalty = clamp( m_flAccuracyPenalty, 0.0f, PISTOL_ACCURACY_MAXIMUM_PENALTY_TIME );
-	}
 }
 
 void CWeaponPistol::PrimaryAttack( void )
@@ -336,4 +242,98 @@ void CWeaponPistol::PrimaryAttack( void )
 
 	// start idle animation in 5 seconds
 	SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
+}
+
+void CWeaponPistol::WeaponIdle()
+{
+	if (m_flTimeWeaponIdle > gpGlobals->curtime)
+		return;
+
+	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( !pPlayer )
+		return;
+
+	if ( pPlayer->GetSafe() )
+	{
+		SendWeaponAnim( ACT_VM_LOWERED );
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
+	}
+	// only idle if the slid isn't back
+	else if ( m_iClip1 != 0 )
+	{
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
+		SendWeaponAnim( ACT_VM_IDLE );
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CWeaponPistol::UpdatePenaltyTime( void )
+{
+	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
+
+	if ( pOwner == NULL )
+		return;
+
+	// Check our penalty time decay
+	if ( ( ( pOwner->m_nButtons & IN_ATTACK ) == false ) && ( m_flSoonestPrimaryAttack < gpGlobals->curtime ) )
+	{
+		m_flAccuracyPenalty -= gpGlobals->frametime;
+		m_flAccuracyPenalty = clamp( m_flAccuracyPenalty, 0.0f, PISTOL_ACCURACY_MAXIMUM_PENALTY_TIME );
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CWeaponPistol::ItemPreFrame( void )
+{
+	UpdatePenaltyTime();
+
+	BaseClass::ItemPreFrame();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CWeaponPistol::ItemBusyFrame( void )
+{
+	UpdatePenaltyTime();
+
+	BaseClass::ItemBusyFrame();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Allows firing as fast as button is pressed
+//-----------------------------------------------------------------------------
+void CWeaponPistol::ItemPostFrame( void )
+{
+	BaseClass::ItemPostFrame();
+
+	if ( m_bInReload )
+		return;
+	
+	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
+
+	if ( pOwner == NULL )
+		return;
+
+	if ( pOwner->GetSafe() )
+		return;
+
+	//Allow a refire as fast as the player can click
+	if ( ( ( pOwner->m_nButtons & IN_ATTACK ) == false ) && ( m_flSoonestPrimaryAttack < gpGlobals->curtime ) )
+	{
+		m_flNextPrimaryAttack = gpGlobals->curtime - 0.1f;
+	}
+	else if ( ( pOwner->m_nButtons & IN_ATTACK ) && ( m_flNextPrimaryAttack < gpGlobals->curtime ) && ( m_iClip1 <= 0 ) )
+	{
+		// Dry fire
+		WeaponSound( EMPTY );
+		SendWeaponAnim( ACT_VM_DRYFIRE );
+		
+		m_flSoonestPrimaryAttack	= gpGlobals->curtime + PISTOL_FASTEST_DRY_REFIRE_TIME;
+		m_flNextPrimaryAttack		= gpGlobals->curtime + SequenceDuration();
+	}
 }

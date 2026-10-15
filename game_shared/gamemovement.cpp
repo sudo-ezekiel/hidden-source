@@ -169,7 +169,7 @@ CGameMovement::CGameMovement( void )
 
 	mv					= NULL;
 
-	m_flClingTime		= 0;
+	m_fPounceTime		= 0;
 
 	memset( m_flStuckCheckTime, 0, sizeof(m_flStuckCheckTime) );
 }
@@ -862,14 +862,14 @@ void CGameMovement::CheckWaterJump( void )
 	VectorMA( vecStart, 24.0f, flatforward, vecEnd );
 
 	// Hidden: splash at the feet
-	Vector feet;
-	feet[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
-	feet[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
-	feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
+	Vector point;
+	point[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
+	point[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
+	point[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
 
 	CEffectData data;
 	data.m_fFlags = 0;
-	data.m_vOrigin = feet;
+	data.m_vOrigin = point;
 	data.m_vNormal.Init( 0, 0, 1 );
 	VectorAngles( data.m_vNormal, data.m_vAngles );
 	data.m_flScale = random->RandomFloat( 8, 10 );
@@ -1340,15 +1340,15 @@ void CGameMovement::AirMove( void )
 	// Hidden: holding +pounce in the air with a wall within 24 units of the eyes makes the Hidden cling to it
 	if ( player->GetMoveType() != MOVETYPE_CLING && player->GetTeamNumber() == TEAM_HIDDEN && ( mv->m_nButtons & IN_BULLRUSH ) )
 	{
-		Vector vecSrc = player->Weapon_ShootPosition();
-		Vector vecForward;
-		player->EyeVectors( &vecForward );
+		Vector vStart = player->Weapon_ShootPosition();
+		Vector vForward;
+		player->EyeVectors( &vForward );
 
-		Vector vecEnd = vecSrc + vecForward * 24;
-		UTIL_TraceLine( vecSrc, vecEnd, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
+		Vector vEnd = vStart + vForward * 24;
+		UTIL_TraceLine( vStart, vEnd, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
 		if ( tr.fraction < 1.0 )
 		{
-			m_flClingTime = gpGlobals->curtime + 4.0f;
+			m_fPounceTime = gpGlobals->curtime + 4.0f;
 			player->SetMoveType( MOVETYPE_CLING );
 			return;
 		}
@@ -2042,9 +2042,9 @@ bool CGameMovement::CheckPounceButton( void )
 
 	// Launch along the aim
 	float flPounceSpeed = 615.0f;
-	Vector vecPounce = player->GetAutoaimVector( 0 );
-	vecPounce *= flPounceSpeed;
-	VectorAdd( mv->m_vecVelocity, vecPounce, mv->m_vecVelocity );
+	Vector vecForward = player->GetAutoaimVector( 0 );
+	vecForward *= flPounceSpeed;
+	VectorAdd( mv->m_vecVelocity, vecForward, mv->m_vecVelocity );
 
 	FinishGravity();
 
@@ -3350,14 +3350,14 @@ void CGameMovement::CheckFalling( void )
 		{
 			// They landed in water.
 			// Hidden: splash at the feet
-			Vector feet;
-			feet[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
-			feet[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
-			feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
+			Vector point;
+			point[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
+			point[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
+			point[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
 
 			CEffectData data;
 			data.m_fFlags = 0;
-			data.m_vOrigin = feet;
+			data.m_vOrigin = point;
 			data.m_vNormal.Init( 0, 0, 1 );
 			VectorAngles( data.m_vNormal, data.m_vAngles );
 			data.m_flScale = random->RandomFloat( 8, 10 );

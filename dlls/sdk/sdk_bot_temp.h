@@ -12,7 +12,7 @@
 #endif
 
 
-CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int iTeam );
+CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int team );
 CBasePlayer *BotPutInServer( bool bFrozen );
 CBasePlayer *TutorialBotPutInServer( void );
 

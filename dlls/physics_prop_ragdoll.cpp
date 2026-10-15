@@ -1058,9 +1058,9 @@ bool CRagdollProp::IsFading()
 	return ( GetNextThink( s_pFadeOutContext ) >= gpGlobals->curtime );
 }
 
-void CRagdollProp::SetHealth( int iHealth )
+void CRagdollProp::SetHealth( int healthValue )
 {
-	m_iHealth += iHealth;
+	m_iHealth += healthValue;
 }
 
 int CRagdollProp::GetHealth( void )
@@ -1386,16 +1386,16 @@ CBaseEntity *CreateServerCorpseRagdoll( CBaseAnimating *pAnimating, int forceBon
 		DevMsg( 1, "hitting for over 100 damage\n" );
 
 		// Throw the pieces away from the attacker
-		CTakeDamageInfo gibInfo = info;
-		Vector vecDir = info.GetAttacker()->EyePosition();
-		VectorNormalize( vecDir );
-		gibInfo.SetDamage( 50 );
-		CalculateMeleeDamageForce( &gibInfo, vecDir, pAnimating->GetAbsOrigin() );
+		CTakeDamageInfo temp = info;
+		Vector vForward = info.GetAttacker()->EyePosition();
+		VectorNormalize( vForward );
+		temp.SetDamage( 50 );
+		CalculateMeleeDamageForce( &temp, vForward, pAnimating->GetAbsOrigin() );
 
 		int iGibSet = random->RandomInt( 1, 3 );
 		CBasePlayer *pPlayer = ToBasePlayer( pAnimating );
 
-		UTIL_BloodSpray( pAnimating->GetAbsOrigin(), vecDir, BLOOD_COLOR_RED, 10, FX_BLOODSPRAY_ALL );
+		UTIL_BloodSpray( pAnimating->GetAbsOrigin(), vForward, BLOOD_COLOR_RED, 10, FX_BLOODSPRAY_ALL );
 
 		// The ragdoll becomes a torso; the rest flies off as gibs
 		switch ( iGibSet )
@@ -1442,7 +1442,7 @@ CBaseEntity *CreateServerCorpseRagdoll( CBaseAnimating *pAnimating, int forceBon
 			pRagdoll->m_nSkin = 1;
 		}
 
-		pRagdoll->InitRagdoll( gibInfo.GetDamageForce(), forceBone, gibInfo.GetDamagePosition(), pBoneToWorld, pBoneToWorldNext, dt, collisionGroup, true );
+		pRagdoll->InitRagdoll( temp.GetDamageForce(), forceBone, temp.GetDamagePosition(), pBoneToWorld, pBoneToWorldNext, dt, collisionGroup, true );
 
 		// A torn up corpse has less left to feed on
 		pRagdoll->SetHealth( -25 );

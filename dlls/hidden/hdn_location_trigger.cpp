@@ -24,7 +24,7 @@ public:
 	void	BrushTouch( CBaseEntity *pOther );
 
 	char	*m_Location;		// FIELD_STRING, but used as a plain pointer: no NULL check
-	bool	m_bChanged;			// REBUILD: name ours. The last toucher's location changed
+	bool	m_location_change;			// the last toucher's location changed
 };
 
 LINK_ENTITY_TO_CLASS( location_brush, CLocationBrush );
@@ -37,7 +37,7 @@ END_DATADESC()
 
 void CLocationBrush::Spawn( void )
 {
-	m_bChanged = true;
+	m_location_change = true;
 	SetTouch( &CLocationBrush::BrushTouch );
 
 	SetMoveType( MOVETYPE_NONE );
@@ -55,9 +55,9 @@ void CLocationBrush::BrushTouch( CBaseEntity *pOther )
 		return;
 
 	CBasePlayer *pPlayer = static_cast<CBasePlayer *>( pOther );
-	m_bChanged = pPlayer->SetCurrentLocation( m_Location );
+	m_location_change = pPlayer->SetCurrentLocation( m_Location );
 
-	if ( m_bChanged == true )
+	if ( m_location_change == true )
 	{
 		IGameEvent *event = gameeventmanager->CreateEvent( "player_location" );
 		if ( event )

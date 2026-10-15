@@ -40,10 +40,6 @@ void CHDNSpectator::Precache( void )
 	PrecacheModel( HDN_SPECTATOR_MODEL );
 }
 
-void CHDNSpectator::Think( void )
-{
-}
-
 void CHDNSpectator::Spawn( void )
 {
 	Precache();
@@ -55,4 +51,8 @@ void CHDNSpectator::Spawn( void )
 	m_fFOV = m_fFOVValue;
 	Q_strncpy( m_Location.GetForModify(), m_pLocation, sizeof( m_Location ) );
 #endif
+}
+
+void CHDNSpectator::Think( void )
+{
 }

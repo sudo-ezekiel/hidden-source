@@ -478,19 +478,19 @@ CBasePlayer::CBasePlayer( )
 	memset( m_CurrentLocation.GetForModify(), 0, sizeof( m_CurrentLocation ) );
 	m_iNewClass = 2;
 	m_bSpawn = false;
-	m_iCharacterSkin = -1;
-	m_iCharacterBody = -1;
+	m_nSkin_change = -1;
+	m_nBody_change = -1;
 	m_iNewPrimary = -1;
 	m_iPrimary = -1;
 	m_iNewSecondary = -1;
 	m_iSecondary = -1;
-	m_iNewEquipment = -1;
+	m_iNewEquip = -1;
 	m_iEquipment = -1;
 	m_bReady = false;
 	m_bNoHidden = false;
 	m_bHadHidden = true;
 
-	DevMsg( 1, "Primary [%i] Secondary [%i] Equipment [%i]\n", m_iNewPrimary, m_iNewSecondary, m_iNewEquipment );
+	DevMsg( 1, "Primary [%i] Secondary [%i] Equipment [%i]\n", m_iNewPrimary, m_iNewSecondary, m_iNewEquip );
 }
 
 CBasePlayer::~CBasePlayer( )
@@ -1381,13 +1381,13 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 			event->SetInt("attacker", player->GetUserID() ); // hurt by other player
 
 			// Hidden: the weapon name without its "weapon_" prefix, for the log
-			const char *weaponName = "world";
+			const char *attacker_weapon_name = "world";
 			if ( player->GetActiveWeapon() )
 			{
-				weaponName = player->GetActiveWeapon()->GetDeathNoticeName();
-				if ( strncmp( weaponName, "weapon_", 7 ) == 0 )
+				attacker_weapon_name = player->GetActiveWeapon()->GetDeathNoticeName();
+				if ( strncmp( attacker_weapon_name, "weapon_", 7 ) == 0 )
 				{
-					weaponName += 7;
+					attacker_weapon_name += 7;
 				}
 			}
 
@@ -1410,7 +1410,7 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 				GetNetworkIDString(),
 				team ? team->GetName() : "",
 				(int)info.GetDamage(),
-				weaponName );
+				attacker_weapon_name );
 
 			// Hidden: damage to the other team raises the attacker's chance of being the next
 			// Hidden, damage to a team mate lowers it (see CHiddenSelector)
@@ -2440,28 +2440,28 @@ CBaseEntity * CBasePlayer::FindNextObserverTarget(bool bReverse)
 	{
 		if ( m_hObserverTarget )
 		{
-			for ( int i = 0; i < m_ObserverTargets.Count(); i++ )
+			for ( int i = 0; i < m_SpectorSpawns.Count(); i++ )
 			{
-				if ( m_hObserverTarget.Get() == m_ObserverTargets[i] )
+				if ( m_hObserverTarget.Get() == m_SpectorSpawns[i] )
 				{
 					if ( !bReverse )
 					{
-						if ( i == m_ObserverTargets.Count() - 1 )
-							return m_ObserverTargets[0];
+						if ( i == m_SpectorSpawns.Count() - 1 )
+							return m_SpectorSpawns[0];
 
-						return m_ObserverTargets[i + 1];
+						return m_SpectorSpawns[i + 1];
 					}
 
 					if ( i == 0 )
-						return m_ObserverTargets[m_ObserverTargets.Count() - 1];
+						return m_SpectorSpawns[m_SpectorSpawns.Count() - 1];
 
-					return m_ObserverTargets[i - 1];
+					return m_SpectorSpawns[i - 1];
 				}
 			}
 		}
 
-		if ( m_ObserverTargets.Count() > 0 )
-			return m_ObserverTargets[0];
+		if ( m_SpectorSpawns.Count() > 0 )
+			return m_SpectorSpawns[0];
 	}
 
 	return NULL;
@@ -4120,24 +4120,24 @@ void CBasePlayer::InitialSpawn( void )
 	m_iConnected = PlayerConnected;
 
 	// Hidden: collect the spectator cameras, falling back to the Hidden's spawn point
-	CBaseEntity *pCamera = NULL;
-	CBaseEntity *pFirstCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
-	pCamera = pFirstCamera;
+	CBaseEntity *pSpectatorSpot = NULL;
+	CBaseEntity *pFirstSpectator = gEntList.FindEntityByClassname( pSpectatorSpot, "info_spectator" );
+	pSpectatorSpot = pFirstSpectator;
 	do
 	{
-		pCamera = gEntList.FindEntityByClassname( pCamera, "info_spectator" );
-		if ( pCamera )
-			m_ObserverTargets.AddToTail( pCamera );
-	} while ( pCamera != pFirstCamera );
+		pSpectatorSpot = gEntList.FindEntityByClassname( pSpectatorSpot, "info_spectator" );
+		if ( pSpectatorSpot )
+			m_SpectorSpawns.AddToTail( pSpectatorSpot );
+	} while ( pSpectatorSpot != pFirstSpectator );
 
-	DevMsg( 1, "Camera Count : %i\n", m_ObserverTargets.Count() );
+	DevMsg( 1, "Camera Count : %i\n", m_SpectorSpawns.Count() );
 
-	if ( m_ObserverTargets.Count() == 0 )
+	if ( m_SpectorSpawns.Count() == 0 )
 	{
-		pCamera = gEntList.FindEntityByClassname( pCamera, "info_hidden_spawn" );
-		if ( !pCamera )
-			pCamera = gEntList.FindEntityByClassname( NULL, "info_hidden_spawn" );
-		m_ObserverTargets.AddToTail( pCamera );
+		pSpectatorSpot = gEntList.FindEntityByClassname( pSpectatorSpot, "info_hidden_spawn" );
+		if ( !pSpectatorSpot )
+			pSpectatorSpot = gEntList.FindEntityByClassname( NULL, "info_hidden_spawn" );
+		m_SpectorSpawns.AddToTail( pSpectatorSpot );
 	}
 }
 
@@ -5318,7 +5318,7 @@ bool CBasePlayer::ClientCommand(const char *cmd)
 		RemoveAllItems( true );
 
 		// Hidden: forget the class, the player picks one again
-		m_iClass = -1;
+		m_iMarineClass = -1;
 		m_iNewClass = -1;
 
 		ChangeTeam( TEAM_SPECTATOR );
@@ -6115,12 +6115,12 @@ const char *CBasePlayer::GetCurrentLocation( void )
 //-----------------------------------------------------------------------------
 // Purpose: Returns true if the location changed
 //-----------------------------------------------------------------------------
-bool CBasePlayer::SetCurrentLocation( char *pszLocation )
+bool CBasePlayer::SetCurrentLocation( char *m_location )
 {
-	if ( strcmp( m_CurrentLocation, pszLocation ) == 0 )
+	if ( strcmp( m_CurrentLocation, m_location ) == 0 )
 		return false;
 
-	Q_strncpy( m_CurrentLocation.GetForModify(), pszLocation, 25 );
+	Q_strncpy( m_CurrentLocation.GetForModify(), m_location, 25 );
 	return true;
 }
 
@@ -6129,14 +6129,14 @@ bool CBasePlayer::GetSafe( void )
 	return m_bSafety;
 }
 
-void CBasePlayer::SetSafe( bool bSafe )
+void CBasePlayer::SetSafe( bool safety )
 {
-	m_bSafety = bSafe;
+	m_bSafety = safety;
 }
 
 int CBasePlayer::GetClass( void )
 {
-	return m_iClass;
+	return m_iMarineClass;
 }
 
 int CBasePlayer::GetNewClass( void )
@@ -6148,20 +6148,20 @@ int CBasePlayer::GetNewClass( void )
 // Purpose: Picks the class used from the next spawn; -1 clears it, anything but
 //			0 or 1 picks one at random
 //-----------------------------------------------------------------------------
-void CBasePlayer::ChangeClass( int iClass )
+void CBasePlayer::ChangeClass( int newClass )
 {
-	if ( iClass == -1 )
+	if ( newClass == -1 )
 	{
-		m_iClass = -1;
+		m_iMarineClass = -1;
 		m_iNewClass = -1;
 	}
-	else if ( iClass != 0 && iClass != 1 )
+	else if ( newClass != 0 && newClass != 1 )
 	{
 		m_iNewClass = random->RandomInt( 0, 3 );
 	}
 	else
 	{
-		m_iNewClass = iClass;
+		m_iNewClass = newClass;
 	}
 }
 
@@ -6173,32 +6173,32 @@ void CBasePlayer::UpdatePlayerInfo( void )
 	if ( m_iNewClass != -1 )
 		ChangeTeam( TEAM_IRIS );
 
-	m_iClass = m_iNewClass;
-	m_iEquipment = m_iNewEquipment;
+	m_iMarineClass = m_iNewClass;
+	m_iEquipment = m_iNewEquip;
 	m_iPrimary = m_iNewPrimary;
 	m_iSecondary = m_iNewSecondary;
 }
 
-void CBasePlayer::SetSpawnBool( bool bSpawn )
+void CBasePlayer::SetSpawnBool( bool should_spawn )
 {
-	m_bSpawn = bSpawn;
+	m_bSpawn = should_spawn;
 }
 
-void CBasePlayer::SetSpawnTimer( int iTime, int iStart )
+void CBasePlayer::SetSpawnTimer( int time_of_death, int wait )
 {
-	m_iSpawnTimer = iTime - iStart;
-	m_bSpawn = ( m_iSpawnTimer > 9 );
+	m_iTimer = time_of_death - wait;
+	m_bSpawn = ( m_iTimer > 9 );
 }
 
 //-----------------------------------------------------------------------------
 // Purpose: Stamina changes only while it stays within 0 to 100
 //-----------------------------------------------------------------------------
-void CBasePlayer::SetStamina( float flAmount )
+void CBasePlayer::SetStamina( float newStamina )
 {
-	float flStamina = m_flStamina + flAmount;
+	float flStamina = m_flStamina + newStamina;
 	if ( flStamina > 100 || flStamina < 0 )
 		return;
-	m_flStamina += flAmount;
+	m_flStamina += newStamina;
 
 }
 
@@ -6207,7 +6207,7 @@ void CBasePlayer::SetStamina( float flAmount )
 //-----------------------------------------------------------------------------
 void CBasePlayer::Boost( void )
 {
-	m_flBoostTime = gpGlobals->curtime + 10.0f;
+	m_flBoostTimer = gpGlobals->curtime + 10.0f;
 	m_flMaxspeed = 250;
 	SetBoosted( true );
 }
@@ -6218,17 +6218,17 @@ void CBasePlayer::Boost( void )
 //-----------------------------------------------------------------------------
 void CBasePlayer::Stun( CBasePlayer *pAttacker )
 {
-	StunTracker tracker;
-	tracker.flExpireTime = gpGlobals->curtime + 10.0f;
-	tracker.pAttacker = pAttacker;
-	m_StunTrackers.AddToTail( tracker );
+	StunTracker temp;
+	temp.m_flStunTimer = gpGlobals->curtime + 10.0f;
+	temp.pStunner = pAttacker;
+	StunnerList.AddToTail( temp );
 
 
 	if ( !IsStunned() )
 	{
 		m_bStunned = true;
 		m_flBlur = 6.0f;
-		m_flNextStunThink = gpGlobals->curtime + 0.2f;
+		m_flStunUpdate = gpGlobals->curtime + 0.2f;
 	}
 
 	if ( m_flBlur < 6.0f )
@@ -6244,52 +6244,52 @@ void CBasePlayer::Stun( CBasePlayer *pAttacker )
 //-----------------------------------------------------------------------------
 void CBasePlayer::UpdateStun( void )
 {
-	if ( m_flNextStunThink < gpGlobals->curtime )
+	if ( m_flStunUpdate < gpGlobals->curtime )
 	{
 		if ( GetTeamNumber() == TEAM_HIDDEN )
 		{
-			for ( int i = 0; i < m_StunTrackers.Count(); i++ )
+			for ( int i = 0; i < StunnerList.Count(); i++ )
 			{
-				TakeDamage( CTakeDamageInfo( m_StunTrackers[i].pAttacker, m_StunTrackers[i].pAttacker, GetAbsVelocity(), GetAbsOrigin(), 0.3f, DMG_DIRECT ) );
+				TakeDamage( CTakeDamageInfo( StunnerList[i].pStunner, StunnerList[i].pStunner, GetAbsVelocity(), GetAbsOrigin(), 0.3f, DMG_DIRECT ) );
 
 			}
 		}
 
-		m_flNextStunThink = gpGlobals->curtime + 0.2f;
+		m_flStunUpdate = gpGlobals->curtime + 0.2f;
 
 		if ( m_flBlur > 1.0f )
 			m_flBlur -= ( 1.0f / m_flBlur ) * m_flBlur * 0.2f;
 
-		for ( int i = 0; i < m_StunTrackers.Count(); i++ )
+		for ( int i = 0; i < StunnerList.Count(); i++ )
 		{
-			if ( m_StunTrackers[i].flExpireTime < gpGlobals->curtime )
-				m_StunTrackers.Remove( i );
+			if ( StunnerList[i].m_flStunTimer < gpGlobals->curtime )
+				StunnerList.Remove( i );
 		}
 	}
 
-	if ( gpGlobals->curtime > m_flShockwaveEnd && m_StunTrackers.Count() == 0 )
+	if ( gpGlobals->curtime > m_flStunTimer && StunnerList.Count() == 0 )
 
 		m_bStunned = false;
 }
 
 //-----------------------------------------------------------------------------
-// Purpose: Caught in a shockwave: stunned for flDuration more seconds
+// Purpose: Caught in a shockwave: stunned for time more seconds
 //-----------------------------------------------------------------------------
-void CBasePlayer::Shockwave( float flBlur, float flDuration )
+void CBasePlayer::Shockwave( float bluramount, float time )
 {
-	if ( m_flShockwaveEnd > gpGlobals->curtime )
-		m_flShockwaveEnd = flDuration + m_flShockwaveEnd;
+	if ( m_flStunTimer > gpGlobals->curtime )
+		m_flStunTimer = time + m_flStunTimer;
 	else
-		m_flShockwaveEnd = flDuration + gpGlobals->curtime;
+		m_flStunTimer = time + gpGlobals->curtime;
 
 	m_bStunned = true;
 
 	if ( m_flBlur > 1.0f && m_flBlur < 10.0f && IsStunned() )
-		m_flBlur += flBlur;
+		m_flBlur += bluramount;
 	else
-		m_flBlur = flBlur;
+		m_flBlur = bluramount;
 
-	m_flNextStunThink = gpGlobals->curtime + 0.2f;
+	m_flStunUpdate = gpGlobals->curtime + 0.2f;
 }
 
 

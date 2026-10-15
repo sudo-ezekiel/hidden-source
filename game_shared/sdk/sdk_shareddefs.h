@@ -13,11 +13,12 @@
 
 #define SDK_PLAYER_VIEW_OFFSET	Vector( 0, 0, 53.5 )
 
-// Hidden: collision groups past Valve's shared ones (CSDKGameRules::ShouldCollide)
+// Hidden: collision groups past Valve's shared ones (CSDKGameRules::ShouldCollide). The May 2006
+// PDB has them inside Collision_Group_t, before LAST_SHARED_COLLISION_GROUP (rebuild/PDB.md).
 enum
 {
-	COLLISION_GROUP_HIDDEN = LAST_SHARED_COLLISION_GROUP,	// REBUILD: name; the Hidden player
-	COLLISION_GROUP_MARINE_CLIP,							// REBUILD: name; hdn_marine_clip brushes
+	COLLISION_GROUP_HIDDEN = LAST_SHARED_COLLISION_GROUP,	// the Hidden player
+	COLLISION_GROUP_MARINECLIP,								// hdn_marine_clip brushes
 };
 
 
