@@ -17,6 +17,12 @@
 #include "hl_movedata.h"
 #endif
 
+#ifdef CLIENT_DLL
+	#include "c_te_effect_dispatch.h"
+#else
+	#include "te_effect_dispatch.h"
+#endif
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -33,6 +39,9 @@ extern IFileSystem *filesystem;
 	static ConVar dispcoll_drawplane( "dispcoll_drawplane", "0" );
 #endif
 
+// Hidden: stamina added every tick while the Hidden hangs on a wall
+ConVar hdn_staminadrain( "hdn_staminadrain", "-0.095", FCVAR_REPLICATED | FCVAR_NOTIFY, "should be negative" );
+
 
 // tickcount currently isn't set during prediction, although gpGlobals->curtime and
 // gpGlobals->frametime are. We should probably set tickcount (to player->m_nTickBase),
@@ -48,13 +57,13 @@ bool g_bMovementOptimizations = true;
 // Roughly how often we want to update the info about the ground surface we're on.
 // We don't need to do this very often.
 #define CATEGORIZE_GROUND_SURFACE_INTERVAL			0.3f
-const int CATEGORIZE_GROUND_SURFACE_TICK_INTERVAL = ( (int)( CATEGORIZE_GROUND_SURFACE_INTERVAL / TICK_INTERVAL ) );
+#define CATEGORIZE_GROUND_SURFACE_TICK_INTERVAL   ( (int)( CATEGORIZE_GROUND_SURFACE_INTERVAL / TICK_INTERVAL ) )
 
 #define CHECK_STUCK_INTERVAL			0.4f
-const int CHECK_STUCK_TICK_INTERVAL = ( (int)( CHECK_STUCK_INTERVAL / TICK_INTERVAL ) );
+#define CHECK_STUCK_TICK_INTERVAL		( (int)( CHECK_STUCK_INTERVAL / TICK_INTERVAL ) )
 
 #define CHECK_LADDER_INTERVAL			0.2f
-const int CHECK_LADDER_TICK_INTERVAL = ( (int)( CHECK_LADDER_INTERVAL / TICK_INTERVAL ) );
+#define CHECK_LADDER_TICK_INTERVAL		( (int)( CHECK_LADDER_INTERVAL / TICK_INTERVAL ) )
 
 void COM_Log( char *pszFile, char *fmt, ...)
 {
@@ -160,8 +169,7 @@ CGameMovement::CGameMovement( void )
 
 	mv					= NULL;
 
-	m_surfaceProps = 0;
-	m_surfaceFriction = 1.0f;
+	m_flClingTime		= 0;
 
 	memset( m_flStuckCheckTime, 0, sizeof(m_flStuckCheckTime) );
 }
@@ -450,18 +458,18 @@ void CGameMovement::CategorizeGroundSurface( void )
 	trace_t	trace;
 	TracePlayerBBox( start, end, MASK_PLAYERSOLID_BRUSHONLY, COLLISION_GROUP_PLAYER_MOVEMENT, trace ); 
 	IPhysicsSurfaceProps *physprops = MoveHelper()->GetSurfaceProps();
-	m_surfaceProps = trace.surface.surfaceProps;
-	m_pSurfaceData = physprops->GetSurfaceData( m_surfaceProps );
-	physprops->GetPhysicsProperties( m_surfaceProps, NULL, NULL, &m_surfaceFriction, NULL );
+	player->m_surfaceProps = trace.surface.surfaceProps;
+	player->m_pSurfaceData = physprops->GetSurfaceData( player->m_surfaceProps );
+	physprops->GetPhysicsProperties( player->m_surfaceProps, NULL, NULL, &player->m_surfaceFriction, NULL );
 	
 	// HACKHACK: Scale this to fudge the relationship between vphysics friction values and player friction values.
 	// A value of 0.8f feels pretty normal for vphysics, whereas 1.0f is normal for players.
 	// This scaling trivially makes them equivalent.  REVISIT if this affects low friction surfaces too much.
-	m_surfaceFriction *= 1.25f;
-	if ( m_surfaceFriction > 1.0f )
-		m_surfaceFriction = 1.0f;
+	player->m_surfaceFriction *= 1.25f;
+	if ( player->m_surfaceFriction > 1.0f )
+		player->m_surfaceFriction = 1.0f;
 
-	m_chTextureType = m_pSurfaceData->game.material;
+	player->m_chTextureType = player->m_pSurfaceData->game.material;
 }
 
 bool CGameMovement::IsDead( void ) const
@@ -533,9 +541,9 @@ void CGameMovement::CheckParameters( void )
 
 		// Slow down by the speed factor
 		float flSpeedFactor = 1.0f;
-		if (m_pSurfaceData)
+		if (player->m_pSurfaceData)
 		{
-			flSpeedFactor = m_pSurfaceData->game.maxSpeedFactor;
+			flSpeedFactor = player->m_pSurfaceData->game.maxSpeedFactor;
 		}
 
 		// If we have a constraint, slow down because of that too.
@@ -852,6 +860,19 @@ void CGameMovement::CheckWaterJump( void )
 
 	Vector vecEnd;
 	VectorMA( vecStart, 24.0f, flatforward, vecEnd );
+
+	// Hidden: splash at the feet
+	Vector feet;
+	feet[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
+	feet[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
+	feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
+
+	CEffectData data;
+	data.m_vOrigin = feet;
+	data.m_vNormal.Init( 0, 0, 1 );
+	VectorAngles( data.m_vNormal, data.m_vAngles );
+	data.m_flScale = random->RandomFloat( 8, 12 );
+	DispatchEffect( "watersplash", data );
 	
 	trace_t tr;
 	TracePlayerBBox( vecStart, vecEnd, MASK_PLAYERSOLID, COLLISION_GROUP_PLAYER_MOVEMENT, tr );
@@ -968,7 +989,7 @@ void CGameMovement::WaterMove( void )
 	speed = VectorNormalize(temp);
 	if (speed)
 	{
-		newspeed = speed - gpGlobals->frametime * speed * sv_friction.GetFloat() * m_surfaceFriction;
+		newspeed = speed - gpGlobals->frametime * speed * sv_friction.GetFloat() * player->m_surfaceFriction;
 		if (newspeed < 0.1f)
 		{
 			newspeed = 0;
@@ -988,7 +1009,7 @@ void CGameMovement::WaterMove( void )
 		if (addspeed > 0)
 		{
 			VectorNormalize(wishvel);
-			accelspeed = sv_accelerate.GetFloat() * wishspeed * gpGlobals->frametime * m_surfaceFriction;
+			accelspeed = sv_accelerate.GetFloat() * wishspeed * gpGlobals->frametime * player->m_surfaceFriction;
 			if (accelspeed > addspeed)
 			{
 				accelspeed = addspeed;
@@ -1205,7 +1226,7 @@ void CGameMovement::Friction( void )
 		friction = sv_friction.GetFloat();
 
 		// Grab friction value.
-		friction *= m_surfaceFriction;  // player friction?
+		friction *= player->m_surfaceFriction;  // player friction?
 
 		// Bleed off some speed, but if we have less than the bleed
 		//  threshhold, bleed the theshold amount.
@@ -1288,7 +1309,7 @@ void CGameMovement::AirAccelerate( Vector& wishdir, float wishspeed, float accel
 		return;
 
 	// Determine acceleration speed after acceleration
-	accelspeed = accel * wishspeed * gpGlobals->frametime * m_surfaceFriction;
+	accelspeed = accel * wishspeed * gpGlobals->frametime * player->m_surfaceFriction;
 
 	// Cap it
 	if (accelspeed > addspeed)
@@ -1313,6 +1334,24 @@ void CGameMovement::AirMove( void )
 	Vector		wishdir;
 	float		wishspeed;
 	Vector forward, right, up;
+	trace_t tr;
+
+	// Hidden: holding +pounce in the air with a wall within 24 units of the eyes makes the Hidden cling to it
+	if ( player->GetMoveType() != MOVETYPE_CLING && player->GetTeamNumber() == TEAM_HIDDEN && ( mv->m_nButtons & IN_BULLRUSH ) )
+	{
+		Vector vecSrc = player->Weapon_ShootPosition();
+		Vector vecForward;
+		player->EyeVectors( &vecForward );
+
+		Vector vecEnd = vecSrc + vecForward * 24;
+		UTIL_TraceLine( vecSrc, vecEnd, MASK_SOLID_BRUSHONLY, NULL, COLLISION_GROUP_NONE, &tr );
+		if ( tr.fraction < 1.0 )
+		{
+			m_flClingTime = gpGlobals->curtime + 4.0f;
+			player->SetMoveType( MOVETYPE_CLING );
+			return;
+		}
+	}
 
 	AngleVectors (mv->m_vecViewAngles, &forward, &right, &up);  // Determine movement angles
 	
@@ -1384,8 +1423,9 @@ void CGameMovement::Accelerate( Vector& wishdir, float wishspeed, float accel )
 	if ( !CanAccelerate() )
 		return;
 
-	// See if we are changing direction a bit
-	currentspeed = mv->m_vecVelocity.Dot(wishdir);
+	// Hidden: compare against the full speed, not the speed along wishdir, so turning
+	// and strafing cannot build speed past wishspeed
+	currentspeed = sqrt( mv->m_vecVelocity.LengthSqr() );
 
 	// Reduce wishspeed by the amount of veer.
 	addspeed = wishspeed - currentspeed;
@@ -1395,7 +1435,7 @@ void CGameMovement::Accelerate( Vector& wishdir, float wishspeed, float accel )
 		return;
 
 	// Determine amount of accleration.
-	accelspeed = accel * gpGlobals->frametime * wishspeed * m_surfaceFriction;
+	accelspeed = accel * gpGlobals->frametime * wishspeed * player->m_surfaceFriction;
 
 	// Cap at addspeed
 	if (accelspeed > addspeed)
@@ -1605,6 +1645,16 @@ void CGameMovement::FullWalkMove( )
 			mv->m_nOldButtons &= ~IN_JUMP;
 		}
 
+		// Hidden: was pounce pressed?
+		if (mv->m_nButtons & IN_BULLRUSH)
+		{
+			CheckPounceButton();
+		}
+		else
+		{
+			mv->m_nOldButtons &= ~IN_BULLRUSH;
+		}
+
 		// Fricion is handled before we add in any base velocity. That way, if we are on a conveyor, 
 		//  we don't slow when standing still, relative to the conveyor.
 		if (player->GetGroundEntity() != NULL)
@@ -1657,108 +1707,15 @@ void CGameMovement::FullWalkMove( )
 //-----------------------------------------------------------------------------
 void CGameMovement::FullObserverMove( void )
 {
-	int mode = player->GetObserverMode();
+	// Hidden: spectators never roam, they always sit on their target (a camera or a player)
+	CBaseEntity * target = player->GetObserverTarget();
 
-	if ( mode == OBS_MODE_IN_EYE || mode == OBS_MODE_CHASE )
+	if ( target != NULL )
 	{
-		CBaseEntity * target = player->GetObserverTarget();
-
-		if ( target != NULL )
-		{
-			mv->m_vecAbsOrigin = target->GetAbsOrigin();
-			mv->m_vecViewAngles = target->GetAbsAngles();
-			mv->m_vecVelocity = target->GetAbsVelocity();
-		}
-
-		return;
+		mv->m_vecAbsOrigin = target->GetAbsOrigin();
+		mv->m_vecViewAngles = target->GetAbsAngles();
+		mv->m_vecVelocity = target->GetAbsVelocity();
 	}
-
-	if ( mode != OBS_MODE_ROAMING )
-	{
-		// don't move in fixed or death cam mode
-		return;
-	}
-
-	if ( sv_specnoclip.GetBool() )
-	{
-		// roam in noclip mode
-		FullNoClipMove( sv_specspeed.GetFloat(), sv_specaccelerate.GetFloat() );
-		return;
-	}
-
-	// do a full clipped free roam move:
-
-	Vector wishvel;
-	Vector forward, right, up;
-	Vector wishdir, wishend;
-	float wishspeed;
-
-	AngleVectors (mv->m_vecViewAngles, &forward, &right, &up);  // Determine movement angles
-	
-	// Copy movement amounts
-
-	float factor = sv_specspeed.GetFloat();
-
-	if ( mv->m_nButtons & IN_SPEED )
-	{
-		factor /= 2.0f;
-	}
-
-	float fmove = mv->m_flForwardMove * factor;
-	float smove = mv->m_flSideMove * factor;
-	
-	VectorNormalize (forward);  // Normalize remainder of vectors
-	VectorNormalize (right);    // 
-
-	for (int i=0 ; i<3 ; i++)       // Determine x and y parts of velocity
-		wishvel[i] = forward[i]*fmove + right[i]*smove;
-	wishvel[2] += mv->m_flUpMove;
-
-	VectorCopy (wishvel, wishdir);   // Determine maginitude of speed of move
-	wishspeed = VectorNormalize(wishdir);
-
-	//
-	// Clamp to server defined max speed
-	//
-
-	float maxspeed = sv_maxvelocity.GetFloat(); 
-
-
-	if (wishspeed > maxspeed )
-	{
-		VectorScale (wishvel, mv->m_flMaxSpeed/wishspeed, wishvel);
-		wishspeed = maxspeed;
-	}
-
-	// Set pmove velocity, give observer 50% acceration bonus
-	Accelerate ( wishdir, wishspeed, sv_specaccelerate.GetFloat() );
-
-	float spd = VectorLength( mv->m_vecVelocity );
-	if (spd < 1.0f)
-	{
-		mv->m_vecVelocity.Init();
-		return;
-	}
-		
-	float friction = sv_friction.GetFloat();
-					
-	// Add the amount to the drop amount.
-	float drop = spd * friction * gpGlobals->frametime;
-
-			// scale the velocity
-	float newspeed = spd - drop;
-
-	if (newspeed < 0)
-		newspeed = 0;
-
-	// Determine proportion of old speed we are using.
-	newspeed /= spd;
-
-	VectorScale( mv->m_vecVelocity, newspeed, mv->m_vecVelocity );
-
-	CheckVelocity();
-
-	TryPlayerMove();
 }
 
 
@@ -1819,7 +1776,7 @@ void CGameMovement::FullNoClipMove( float factor, float maxacceleration )
 		//  threshhold, bleed the theshold amount.
 		float control = (spd < maxspeed/4.0) ? maxspeed/4.0 : spd;
 		
-		float friction = sv_friction.GetFloat() * m_surfaceFriction;
+		float friction = sv_friction.GetFloat() * player->m_surfaceFriction;
 				
 		// Add the amount to the drop amount.
 		float drop = control * friction * gpGlobals->frametime;
@@ -1901,8 +1858,8 @@ bool CGameMovement::CheckJumpButton( void )
 		return false;
 	}
 
-	// No more effect
- 	if (player->GetGroundEntity() == NULL)
+	// No more effect (Hidden: the Hidden can jump off the wall he clings to)
+ 	if (player->GetGroundEntity() == NULL && player->GetMoveType() != MOVETYPE_CLING)
 	{
 		mv->m_nOldButtons |= IN_JUMP;
 		return false;		// in air, so no effect
@@ -1924,17 +1881,21 @@ bool CGameMovement::CheckJumpButton( void )
 		return false;
 
 
+	// Hidden: let go of the wall
+	if ( player->GetMoveType() == MOVETYPE_CLING )
+		player->SetMoveType( MOVETYPE_WALK );
+
 	// In the air now.
     SetGroundEntity( (CBaseEntity *)NULL );
 	
-	player->PlayStepSound( mv->m_vecAbsOrigin, m_pSurfaceData, 1.0, true );
+	player->PlayStepSound( mv->m_vecAbsOrigin, player->m_pSurfaceData, 1.0, true );
 	
 	MoveHelper()->PlayerSetAnimation( PLAYER_JUMP );
 
 	float flGroundFactor = 1.0f;
-	if (m_pSurfaceData)
+	if (player->m_pSurfaceData)
 	{
-		flGroundFactor = m_pSurfaceData->game.jumpFactor; 
+		flGroundFactor = player->m_pSurfaceData->game.jumpFactor; 
 	}
 
 	float flMul;
@@ -2016,6 +1977,137 @@ bool CGameMovement::CheckJumpButton( void )
 	// Flag that we jumped.
 	mv->m_nOldButtons |= IN_JUMP;	// don't jump again until released
 	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: +pounce launches the Hidden along his aim, from the ground or off a wall
+// Output : Returns true if he pounced
+//-----------------------------------------------------------------------------
+bool CGameMovement::CheckPounceButton( void )
+{
+	if (player->pl.deadflag)
+	{
+		mv->m_nOldButtons |= IN_BULLRUSH ;	// don't pounce again until released
+		return false;
+	}
+
+	// A pounce costs 20 stamina
+	if ( player->GetStamina() < 20.0f )
+		return false;
+
+	// If we are in the water most of the way...
+	if ( player->GetWaterLevel() >= 2 )
+	{	
+		// swimming, not pouncing
+		SetGroundEntity( (CBaseEntity *)NULL );
+
+		if(player->GetWaterType() == CONTENTS_WATER)    // We move up a certain amount
+			mv->m_vecVelocity[2] = 100;
+		else if (player->GetWaterType() == CONTENTS_SLIME)
+			mv->m_vecVelocity[2] = 80;
+		
+		// play swiming sound
+		if ( player->m_flSwimSoundTime <= 0 )
+		{
+			// Don't play sound again for 1 second
+			player->m_flSwimSoundTime = 1000;
+			PlaySwimSound();
+		}
+
+		return false;
+	}
+
+	if ( mv->m_nOldButtons & IN_BULLRUSH )
+		return false;		// don't pogo stick
+
+	// Still updating the eye position.
+	if ( player->m_Local.m_flDuckJumpTime > 0.0f )
+		return false;
+
+	// Only from the ground or from a wall
+ 	if ( player->GetGroundEntity() == NULL && player->GetMoveType() != MOVETYPE_CLING )
+		return false;
+
+	// In the air now.
+	SetGroundEntity( (CBaseEntity *)NULL );
+	mv->m_vecVelocity[0] = 0;
+	mv->m_vecVelocity[1] = 0;
+	mv->m_vecVelocity[2] = 0;
+	player->SetMoveType( MOVETYPE_WALK );
+
+	player->PlayStepSound( mv->m_vecAbsOrigin, player->m_pSurfaceData, 1.0, true );
+
+	MoveHelper()->PlayerSetAnimation( PLAYER_JUMP );
+
+	// Launch along the aim
+	float flPounceSpeed = 615.0f;
+	Vector vecPounce = player->GetAutoaimVector( 0 );
+	vecPounce *= flPounceSpeed;
+	mv->m_vecVelocity += vecPounce;
+
+	FinishGravity();
+
+	player->SetStamina( -20.0f );
+
+	mv->m_nOldButtons |= IN_BULLRUSH;	// don't pounce again until released
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: MOVETYPE_CLING, the Hidden hangs on a wall until he lets go,
+//			lands or runs out of stamina
+//-----------------------------------------------------------------------------
+void CGameMovement::WallCling( void )
+{
+	mv->m_vecVelocity[0] = 0;
+	mv->m_vecVelocity[1] = 0;
+	mv->m_vecVelocity[2] = 0;
+
+	if ( player->GetGroundEntity() != NULL || player->GetStamina() < 1 )
+	{
+		mv->m_vecVelocity[0] = 0;
+		mv->m_vecVelocity[1] = 0;
+		mv->m_vecVelocity[2] = 0;
+		player->SetMoveType( MOVETYPE_WALK );
+		return;
+	}
+
+	player->SetStamina( hdn_staminadrain.GetFloat() );
+
+	if ( mv->m_nButtons & IN_JUMP )
+	{
+		mv->m_vecVelocity[0] = 0;
+		mv->m_vecVelocity[1] = 0;
+		mv->m_vecVelocity[2] = 0;
+		player->SetStamina( -10.0f );
+		CheckJumpButton();
+	}
+	else
+	{
+		mv->m_nOldButtons &= ~IN_JUMP;
+	}
+
+	if ( mv->m_nButtons & IN_BULLRUSH )
+	{
+		CheckPounceButton();
+	}
+	else
+	{
+		mv->m_nOldButtons &= ~IN_BULLRUSH;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: marines walk backwards at 80% speed
+//-----------------------------------------------------------------------------
+void CGameMovement::CheckBack( void )
+{
+	if ( player->GetTeamNumber() == TEAM_IRIS && !m_bSpeedCropped && player->GetGroundEntity() != NULL && ( mv->m_nButtons & IN_BACK ) )
+	{
+		float flForwardMove = mv->m_flForwardMove;
+		m_bSpeedCropped = true;
+		mv->m_flForwardMove = flForwardMove * 0.8f;
+	}
 }
 
 
@@ -2184,7 +2276,7 @@ int CGameMovement::TryPlayerMove( Vector *pFirstDest, trace_t *pFirstTrace )
 				}
 				else
 				{
-					ClipVelocity( original_velocity, planes[i], new_velocity, 1.0 + sv_bounce.GetFloat() * (1 - m_surfaceFriction) );
+					ClipVelocity( original_velocity, planes[i], new_velocity, 1.0 + sv_bounce.GetFloat() * (1 - player->m_surfaceFriction) );
 				}
 			}
 
@@ -2312,8 +2404,8 @@ bool CGameMovement::LadderMove( void )
 	}
 
 	// wishdir points toward the ladder if any exists
-	VectorMA( mv->m_vecAbsOrigin, 2, wishdir, end );
-	TracePlayerBBox( mv->m_vecAbsOrigin, end, MASK_PLAYERSOLID, COLLISION_GROUP_PLAYER_MOVEMENT, pm );
+	VectorMA( mv->m_vecAbsOrigin, LadderDistance(), wishdir, end );
+	TracePlayerBBox( mv->m_vecAbsOrigin, end, LadderMask(), COLLISION_GROUP_PLAYER_MOVEMENT, pm );
 
 	// no ladder in that direction, return
 	if ( pm.fraction == 1.0f || !OnLadder( pm ) )
@@ -2323,6 +2415,14 @@ bool CGameMovement::LadderMove( void )
 	player->SetMoveCollide( MOVECOLLIDE_DEFAULT );
 
 	player->m_vecLadderNormal = pm.plane.normal;
+
+	// Hidden: marines put their weapon away on a ladder
+	if ( player->GetTeamNumber() == TEAM_IRIS )
+	{
+		CBaseCombatWeapon *pWeapon = player->GetActiveWeapon();
+		if ( pWeapon )
+			pWeapon->Holster( NULL );
+	}
 
 	// On ladder, convert movement to be relative to the ladder
 
@@ -3022,6 +3122,77 @@ void CGameMovement::SetGroundEntity( CBaseEntity *newGround )
 }
 
 //-----------------------------------------------------------------------------
+// Traces the player's collision bounds in quadrants, looking for a plane that
+// can be stood upon (normal's z >= 0.7f).  Regardless of success or failure,
+// replace the fraction and endpos with the original ones, so we don't try to
+// move the player down to the new floor and get stuck on a leaning wall that
+// the original trace hit first.
+//-----------------------------------------------------------------------------
+void TracePlayerBBoxForGround( const Vector& start, const Vector& end, const Vector& minsSrc,
+							  const Vector& maxsSrc, IHandleEntity *player, unsigned int fMask,
+							  int collisionGroup, trace_t& pm )
+{
+	VPROF( "TracePlayerBBoxForGround" );
+
+	Ray_t ray;
+	Vector mins, maxs;
+
+	float fraction = pm.fraction;
+	Vector endpos = pm.endpos;
+
+	// Check the -x, -y quadrant
+	mins = minsSrc;
+	maxs.Init( min( 0, maxsSrc.x ), min( 0, maxsSrc.y ), maxsSrc.z );
+	ray.Init( start, end, mins, maxs );
+	UTIL_TraceRay( ray, fMask, player, collisionGroup, &pm );
+	if ( pm.m_pEnt && pm.plane.normal[2] >= 0.7)
+	{
+		pm.fraction = fraction;
+		pm.endpos = endpos;
+		return;
+	}
+
+	// Check the +x, +y quadrant
+	mins.Init( max( 0, minsSrc.x ), max( 0, minsSrc.y ), minsSrc.z );
+	maxs = maxsSrc;
+	ray.Init( start, end, mins, maxs );
+	UTIL_TraceRay( ray, fMask, player, collisionGroup, &pm );
+	if ( pm.m_pEnt && pm.plane.normal[2] >= 0.7)
+	{
+		pm.fraction = fraction;
+		pm.endpos = endpos;
+		return;
+	}
+
+	// Check the -x, +y quadrant
+	mins.Init( minsSrc.x, max( 0, minsSrc.y ), minsSrc.z );
+	maxs.Init( min( 0, maxsSrc.x ), maxsSrc.y, maxsSrc.z );
+	ray.Init( start, end, mins, maxs );
+	UTIL_TraceRay( ray, fMask, player, collisionGroup, &pm );
+	if ( pm.m_pEnt && pm.plane.normal[2] >= 0.7)
+	{
+		pm.fraction = fraction;
+		pm.endpos = endpos;
+		return;
+	}
+
+	// Check the +x, -y quadrant
+	mins.Init( max( 0, minsSrc.x ), minsSrc.y, minsSrc.z );
+	maxs.Init( maxsSrc.x, min( 0, maxsSrc.y ), maxsSrc.z );
+	ray.Init( start, end, mins, maxs );
+	UTIL_TraceRay( ray, fMask, player, collisionGroup, &pm );
+	if ( pm.m_pEnt && pm.plane.normal[2] >= 0.7)
+	{
+		pm.fraction = fraction;
+		pm.endpos = endpos;
+		return;
+	}
+
+	pm.fraction = fraction;
+	pm.endpos = endpos;
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: 
 // Input  : &input - 
 //-----------------------------------------------------------------------------
@@ -3080,11 +3251,21 @@ void CGameMovement::CategorizePosition( void )
 		// If we hit a steep plane, we are not on ground
 		if ( pm.plane.normal[2] < 0.7)
 		{
-			SetGroundEntity( (CBaseEntity *)NULL );	// too steep
-			// probably want to add a check for a +z velocity too!
-			if ( ( mv->m_vecVelocity.z > 0.0f ) && ( player->GetMoveType() != MOVETYPE_NOCLIP ) )
+			// Test four sub-boxes, to see if any of them would have found shallower slope we could
+			// actually stand on
+			TracePlayerBBoxForGround( bumpOrigin, point, GetPlayerMins(), GetPlayerMaxs(), mv->m_nPlayerHandle.Get(), MASK_PLAYERSOLID, COLLISION_GROUP_PLAYER_MOVEMENT, pm );
+			if ( pm.plane.normal[2] < 0.7)
 			{
-				m_surfaceFriction = 0.25f;
+				SetGroundEntity( (CBaseEntity *)NULL );	// too steep
+				// probably want to add a check for a +z velocity too!
+				if ( ( mv->m_vecVelocity.z > 0.0f ) && ( player->GetMoveType() != MOVETYPE_NOCLIP ) )
+				{
+					player->m_surfaceFriction = 0.25f;
+				}
+			}
+			else
+			{
+				SetGroundEntity( pm.m_pEnt );  // Otherwise, point to index of ent under us.
 			}
 		}
 		else
@@ -3127,12 +3308,12 @@ void CGameMovement::CategorizePosition( void )
 			}
 
 			// Changed?
-			if ( m_chPreviousTextureType != cCurrGameMaterial )
+			if ( player->m_chPreviousTextureType != cCurrGameMaterial )
 			{
 				CEnvPlayerSurfaceTrigger::SetPlayerSurface( player, cCurrGameMaterial );
 			}
 
-			m_chPreviousTextureType = cCurrGameMaterial;
+			player->m_chPreviousTextureType = cCurrGameMaterial;
 		}
 #endif
 
@@ -3160,6 +3341,18 @@ void CGameMovement::CheckFalling( void )
 		if ( player->GetWaterLevel() > 0 )
 		{
 			// They landed in water.
+			// Hidden: splash at the feet
+			Vector feet;
+			feet[0] = mv->m_vecAbsOrigin[0] + (GetPlayerMins()[0] + GetPlayerMaxs()[0]) * 0.5;
+			feet[1] = mv->m_vecAbsOrigin[1] + (GetPlayerMins()[1] + GetPlayerMaxs()[1]) * 0.5;
+			feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
+
+			CEffectData data;
+			data.m_vOrigin = feet;
+			data.m_vNormal.Init( 0, 0, 1 );
+			VectorAngles( data.m_vNormal, data.m_vAngles );
+			data.m_flScale = random->RandomFloat( 8, 12 );
+			DispatchEffect( "watersplash", data );
 		}
 		else
 		{
@@ -3197,7 +3390,7 @@ void CGameMovement::CheckFalling( void )
 			player->m_flStepSoundTime = 400;
 
 			// Play step sound for current texture.
-			player->PlayStepSound( mv->m_vecAbsOrigin, m_pSurfaceData, fvol, true );
+			player->PlayStepSound( mv->m_vecAbsOrigin, player->m_pSurfaceData, fvol, true );
 
 			//
 			// Knock the screen around a little bit, temporary effect.
@@ -3573,6 +3766,10 @@ void CGameMovement::Duck( void )
 	// If the player is holding down the duck button, the player is in duck transition, ducking, or duck-jumping.
 	if ( ( mv->m_nButtons & IN_DUCK ) || player->m_Local.m_bDucking  || bInDuck || bDuckJump )
 	{
+		// Hidden: ducking lets go of the wall
+		if ( player->GetMoveType() == MOVETYPE_CLING )
+			player->SetMoveType( MOVETYPE_WALK );
+
 		// DUCK
 		if ( ( mv->m_nButtons & IN_DUCK ) || bDuckJump )
 		{
@@ -3750,10 +3947,13 @@ void CGameMovement::PlayerMove( void )
 		CategorizeGroundSurface();
 	}
 
-	player->UpdateStepSound( m_pSurfaceData, mv->m_vecAbsOrigin, mv->m_vecVelocity );
+	player->UpdateStepSound( player->m_pSurfaceData, mv->m_vecAbsOrigin, mv->m_vecVelocity );
 
 	UpdateDuckJumpEyeOffset();
 	Duck();
+
+	// Hidden: marines walk backwards slower
+	CheckBack();
 
 	// Don't run ladder code if dead on on a train
 	if ( !player->pl.deadflag && !(player->GetFlags() & FL_ONTRAIN) )
@@ -3809,6 +4009,10 @@ void CGameMovement::PlayerMove( void )
 			FullObserverMove(); // clips against world&players
 			break;
 
+		case MOVETYPE_CLING:
+			WallCling();
+			break;
+
 		default:
 			DevMsg( 1, "Bogus pmove player movetype %i on (%i) 0=cl 1=sv\n", player->GetMoveType(), player->IsServer());
 			break;
@@ -3841,7 +4045,7 @@ void CGameMovement::PerformFlyCollisionResolution( trace_t &pm, Vector &move )
 	case MOVECOLLIDE_DEFAULT:
 		{
 			if (player->GetMoveCollide() == MOVECOLLIDE_FLY_BOUNCE)
-				backoff = 2.0 - m_surfaceFriction;
+				backoff = 2.0 - player->m_surfaceFriction;
 			else
 				backoff = 1;
 

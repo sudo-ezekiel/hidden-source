@@ -15,6 +15,7 @@
 	#include "prediction.h"
 	#include "c_basedoor.h"
 	#include "c_world.h"
+	#include "c_te_effect_dispatch.h"
 
 	#define CRecipientFilter C_RecipientFilter
 
@@ -25,6 +26,7 @@
 	#include "world.h"
 	#include "doors.h"
 	#include "ai_basenpc.h"
+	#include "te_effect_dispatch.h"
 
 	extern int TrainSpeed(int iSpeed, int iMax);
 	
@@ -38,6 +40,12 @@
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
+
+#if !defined( CLIENT_DLL )
+	extern ConVar sv_pushaway_max_force;	// obstacle_pushaway.cpp
+	extern ConVar sv_pushaway_force;		// obstacle_pushaway.cpp
+	extern ConVar sv_turbophysics;			// props.cpp
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -150,6 +158,12 @@ void CBasePlayer::ItemPostFrame()
 	}
 
 #if !defined( CLIENT_DLL )
+	// Hidden: the Hidden gets his stamina back while he stands on the ground with his aura off
+	if ( GetTeamNumber() == TEAM_HIDDEN && GetStamina() < 100.0f && GetGroundEntity() && !IsViewing() )
+	{
+		SetStamina( 0.3f );
+	}
+
 	// check if the player is using something
 	if ( m_hUseEntity != NULL )
 	{
@@ -205,7 +219,7 @@ const QAngle &CBasePlayer::EyeAngles( )
 
 	// FIXME: Cache off the angles?
 	matrix3x4_t eyesToParent, eyesToWorld;
-	AngleMatrix( pl.v_angle, eyesToParent );
+	AngleMatrix( pl.v_angle.Get(), eyesToParent );
 	ConcatTransforms( pMoveParent->EntityToWorldTransform(), eyesToParent, eyesToWorld );
 
 	static QAngle angEyeWorld;
@@ -401,7 +415,7 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 	else
 	{
 		velwalk = 90;
-		velrun = 220;
+		velrun = 180;		// Hidden: was 220
 		flduck = 0;
 	}
 
@@ -456,6 +470,25 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 		psurface = physprops->GetSurfaceData( physprops->GetSurfaceIndex( "water" ) );
 		fvol = fWalking ? 0.2 : 0.5;
 		m_flStepSoundTime = fWalking ? 400 : 300;		
+
+		if ( GetFlags() & FL_DUCKING )
+		{
+			CEffectData data;
+			data.m_vOrigin = feet;
+			data.m_vNormal.Init( 0, 0, 1 );
+			VectorAngles( data.m_vNormal, data.m_vAngles );
+			data.m_flScale = random->RandomFloat( 8, 12 );
+			DispatchEffect( "waterripple", data );
+		}
+		else
+		{
+			CEffectData data;
+			data.m_vOrigin = feet;
+			data.m_vNormal.Init( 0, 0, 1 );
+			VectorAngles( data.m_vNormal, data.m_vAngles );
+			data.m_flScale = random->RandomFloat( 8, 12 );
+			DispatchEffect( "watersplash", data );
+		}
 	}
 	else
 	{
@@ -503,6 +536,12 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 	if ( GetFlags() & FL_DUCKING )
 	{
 		fvol *= 0.65;
+	}
+
+	// Hidden: the Hidden's steps are quieter
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+	{
+		fvol *= 0.45;
 	}
 
 	PlayStepSound( feet, psurface, fvol, false );
@@ -599,6 +638,10 @@ void CBasePlayer::Weapon_SetLast( CBaseCombatWeapon *pWeapon )
 bool CBasePlayer::Weapon_Switch( CBaseCombatWeapon *pWeapon, int viewmodelindex /*=0*/ ) 
 {
 	CBaseCombatWeapon *pLastWeapon = GetActiveWeapon();
+
+	// Hidden: no switching in the middle of a reload
+	if ( pLastWeapon && pLastWeapon->m_bInReload )
+		return false;
 
 	if ( BaseClass::Weapon_Switch( pWeapon, viewmodelindex ))
 	{
@@ -997,6 +1040,40 @@ void CBasePlayer::PlayerUse ( void )
 		return;
 	}
 
+	// Hidden: push objects in turbo physics mode (Valve's later SDK code)
+	if ( (m_nButtons & IN_USE) && sv_turbophysics.GetBool() )
+	{
+		Vector forward, up;
+		EyeVectors( &forward, NULL, &up );
+
+		trace_t tr;
+		// Search for objects in a sphere (tests for entities that are not solid, yet still useable)
+		Vector searchCenter = EyePosition();
+
+		UTIL_TraceLine( searchCenter, searchCenter + forward * 96.0f, MASK_SOLID, this, COLLISION_GROUP_NONE, &tr );
+
+		// try the hit entity if there is one, or the ground entity if there isn't.
+		CBaseEntity *entity = tr.m_pEnt;
+
+		if ( entity )
+		{
+			IPhysicsObject *pObj = entity->VPhysicsGetObject();
+			if ( pObj )
+			{
+				Vector vPushAway = (entity->WorldSpaceCenter() - WorldSpaceCenter());
+				vPushAway.z = 0;
+
+				float flDist = VectorNormalize( vPushAway );
+				flDist = max( flDist, 1 );
+
+				float flForce = sv_pushaway_force.GetFloat() / flDist;
+				flForce = min( flForce, sv_pushaway_max_force.GetFloat() );
+
+				pObj->ApplyForceOffset( vPushAway * flForce, WorldSpaceCenter() );
+			}
+		}
+	}
+
 	if ( m_afButtonPressed & IN_USE )
 	{
 		// Controlling some latched entity?
@@ -1175,7 +1252,7 @@ void CBasePlayer::ResetObserverMode()
 	}
 
 #ifndef CLIENT_DLL
-	m_iObserverLastMode = OBS_MODE_ROAMING;
+	m_iObserverLastMode = OBS_MODE_FIXED;	// Hidden: was OBS_MODE_ROAMING
 	m_bForcedObserverMode = false;
 	m_bIsRecording = false;
 	m_afPhysicsFlags &= ~PFLAG_OBSERVER;

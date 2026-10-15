@@ -52,7 +52,7 @@ public:
 	virtual void			SetWeaponModel( const char *pszModelname, CBaseCombatWeapon *weapon );
 
 	virtual void			CalcViewModelLag( Vector& origin, QAngle& angles, QAngle& original_angles );
-	void					CalcViewModelView( CBasePlayer *owner, const Vector& eyePosition, 
+	virtual void			CalcViewModelView( CBasePlayer *owner, const Vector& eyePosition, 
 								const QAngle& eyeAngles );
 
 	// Initializes the viewmodel for use							
