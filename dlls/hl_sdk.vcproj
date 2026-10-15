@@ -5738,12 +5738,6 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 					<File
 						RelativePath="hl2_dll\grenade_tripmine.cpp">
 						<FileConfiguration
-							Name="Release SDK|Win32"
-							ExcludedFromBuild="TRUE">
-							<Tool
-								Name="VCCLCompilerTool"/>
-						</FileConfiguration>
-						<FileConfiguration
 							Name="Debug SDK|Win32"
 							ExcludedFromBuild="TRUE">
 							<Tool
