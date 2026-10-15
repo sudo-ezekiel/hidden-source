@@ -45,7 +45,7 @@ public:
 			if (ladder)
 				dist = ladder->m_length;
 			else
-				dist = (*area->GetCenter() - *fromArea->GetCenter()).Length();
+				dist = (area->GetCenter() - fromArea->GetCenter()).Length();
 
 			float cost = dist + fromArea->GetCostSoFar();
 
@@ -85,6 +85,9 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 	if (startArea == NULL)
 		return false;
 
+	if (goalArea != NULL && goalArea->IsBlocked())
+		goalArea = NULL;
+
 	if (goalArea == NULL && goalPos == NULL)
 		return false;
 
@@ -98,14 +101,14 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 	}
 
 	// determine actual goal position
-	Vector actualGoalPos = (goalPos) ? *goalPos : *goalArea->GetCenter();
+	Vector actualGoalPos = (goalPos) ? *goalPos : goalArea->GetCenter();
 
 	// start search
 	CNavArea::ClearSearchLists();
 
 	// compute estimate of path length
 	/// @todo Cost might work as "manhattan distance"
-	startArea->SetTotalCost( (*startArea->GetCenter() - actualGoalPos).Length() );
+	startArea->SetTotalCost( (startArea->GetCenter() - actualGoalPos).Length() );
 
 	float initCost = costFunc( startArea, NULL, NULL );	
 	if (initCost < 0.0f)
@@ -125,9 +128,18 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 		// get next area to check
 		CNavArea *area = CNavArea::PopOpenList();
 
-		// check if we have found the goal area
-		if (area == goalArea)
+		// don't consider blocked areas
+		if ( area->IsBlocked() )
+			continue;
+
+		// check if we have found the goal area or position
+		if (area == goalArea || (goalArea == NULL && goalPos && area->Contains( *goalPos )))
 		{
+			if (closestArea)
+			{
+				*closestArea = area;
+			}
+
 			return true;
 		}
 
@@ -138,8 +150,8 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 		int floorIter = floorList->Head();
 
 		bool ladderUp = true;
-		const NavLadderList *ladderList = NULL;
-		int ladderIter = NavLadderList::InvalidIndex();
+		const NavLadderConnectList *ladderList = NULL;
+		int ladderIter = NavLadderConnectList::InvalidIndex();
 		enum { AHEAD = 0, LEFT, RIGHT, BEHIND, NUM_TOP_DIRECTIONS };
 		int ladderTopDir = AHEAD;
 
@@ -203,14 +215,7 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 
 				if (ladderUp)
 				{
-					ladder = ladderList->Element( ladderIter );
-
-					// cannot use this ladder if the ladder bottom is hanging above our head
-					if (ladder->m_isDangling)
-					{
-						ladderIter = ladderList->Next( ladderIter );
-						continue;
-					}
+					ladder = ladderList->Element( ladderIter ).ladder;
 
 					// do not use BEHIND connection, as its very hard to get to when going up a ladder
 					if (ladderTopDir == AHEAD)
@@ -222,6 +227,7 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 					else
 					{
 						ladderIter = ladderList->Next( ladderIter );
+						ladderTopDir = AHEAD;
 						continue;
 					}
 
@@ -230,9 +236,9 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 				}
 				else
 				{
-					newArea = ladderList->Element(ladderIter)->m_bottomArea;
+					newArea = ladderList->Element(ladderIter).ladder->m_bottomArea;
 					how = GO_LADDER_DOWN;
-					ladder = ladderList->Element(ladderIter);
+					ladder = ladderList->Element(ladderIter).ladder;
 					ladderIter = ladderList->Next( ladderIter );
 				}
 
@@ -242,6 +248,10 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 
 			// don't backtrack
 			if (newArea == area)
+				continue;
+
+			// don't consider blocked areas
+			if ( newArea->IsBlocked() )
 				continue;
 
 			float newCostSoFar = costFunc( newArea, area, ladder );
@@ -258,7 +268,7 @@ bool NavAreaBuildPath( CNavArea *startArea, CNavArea *goalArea, const Vector *go
 			else
 			{
 				// compute estimate of distance left to go
-				float newCostRemaining = (*newArea->GetCenter() - actualGoalPos).Length();
+				float newCostRemaining = (newArea->GetCenter() - actualGoalPos).Length();
 
 				// track closest area to goal in case path fails
 				if (closestArea && newCostRemaining < closestAreaDist)
@@ -318,46 +328,61 @@ float NavAreaTravelDistance( CNavArea *startArea, CNavArea *endArea, CostFunctor
 	float distance = 0.0f;
 	for( CNavArea *area = endArea; area->GetParent(); area = area->GetParent() )
 	{
-		distance += (*area->GetCenter() - *area->GetParent()->GetCenter()).Length();
+		distance += (area->GetCenter() - area->GetParent()->GetCenter()).Length();
 	}
 
 	return distance;
 }
 
+
 //--------------------------------------------------------------------------------------------------------------
 /**
- * Compute distance from area to position. Return -1 if can't reach position.
+ * Compute travel distance along shortest path from startPos to goalPos. 
+ * Return -1 if can't reach endPos from goalPos.
  */
 template< typename CostFunctor >
-float NavAreaTravelDistance( const Vector *startPos, CNavArea *startArea, const Vector *goalPos, CostFunctor &costFunc )
+float NavAreaTravelDistance( const Vector &startPos, const Vector &goalPos, CostFunctor &costFunc )
 {
-	if (startArea == NULL || startPos == NULL || goalPos == NULL)
+	CNavArea *startArea = TheNavMesh->GetNearestNavArea( startPos );
+	if (startArea == NULL)
+	{
 		return -1.0f;
+	}
 
 	// compute path between areas using given cost heuristic
 	CNavArea *goalArea = NULL;
-	if (NavAreaBuildPath( startArea, NULL, goalPos, costFunc, &goalArea ) == false)
+	if (NavAreaBuildPath( startArea, NULL, &goalPos, costFunc, &goalArea ) == false)
+	{
 		return -1.0f;
+	}
 
 	// compute distance along path
 	if (goalArea->GetParent() == NULL)
 	{
-		return (*goalPos - *startPos).Length();
+		// both points are in the same area - return euclidean distance
+		return (goalPos - startPos).Length();
 	}
 	else
 	{
-		CNavArea *area = goalArea->GetParent();
+		CNavArea *area;
+		float distance;
 
-		float distance = (*goalPos - *area->GetCenter()).Length();
+		// goalPos is assumed to be inside goalArea (or very close to it) - skip to next area
+		area = goalArea->GetParent();
+		distance = (goalPos - area->GetCenter()).Length();
 
 		for( ; area->GetParent(); area = area->GetParent() )
 		{
-			distance += (*area->GetCenter() - *area->GetParent()->GetCenter()).Length();
+			distance += (area->GetCenter() - area->GetParent()->GetCenter()).Length();
 		}
+
+		// add in distance to startPos
+		distance += (startPos - area->GetCenter()).Length();
 
 		return distance;
 	}
 }
+
 
 //--------------------------------------------------------------------------------------------------------------
 /**
@@ -372,7 +397,7 @@ float NavAreaTravelDistance( const Vector *startPos, CNavArea *startArea, const 
  */
 
 // helper function
-inline void AddAreaToOpenList( CNavArea *area, CNavArea *parent, const Vector *startPos, float maxRange )
+inline void AddAreaToOpenList( CNavArea *area, CNavArea *parent, const Vector &startPos, float maxRange )
 {
 	if (area == NULL)
 		return;
@@ -388,11 +413,11 @@ inline void AddAreaToOpenList( CNavArea *area, CNavArea *parent, const Vector *s
 			// make sure this area overlaps range
 			Vector closePos;
 			area->GetClosestPointOnArea( startPos, &closePos );
-			if ((closePos - *startPos).AsVector2D().IsLengthLessThan( maxRange ))
+			if ((closePos - startPos).AsVector2D().IsLengthLessThan( maxRange ))
 			{
 				// compute approximate distance along path to limit travel range, too
 				float distAlong = parent->GetCostSoFar();
-				distAlong += (*area->GetCenter() - *parent->GetCenter()).Length();
+				distAlong += (area->GetCenter() - parent->GetCenter()).Length();
 				area->SetCostSoFar( distAlong );
 
 				// allow for some fudge due to large size areas
@@ -410,9 +435,9 @@ inline void AddAreaToOpenList( CNavArea *area, CNavArea *parent, const Vector *s
 
 
 template < typename Functor >
-void SearchSurroundingAreas( CNavArea *startArea, const Vector *startPos, Functor &func, float maxRange = -1.0f )
+void SearchSurroundingAreas( CNavArea *startArea, const Vector &startPos, Functor &func, float maxRange = -1.0f )
 {
-	if (startArea == NULL || startPos == NULL)
+	if (startArea == NULL)
 		return;
 
 	CNavArea::MakeNewMarker();
@@ -428,6 +453,10 @@ void SearchSurroundingAreas( CNavArea *startArea, const Vector *startPos, Functo
 	{
 		// get next area to check
 		CNavArea *area = CNavArea::PopOpenList();
+
+		// don't use blocked areas
+		if ( area->IsBlocked() )
+			continue;
 
 		// invoke functor on area
 		if (func( area ))
@@ -448,18 +477,12 @@ void SearchSurroundingAreas( CNavArea *startArea, const Vector *startPos, Functo
 			// explore adjacent areas connected by ladders
 
 			// check up ladders
-			const NavLadderList *ladderList = area->GetLadderList( CNavLadder::LADDER_UP );
+			const NavLadderConnectList *ladderList = area->GetLadderList( CNavLadder::LADDER_UP );
 			if (ladderList)
 			{
 				FOR_EACH_LL( (*ladderList), it )
 				{
-					const CNavLadder *ladder = (*ladderList)[ it ];
-
-					// cannot use this ladder if the ladder bottom is hanging above our head
-					if (ladder->m_isDangling)
-					{
-						continue;
-					}
+					const CNavLadder *ladder = (*ladderList)[ it ].ladder;
 
 					// do not use BEHIND connection, as its very hard to get to when going up a ladder
 					AddAreaToOpenList( ladder->m_topForwardArea, area, startPos, maxRange );
@@ -474,7 +497,7 @@ void SearchSurroundingAreas( CNavArea *startArea, const Vector *startPos, Functo
 			{
 				FOR_EACH_LL( (*ladderList), it )
 				{
-					const CNavLadder *ladder = (*ladderList)[ it ];
+					const CNavLadder *ladder = (*ladderList)[ it ].ladder;
 
 					AddAreaToOpenList( ladder->m_bottomArea, area, startPos, maxRange );
 				}
@@ -497,7 +520,7 @@ public:
 		if (area == fromArea)
 			return 9999999.9f;
 
-		return 1.0f/(*fromArea->GetCenter() - *area->GetCenter()).Length();
+		return 1.0f/(fromArea->GetCenter() - area->GetCenter()).Length();
 	}
 };
 
@@ -508,18 +531,17 @@ public:
 class FarAwayFromPositionFunctor 
 {
 public:
-	FarAwayFromPositionFunctor( const Vector *pos )
+	FarAwayFromPositionFunctor( const Vector &pos ) : m_pos( pos )
 	{
-		m_pos = pos;
 	}
 
 	float operator() ( CNavArea *area, CNavArea *fromArea, const CNavLadder *ladder )
 	{
-		return 1.0f/(*m_pos - *area->GetCenter()).Length();
+		return 1.0f/(m_pos - area->GetCenter()).Length();
 	}
 
 private:
-	const Vector *m_pos;
+	const Vector &m_pos;
 };
 
 
@@ -546,8 +568,8 @@ CNavArea *FindMinimumCostArea( CNavArea *startArea, CostFunctor &costFunc )
 		CNavArea *area = TheNavAreaList[iter];
 
 		// skip the small areas
-		const Extent *extent = area->GetExtent();
-		if (extent->hi.x - extent->lo.x < minSize || extent->hi.y - extent->lo.y < minSize)
+		const Extent &extent = area->GetExtent();
+		if (extent.hi.x - extent.lo.x < minSize || extent.hi.y - extent.lo.y < minSize)
 			continue;
 
 		// compute cost of this area

@@ -577,6 +577,27 @@ bool UTIL_IsCommandIssuedByServerAdmin( void )
 }
 
 
+//--------------------------------------------------------------------------------------------------------------
+/**
+ * Returns a CBaseEntity pointer by entindex.  Index is 1 based.
+ */
+CBaseEntity	*UTIL_EntityByIndex( int entityIndex )
+{
+	CBaseEntity *entity = NULL;
+
+	if ( entityIndex > 0 )
+	{
+		edict_t *edict = INDEXENT( entityIndex );
+		if ( edict && !edict->IsFree() )
+		{
+			entity = GetContainingEntity( edict );
+		}
+	}
+	
+	return entity;
+}
+
+
 int ENTINDEX( CBaseEntity *pEnt )
 {
 	// This works just like ENTINDEX for edicts.

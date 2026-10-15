@@ -4570,7 +4570,18 @@ public:
 		return m_iPhysicsMode;
 	}
 
+	virtual float GetMass()
+	{
+		return m_fMass;
+	}
+
+	virtual bool IsAsleep()
+	{
+		return VPhysicsGetObject()->IsAsleep();
+	}
+
 	CNetworkVar( int, m_iPhysicsMode );	// One of the PHYSICS_MULTIPLAYER_ defines.	
+	CNetworkVar( float, m_fMass );
 
 
 	DECLARE_DATADESC();
@@ -4580,6 +4591,7 @@ public:
 	{
 		BaseClass::Activate();
 		SetCollisionGroup( COLLISION_GROUP_PUSHAWAY );
+		m_fMass = VPhysicsGetObject()->GetMass();
 	}
 };
 
@@ -4589,7 +4601,8 @@ BEGIN_DATADESC( CPhysBoxMultiplayer )
 END_DATADESC()
 
 IMPLEMENT_SERVERCLASS_ST( CPhysBoxMultiplayer, DT_PhysBoxMultiplayer )
-	SendPropInt( SENDINFO( m_iPhysicsMode ), 1, SPROP_UNSIGNED )
+	SendPropInt( SENDINFO( m_iPhysicsMode ), 1, SPROP_UNSIGNED ),
+	SendPropFloat( SENDINFO( m_fMass ), 0, SPROP_NOSCALE ),
 END_SEND_TABLE()
 
 
@@ -4599,6 +4612,7 @@ class CPhysicsPropMultiplayer : public CPhysicsProp, public IMultiplayerPhysics
 	DECLARE_CLASS( CPhysicsPropMultiplayer, CPhysicsProp );
 
 	CNetworkVar( int, m_iPhysicsMode );	// One of the PHYSICS_MULTIPLAYER_ defines.	
+	CNetworkVar( float, m_fMass );
 
 	DECLARE_SERVERCLASS();
 	DECLARE_DATADESC();
@@ -4618,6 +4632,8 @@ class CPhysicsPropMultiplayer : public CPhysicsProp, public IMultiplayerPhysics
 
 // IMultiplayerPhysics:
 	int		GetMultiplayerPhysicsMode() { return m_iPhysicsMode; }
+	float	GetMass() { return m_fMass; }
+	bool	IsAsleep() { return !m_bAwake; }
 
 	virtual void Spawn( void )
 	{
@@ -4657,6 +4673,8 @@ class CPhysicsPropMultiplayer : public CPhysicsProp, public IMultiplayerPhysics
 
 		if ( GetCollisionGroup() == COLLISION_GROUP_NONE )
 			SetCollisionGroup( COLLISION_GROUP_PUSHAWAY );
+
+		m_fMass = VPhysicsGetObject()->GetMass();
 	}
 };
 
@@ -4666,5 +4684,6 @@ BEGIN_DATADESC( CPhysicsPropMultiplayer )
 END_DATADESC()
 
 IMPLEMENT_SERVERCLASS_ST( CPhysicsPropMultiplayer, DT_PhysicsPropMultiplayer )
-	SendPropInt( SENDINFO( m_iPhysicsMode ), 2, SPROP_UNSIGNED )
+	SendPropInt( SENDINFO( m_iPhysicsMode ), 2, SPROP_UNSIGNED ),
+	SendPropFloat( SENDINFO( m_fMass ), 0, SPROP_NOSCALE ),
 END_SEND_TABLE()

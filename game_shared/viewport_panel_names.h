@@ -27,6 +27,9 @@
 #define PANEL_BUY_TER		"buy_ter"
 #define PANEL_BUY_EQUIP_CT	"buyequip_ct"
 #define PANEL_BUY_EQUIP_TER	"buyequip_ter"
+#define PANEL_NAV_PROGRESS	"nav_progress"
+#define PANEL_BUYPRESET_MAIN	"buypreset_main"
+#define PANEL_BUYPRESET_EDIT	"buypreset_edit"
 
 
 #endif // VIEWPORT_PANEL_NAMES_H
