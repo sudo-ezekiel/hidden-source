@@ -115,6 +115,20 @@ shipped binaries (the client receives a few props the server does not send, such
 m_mass; DT_Local has m_flStepSize on the server and m_vecClientBaseVelocity on the client; the world
 table is DT_WORLD on the server and DT_World on the client).
 
+## 4. Data layout (member offsets)
+
+    python3 -I rebuild/tools/recv_offsets.py ~/.cache/hsrebuild-work-<lane> DT_BasePlayer DT_SDKPlayer
+
+Every RecvProp in client.dll carries the offset of the member it writes. The tool compiles one
+probe per source file (the file itself plus `(int)&((Class *)0)->member` for each prop, with
+`-fno-access-control`) and prints each prop whose offset differs from client.dll's, plus
+`<work>/out/layout/recv_offsets.tsv`. Run `client_check.sh` first (it needs the mirror and the
+makefile). Read the result as differences: a constant gap over a class's own members means that
+class is right and a base class differs. Example, after the C_BasePlayer state commit: every
+C_BasePlayer member is 0x4c lower than in client.dll, while C_BaseEntity's are 0x10 lower and
+C_BaseCombatCharacter's m_iAmmo 0x20 lower, so the missing bytes are in the bases. Members written
+as `m_vecViewOffset[0]` (a Vector element) print `?`: the probe expression is not a constant there.
+
 ## Original build settings ("Release SDK|Win32", cl_dll/client_sdk.vcproj)
 
 Compiler (VCCLCompilerTool), as attributes and the cl.exe 13.10 switches they stand for:
