@@ -119,6 +119,9 @@ void FX_FireBullets(
 	CSDKPlayer *pPlayer = ToSDKPlayer( UTIL_PlayerByIndex( iPlayerIndex) );
 #endif
 
+	if ( !pPlayer )
+		return;
+
 	const char * weaponAlias =	WeaponIDToAlias( iWeaponID );
 
 	if ( !weaponAlias )
@@ -160,8 +163,6 @@ void FX_FireBullets(
 		iSeed,
 		flSpread
 		);
-
-	bDoEffects = false; // no effects on server
 #endif
 
 	iSeed++;
@@ -178,10 +179,6 @@ void FX_FireBullets(
 
 
 	// Fire bullets, calculate impacts & effects
-
-	if ( !pPlayer )
-		return;
-	
 	StartGroupingSounds();
 
 	for ( int iBullet=0; iBullet < pWeaponInfo->m_iBullets; iBullet++ )
