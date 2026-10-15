@@ -250,7 +250,7 @@ public:
 	bool					IsMeleeWeapon() const;
 
 	// derive this function if you mod uses encrypted weapon info files
-	virtual const unsigned char *GetEncryptionKey( void ) { return NULL; }
+	virtual const unsigned char *GetEncryptionKey( void );
 
 	virtual int				GetPrimaryAmmoType( void )  const { return m_iPrimaryAmmoType; }
 	virtual int				GetSecondaryAmmoType( void )  const { return m_iSecondaryAmmoType; }

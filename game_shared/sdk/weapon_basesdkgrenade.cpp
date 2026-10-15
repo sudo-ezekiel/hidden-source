@@ -57,6 +57,7 @@ CBaseSDKGrenade::CBaseSDKGrenade()
 	m_bRedraw = false;
 	m_bPinPulled = false;
 	m_fThrowTime = 0;
+	m_nSkin = 1;
 }
 
 //-----------------------------------------------------------------------------
@@ -117,6 +118,9 @@ void CBaseSDKGrenade::PrimaryAttack()
 	if ( !pPlayer || pPlayer->GetAmmoCount( m_iPrimaryAmmoType ) <= 0 )
 		return;
 
+	if ( pPlayer->GetSafe() )
+		return;
+
 	// The pull pin animation has to finish, then we wait until they aren't holding the primary
 	// attack button, then throw the grenade.
 	SendWeaponAnim( ACT_VM_PULLPIN );
@@ -124,8 +128,6 @@ void CBaseSDKGrenade::PrimaryAttack()
 	
 	// Don't let weapon idle interfere in the middle of a throw!
 	SetWeaponIdleTime( gpGlobals->curtime + SequenceDuration() );
-
-	m_flNextPrimaryAttack	= gpGlobals->curtime + SequenceDuration();
 }
 
 //-----------------------------------------------------------------------------
@@ -194,7 +196,7 @@ void CBaseSDKGrenade::ItemPostFrame()
 		return;
 
 	// If they let go of the fire button, they want to throw the grenade.
-	if ( m_bPinPulled && !(pPlayer->m_nButtons & IN_ATTACK) ) 
+	if ( m_bPinPulled && !(pPlayer->m_nButtons & IN_ATTACK) && m_flNextPrimaryAttack < gpGlobals->curtime ) 
 	{
 		pPlayer->DoAnimationEvent( PLAYERANIMEVENT_THROW_GRENADE );
 
@@ -230,7 +232,7 @@ void CBaseSDKGrenade::ItemPostFrame()
 			return;	//don't animate this grenade any more!
 		}	
 	}
-	else if( !m_bRedraw )
+	else if( !m_bRedraw && m_flNextPrimaryAttack < gpGlobals->curtime )
 	{
 		BaseClass::ItemPostFrame();
 	}
@@ -283,6 +285,7 @@ void CBaseSDKGrenade::ItemPostFrame()
 
 	void CBaseSDKGrenade::StartGrenadeThrow()
 	{
+		m_flNextPrimaryAttack = gpGlobals->curtime + 1.0f;
 		m_fThrowTime = gpGlobals->curtime + 0.1f;
 	}
 

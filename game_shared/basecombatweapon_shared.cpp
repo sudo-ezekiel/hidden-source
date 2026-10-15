@@ -452,10 +452,19 @@ bool CBaseCombatWeapon::IsAllowedToSwitch( void )
 //-----------------------------------------------------------------------------
 bool CBaseCombatWeapon::CanBeSelected( void )
 {
+	// HIDDEN: empty weapons stay selectable
 	if ( !VisibleInWeaponSelection() )
 		return false;
 
-	return HasAmmo();
+	return true;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The key for encrypted weapon scripts comes from the game rules (mid-2005 SDK)
+//-----------------------------------------------------------------------------
+const unsigned char *CBaseCombatWeapon::GetEncryptionKey( void ) 
+{ 
+	return g_pGameRules->GetEncryptionKey(); 
 }
 
 //-----------------------------------------------------------------------------
@@ -1026,32 +1035,28 @@ bool CBaseCombatWeapon::IsWeaponVisible( void )
 bool CBaseCombatWeapon::ReloadOrSwitchWeapons( void )
 {
 	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
-	Assert( pOwner );
+	if ( !pOwner )
+		return false;
 
 	m_bFireOnEmpty = false;
 
-	// If we don't have any ammo, switch to the next best weapon
+	// HIDDEN: an empty weapon is neither switched away from nor reloaded automatically;
+	// the player does both.
 	if ( !HasAnyAmmo() && m_flNextPrimaryAttack < gpGlobals->curtime && m_flNextSecondaryAttack < gpGlobals->curtime )
 	{
-		// weapon isn't useable, switch.
-		if ( ( (GetWeaponFlags() & ITEM_FLAG_NOAUTOSWITCHEMPTY) == false ) && ( g_pGameRules->SwitchToNextBestWeapon( pOwner, this ) ) )
-		{
-			m_flNextPrimaryAttack = gpGlobals->curtime + 0.3;
-			return true;
-		}
+		m_flNextPrimaryAttack = gpGlobals->curtime + 0.3;
+		return true;
 	}
 	else
 	{
-		// Weapon is useable. Reload if empty and weapon has waited as long as it has to after firing
+		// Weapon is useable. Wait if empty and weapon has waited as long as it has to after firing
 		if ( UsesClipsForAmmo1() && 
 			 (m_iClip1 == 0) && 
 			 (GetWeaponFlags() & ITEM_FLAG_NOAUTORELOAD) == false && 
 			 m_flNextPrimaryAttack < gpGlobals->curtime && 
 			 m_flNextSecondaryAttack < gpGlobals->curtime )
 		{
-			// if we're successfully reloading, we're done
-			if ( Reload() )
-				return true;
+			return true;
 		}
 	}
 
@@ -1070,10 +1075,7 @@ bool CBaseCombatWeapon::DefaultDeploy( char *szViewModel, char *szWeaponModel, i
 {
 	// Msg( "deploy %s at %f\n", GetClassname(), gpGlobals->curtime );
 
-	// Weapons that don't autoswitch away when they run out of ammo 
-	// can still be deployed when they have no ammo.
-	if ( !HasAnyAmmo() && AllowsAutoSwitchFrom() )
-		return false;
+	// HIDDEN: weapons deploy even when they have no ammo
 
 	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
 	if ( pOwner )
@@ -1656,11 +1658,11 @@ void CBaseCombatWeapon::FinishReload( void )
 	if (pOwner)
 	{
 		// If I use primary clips, reload primary
+		// HIDDEN: primary ammo counts magazines; a reload uses up one and fills the clip.
 		if ( UsesClipsForAmmo1() )
 		{
-			int primary	= min( GetMaxClip1() - m_iClip1, pOwner->GetAmmoCount(m_iPrimaryAmmoType));	
-			m_iClip1 += primary;
-			pOwner->RemoveAmmo( primary, m_iPrimaryAmmoType);
+			m_iClip1 = GetMaxClip1();
+			pOwner->RemoveAmmo( 1, m_iPrimaryAmmoType );
 		}
 
 		// If I use secondary clips, reload secondary

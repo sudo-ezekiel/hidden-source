@@ -31,6 +31,10 @@ public:
 	
 	CWeaponShotgun();
 
+	virtual bool Deploy();
+	virtual bool Holster( CBaseCombatWeapon *pSwitchingTo = NULL );
+	virtual void SetSafe();
+
 	virtual void PrimaryAttack();
 	virtual bool Reload();
 	virtual void WeaponIdle();
@@ -72,11 +76,62 @@ CWeaponShotgun::CWeaponShotgun()
 	m_flPumpTime = 0;
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Lower the shotgun when the player goes safe
+//-----------------------------------------------------------------------------
+void CWeaponShotgun::SetSafe()
+{
+	BaseClass::SetSafe();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+bool CWeaponShotgun::Holster( CBaseCombatWeapon *pSwitchingTo )
+{
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	if ( !pPlayer )
+		return false;
+
+	// Show the shotgun on the player's back
+	if ( pPlayer->m_lifeState == LIFE_ALIVE )
+		pPlayer->SetBodygroup( 2, 1 );
+
+	return BaseClass::Holster( pSwitchingTo );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+bool CWeaponShotgun::Deploy()
+{
+	CSDKPlayer *pPlayer = GetPlayerOwner();
+	pPlayer->m_iShotsFired = 0;
+
+	if ( pPlayer && pPlayer->GetSafe() )
+	{
+		SendWeaponAnim( ACT_VM_LOWERED );
+		SetWeaponIdleTime( gpGlobals->curtime + 0.1 );
+	}
+
+	return BaseClass::Deploy();
+}
+
 void CWeaponShotgun::PrimaryAttack()
 {
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	if ( !pPlayer )
 		return;
+
+	if ( !m_bDeployed )
+		return;
+
+	// No firing while safe
+	if ( pPlayer->GetSafe() )
+	{
+		m_flNextPrimaryAttack = 0.5;
+		return;
+	}
 
 	// don't fire underwater
 	if (pPlayer->GetWaterLevel() == 3)
@@ -99,10 +154,10 @@ void CWeaponShotgun::PrimaryAttack()
 		return;
 	}
 
+	pPlayer->DoMuzzleFlash();
 	SendWeaponAnim( ACT_VM_PRIMARYATTACK );
 
 	m_iClip1--;
-	pPlayer->DoMuzzleFlash();
 
 	// player "shoot" animation
 	pPlayer->SetAnimation( PLAYER_ATTACK1 );
@@ -111,11 +166,11 @@ void CWeaponShotgun::PrimaryAttack()
 	FX_FireBullets( 
 		pPlayer->entindex(),
 		pPlayer->Weapon_ShootPosition(), 
-		pPlayer->EyeAngles() + 2.0f * pPlayer->GetPunchAngle(), 
+		pPlayer->EyeAngles() + 5.0f * pPlayer->GetPunchAngle(), 
 		GetWeaponID(),
 		Primary_Mode,
 		CBaseEntity::GetPredictionRandomSeed() & 255, // wrap it for network traffic so it's the same between client and server
-		0.0675 );
+		0.19 );
 
 	if (!m_iClip1 && pPlayer->GetAmmoCount( m_iPrimaryAmmoType ) <= 0)
 	{
@@ -126,17 +181,14 @@ void CWeaponShotgun::PrimaryAttack()
 	if (m_iClip1 != 0)
 		m_flPumpTime = gpGlobals->curtime + 0.5;
 
-	m_flNextPrimaryAttack = gpGlobals->curtime + 0.875;
-	m_flNextSecondaryAttack = gpGlobals->curtime + 0.875;
-	if (m_iClip1 != 0)
-		SetWeaponIdleTime( gpGlobals->curtime + 2.5 );
-	else
-		SetWeaponIdleTime( gpGlobals->curtime + 0.875 );
+	m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
+	m_flNextSecondaryAttack = gpGlobals->curtime + SequenceDuration();
+	SetWeaponIdleTime( gpGlobals->curtime + SequenceDuration() );
 	m_fInSpecialReload = 0;
 
 	// Update punch angles.
 	QAngle angle = pPlayer->GetPunchAngle();
-	angle.x -= !(pPlayer->GetFlags() & FL_ONGROUND ) ? SHARED_RANDOMINT( 8, 11 ) : SHARED_RANDOMINT( 4, 6 );
+	angle.x -= !(pPlayer->GetFlags() & FL_ONGROUND ) ? SHARED_RANDOMINT( 18, 21 ) : SHARED_RANDOMINT( 8, 11 );
 	pPlayer->SetPunchAngle( angle );
 }
 
@@ -173,7 +225,7 @@ bool CWeaponShotgun::Reload()
 		m_fInSpecialReload = 2;
 
 		SendWeaponAnim( ACT_VM_RELOAD );
-		SetWeaponIdleTime( gpGlobals->curtime + 0.45 );
+		SetWeaponIdleTime( gpGlobals->curtime + 0.6 );
 	}
 	else
 	{
@@ -199,6 +251,8 @@ bool CWeaponShotgun::Reload()
 void CWeaponShotgun::WeaponIdle()
 {
 	CSDKPlayer *pPlayer = GetPlayerOwner();
+	if ( !pPlayer )
+		return;
 
 	if (m_flPumpTime && m_flPumpTime < gpGlobals->curtime)
 	{
@@ -226,8 +280,13 @@ void CWeaponShotgun::WeaponIdle()
 				
 				// play cocking sound
 				m_fInSpecialReload = 0;
-				SetWeaponIdleTime( gpGlobals->curtime + 1.5 );
+				SetWeaponIdleTime( gpGlobals->curtime + SequenceDuration() );
 			}
+		}
+		else if ( pPlayer->GetSafe() )
+		{
+			SendWeaponAnim( ACT_VM_LOWERED );
+			SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
 		}
 		else
 		{

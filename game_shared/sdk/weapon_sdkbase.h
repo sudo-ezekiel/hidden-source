@@ -15,9 +15,11 @@
 
 #if defined( CLIENT_DLL )
 	#define CWeaponSDKBase C_WeaponSDKBase
+	#define CLaserDot C_LaserDot
 #endif
 
 class CSDKPlayer;
+class CLaserDot;
 
 // These are the names of the ammo types that the weapon script files reference.
 #define AMMO_BULLETS			"AMMO_BULLETS"
@@ -32,9 +34,14 @@ typedef enum
 {
 	WEAPON_NONE = 0,
 
-	WEAPON_MP5,
+	WEAPON_CROWBAR,		// the Hidden's knife
+	WEAPON_PISTOL,
+	WEAPON_PISTOL2,
+	WEAPON_P90,
+	WEAPON_FN2000,
+	WEAPON_FN303,
 	WEAPON_SHOTGUN,
-	WEAPON_GRENADE,
+	WEAPON_GRENADE,		// the Hidden's pipe bomb
 	
 	WEAPON_MAX,		// number of weapons weapon index
 } SDKWeaponID;
@@ -63,6 +70,18 @@ public:
 	// All predicted weapons need to implement and return true
 	virtual bool	IsPredicted() const { return true; }
 	virtual SDKWeaponID GetWeaponID( void ) const { return WEAPON_NONE; }
+
+	virtual bool	Deploy( void );
+	virtual bool	Holster( CBaseCombatWeapon *pSwitchingTo = NULL );
+	virtual void	ItemPostFrame( void );
+	virtual void	Drop( const Vector &vecVelocity );
+
+	// Lower the weapon when the player goes safe
+	virtual void	SetSafe( void );
+
+	// Laser aiming module
+	virtual void	UpdateLaserPosition( Vector vecMuzzlePos = vec3_origin, Vector vecEndPos = vec3_origin );
+	virtual void	CreateLaserPointer( void );
 	
 	// Get SDK weapon specific weapon data.
 	CSDKWeaponInfo const	&GetSDKWpnData() const;
@@ -70,12 +89,20 @@ public:
 	// Get a pointer to the player that owns this weapon
 	CSDKPlayer* GetPlayerOwner() const;
 
+	bool ShouldRemoveOnRoundRestart() const;
+
 	// override to play custom empty sounds
 	virtual bool PlayEmptySound();
 
 #ifdef GAME_DLL
 	virtual void SendReloadEvents();
 #endif
+
+protected:
+	bool	m_bDeployed;		// REBUILD: name. Set by Deploy, cleared by Holster; the weapons only fire when it is set.
+	bool	m_bJustDeployed;	// REBUILD: name. Set by Deploy, cleared by the sonic weapon; nothing on the server reads it.
+
+	CHandle<CLaserDot>	m_hLaserDot;
 
 private:
 	CWeaponSDKBase( const CWeaponSDKBase & );

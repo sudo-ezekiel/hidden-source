@@ -5738,12 +5738,6 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 					<File
 						RelativePath="hl2_dll\grenade_tripmine.cpp">
 						<FileConfiguration
-							Name="Release SDK|Win32"
-							ExcludedFromBuild="TRUE">
-							<Tool
-								Name="VCCLCompilerTool"/>
-						</FileConfiguration>
-						<FileConfiguration
 							Name="Debug SDK|Win32"
 							ExcludedFromBuild="TRUE">
 							<Tool
@@ -6538,6 +6532,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 				</File>
 				<File
 					RelativePath="..\game_shared\sdk\weapon_mp5.cpp">
+					<FileConfiguration
+						Name="Release SDK|Win32"
+						ExcludedFromBuild="TRUE">
+						<Tool
+							Name="VCCLCompilerTool"/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath="..\game_shared\sdk\weapon_sdkbase.cpp">
@@ -6597,6 +6597,9 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 				</File>
 				<File
 					RelativePath="..\game_shared\hidden\hdn_bludgeonweapon_sdkbase.cpp">
+				</File>
+				<File
+					RelativePath="..\game_shared\hidden\hdn_lasersight.cpp">
 				</File>
 				<File
 					RelativePath="..\game_shared\hidden\hdn_evacuationrules.cpp">

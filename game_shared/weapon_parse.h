@@ -135,6 +135,7 @@ WEAPON_FILE_INFO_HANDLE LookupWeaponInfoSlot( const char *name );
 
 FileWeaponInfo_t *GetFileWeaponInfoFromHandle( WEAPON_FILE_INFO_HANDLE handle );
 WEAPON_FILE_INFO_HANDLE GetInvalidWeaponInfoHandle( void );
+void PrecacheFileWeaponInfoDatabase( IFileSystem *filesystem, const unsigned char *pICEKey );
 void ResetFileWeaponInfoDatabase( void );
 
 
