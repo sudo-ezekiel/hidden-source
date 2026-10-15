@@ -15,6 +15,9 @@ cand size, mangled name, demangled name.
 """
 import argparse
 import difflib
+import hashlib
+import os
+import pickle
 import re
 import subprocess
 import sys
@@ -70,6 +73,22 @@ def disassemble(path):
     return blocks
 
 
+def disassemble_cached(path):
+    """The reference build never changes, so keep its normalised disassembly next to the work dir."""
+    st = os.stat(path)
+    key = hashlib.sha1(f"{os.path.abspath(path)}:{st.st_size}:{st.st_mtime_ns}".encode()).hexdigest()[:16]
+    cache = os.path.join(os.path.expanduser("~/.cache/hsrebuild-disasm"), key + ".pickle")
+    if os.path.exists(cache):
+        with open(cache, "rb") as f:
+            return pickle.load(f)
+    blocks = disassemble(path)
+    os.makedirs(os.path.dirname(cache), exist_ok=True)
+    with open(cache + ".tmp", "wb") as f:
+        pickle.dump(blocks, f)
+    os.replace(cache + ".tmp", cache)
+    return blocks
+
+
 def body(blocks, addr, size):
     ins = blocks.get(addr)
     return ins if ins is not None else []
@@ -93,7 +112,7 @@ def main():
 
     ref_syms = function_symbols(args.ref)
     cand_syms = function_symbols(args.cand)
-    ref_blocks = disassemble(args.ref)
+    ref_blocks = disassemble_cached(args.ref)
     cand_blocks = disassemble(args.cand)
 
     rows = []
