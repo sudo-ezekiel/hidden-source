@@ -3238,7 +3238,7 @@ void CBasePlayer::PreThink(void)
 		m_Local.m_flFallVelocity = -GetAbsVelocity().z;
 	}
 
-	CNavArea *area = TheNavMesh->GetNavArea( &GetAbsOrigin() );
+	CNavArea *area = TheNavMesh->GetNavArea( GetAbsOrigin() );
 	if (area && area != m_lastNavArea)
 	{
 		// player entered a new nav area

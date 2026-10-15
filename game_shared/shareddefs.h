@@ -14,7 +14,7 @@
 #ifdef CSTRIKE_DLL
 	#define TICK_INTERVAL			0.03					// 30 msec ticks (see const.h)
 #else
-	#define TICK_INTERVAL			DEFAULT_TICK_INTERVAL  // 15 msec ticks (see const.h)
+	#define TICK_INTERVAL			(gpGlobals->interval_per_tick)
 #endif	
 
 #define TIME_TO_TICKS( dt )		( (int)( 0.5f + (float)(dt) / TICK_INTERVAL ) )

@@ -1007,6 +1007,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 				RelativePath="damagemodifier.cpp">
 			</File>
 			<File
+				RelativePath="..\game_shared\death_pose.cpp">
+			</File>
+			<File
+				RelativePath="..\game_shared\death_pose.h">
+			</File>
+			<File
 				RelativePath="..\game_shared\debugoverlay_shared.cpp">
 			</File>
 			<File
@@ -1173,6 +1179,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 			</File>
 			<File
 				RelativePath="..\game_shared\entityparticletrail_shared.h">
+			</File>
+			<File
+				RelativePath="..\game_shared\env_detail_controller.cpp">
+			</File>
+			<File
+				RelativePath="..\game_shared\env_detail_controller.h">
 			</File>
 			<File
 				RelativePath="env_effectsscript.cpp">
@@ -1350,18 +1362,6 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 			</File>
 			<File
 				RelativePath="hl2_dll\Func_Monitor.cpp">
-				<FileConfiguration
-					Name="Release SDK|Win32"
-					ExcludedFromBuild="TRUE">
-					<Tool
-						Name="VCCLCompilerTool"/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug SDK|Win32"
-					ExcludedFromBuild="TRUE">
-					<Tool
-						Name="VCCLCompilerTool"/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="func_movelinear.cpp">
@@ -1865,6 +1865,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 				RelativePath="nav_area.h">
 			</File>
 			<File
+				RelativePath="nav_colors.cpp">
+			</File>
+			<File
+				RelativePath="nav_colors.h">
+			</File>
+			<File
 				RelativePath="nav_edit.cpp">
 			</File>
 			<File
@@ -1872,6 +1878,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 			</File>
 			<File
 				RelativePath="nav_generate.cpp">
+			</File>
+			<File
+				RelativePath="nav_ladder.cpp">
+			</File>
+			<File
+				RelativePath="nav_ladder.h">
 			</File>
 			<File
 				RelativePath="nav_mesh.cpp">
@@ -1917,6 +1929,12 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 			</File>
 			<File
 				RelativePath=".\npc_vehicledriver.cpp">
+			</File>
+			<File
+				RelativePath="..\game_shared\obstacle_pushaway.cpp">
+			</File>
+			<File
+				RelativePath="..\game_shared\obstacle_pushaway.h">
 			</File>
 			<File
 				RelativePath="particle_fire.h">
@@ -2064,6 +2082,9 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 			</File>
 			<File
 				RelativePath="point_camera.h">
+			</File>
+			<File
+				RelativePath="point_devshot_camera.cpp">
 			</File>
 			<File
 				RelativePath="point_playermoveconstraint.cpp">
@@ -6621,18 +6642,6 @@ if exist &quot;$(TargetDir)&quot;server.dll copy &quot;$(TargetDir)&quot;server.
 				</File>
 				<File
 					RelativePath="hidden\hdn_marine_clip.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\death_pose.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\env_detail_controller.cpp">
-				</File>
-				<File
-					RelativePath="..\game_shared\obstacle_pushaway.cpp">
-				</File>
-				<File
-					RelativePath="point_devshot_camera.cpp">
 				</File>
 				<File
 					RelativePath="sdk\sdk_bot_temp.cpp">
