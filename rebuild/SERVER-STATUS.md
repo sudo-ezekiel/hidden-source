@@ -107,3 +107,68 @@ To see how one function differs:
 | player_lagcompensation.cpp | CLagCompensationManager::BacktrackPlayer | 0.792 | Hidden's build has 16 bytes more stack, from extra temporaries. Of the 49 this is the one most likely to hide a real source difference that has not been found. |
 | sdk_gamerules.cpp | CSDKGameRules::RestartRound | 0.729 | The inlined CountHiddens and TotalPlayers loops have a different loop shape (rotated against jump-to-condition). Each of those functions is same on its own. |
 | sdk_gamerules.cpp | CSDKGameRules::IsRoundOver | 0.825 | Hidden's build has a duplicated loop-entry block that we could not reproduce; a different loop form in the source is possible. |
+
+## MSVC build (server.dll)
+
+The same source also builds Hidden's Windows server.dll, with Hidden's compiler (cl 13.10.3077
+under Wine) and the vcproj's "Release SDK|Win32" settings: 441 of 441 files compile and the link
+has no unresolved externals. The DLL is 4,366,336 bytes, the size of Hidden's two August DLLs.
+How to build and compare, the settings and how they were checked are in `msvc/MSVC.md` ("Building
+server.dll", "Comparing server.dll"):
+
+    JOBS=6 sh rebuild/msvc/build_server.sh ~/.cache/hsrebuild-msvc-server
+    sh rebuild/msvc/compare_server.sh ~/.cache/hsrebuild-msvc-server
+    sh rebuild/msvc/compare_server.sh ~/.cache/hsrebuild-msvc-server ~/.cache/subject51764/hsrebuild/builds/dll_2006-08-18_4b1.dll
+
+| Reference | Mapped | Same | Changed | Stable subset: same / changed / unmapped |
+|---|---|---|---|---|
+| May 2006, by its PDB | 30759 of 30779 | 30000 | 759 | 14585 / 38 / 0 |
+| 2006-08-18 4b1 (the build of the .so above) | 30158 of 30701 | 30007 | 151 | 14493 / 37 / 93 |
+| 2006-08-08 4.1 | 30156 of 30698 | 30004 | 152 | 14493 / 37 / 93 |
+
+The May DLL is the only one with names and extents from Hidden's own PDB, but it was built from
+older source (CBasePlayer is 12 bytes shorter, and Hidden's game code differs in many places), so
+most of its 759 are real source differences between May and August. The 2006-08-18 DLL is the
+main target.
+
+What the MSVC build found that the GCC comparison cannot see: `compare_builds.py` treats every
+immediate above 0xffff as an address, so a wrong large constant, a float constant, or a float
+where Hidden had a double compiles to a "same" function in the .so. These were fixed against
+server.dll and checked in the 4b1 .so: FCAP_DONT_SAVE in CHDNAmmoCrate::ObjectCaps, the
+RandomFloat( 8, 10 ) splash scales in gamemovement.cpp and baseplayer_shared.cpp, the eye height
+62 of g_DefaultViewVectors, MASK_SHOT in CSDKPlayer::FireBullet, float and double literals in
+the weapons' WeaponIdle, the FN2000's Deploy and PrimaryAttack, Swing, DelayDeathThink,
+CheckPounceButton and GetBombCount, and the order of CTriggerSoundscape's data description. The
+GCC result above is unchanged by all of them.
+
+The 151 functions that differ from the 2006-08-18 DLL, by cause:
+
+- **LIBC (38).** Hidden's libc.lib differs from the Toolkit's in these objects (pow_pentium4, the
+  printf and scanf cores, SEH helpers, some string functions), although both Rich headers count
+  107 C and 35 MASM objects of build 3077. Which libc.lib Hidden had is not known. No source fix.
+- **Hidden's game code (about 60).** sdk_gamerules.obj (ClientCommand, PlayerKilled, IsRoundOver,
+  GameOverThink, the Count and IRISWins tests), player.obj (ChangeClass, PhysicsSimulate,
+  OnTakeDamage_Alive, PlayerDeathThink, UpdateStun), sdk_player.obj (Spawn, CreateRagdollEntity,
+  PlayerUse), the evacuation and overrun rules, hdn_hiddenselection, hdn_extraction_trigger,
+  hdn_bot, weapon_fn303. Several are also among the 49 above (ClientCommand, IsRoundOver,
+  IRISWins, RespawnHiddens, SelectHidden, OnTakeDamage_Alive, PlayerDeathThink,
+  SetCurrentLocation, CSDKPlayer::Spawn, BoltTouch). The others are "same" in the .so, so either
+  their difference is one the GCC comparison masks, or GCC 3.4 gives the same code for two source
+  forms that MSVC tells apart. They need a closer look one by one.
+- **Static initialiser order (13).** The `_$E` initialisers of sdk_gamerules.obj and
+  weapon_fn303.obj pair in sequence, and the sequences differ: Hidden's globals (ConVars and the
+  like) are defined in another order in those two files.
+- **Register choice and scheduling (about 15).** Same instructions, other registers or order:
+  CheckBack, CHLTVDirector::LevelInitPostEntity, ParseEntryExitAnims, SampleStep,
+  LoadDecalsFromScript, LoadSchedulesFromBuffer, the CBasePlayer and CSDKGameRules constructors,
+  InstallGameRules, CWeaponShotgun::PrimaryAttack.
+- **Inlining and stack layout.** CBaseEntity::FireBullets inlines CGameTrace::operator= where
+  Hidden's calls it.
+- **The reference has no PDB (about 25).** Some extents found from the code are cut at a tail call
+  or run into the next function (ServiceEventQueue, SendProxy_SolidFlags), and the static
+  NetworkStateChanged functions of CBasePlayer are small, alike and named from the May DLL, so a
+  few pair with a neighbour. Of the 37 stable-subset functions that differ, 29 are the same
+  against the May DLL, where the PDB gives the extents.
+
+543 reference functions are not mapped: small ones that no vftable, name, call or neighbour ties
+to one of ours.
