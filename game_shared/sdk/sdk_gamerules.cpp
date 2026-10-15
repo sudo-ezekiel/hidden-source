@@ -506,7 +506,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 					else
 					{
 						// All characters are taken
-						pPlayer->StartObserverMode( OBS_MODE_DEATHCAM );
+						pPlayer->StartObserverMode( OBS_MODE_FIXED );
 					}
 				}
 			}
@@ -841,7 +841,7 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 			if ( iTeam == TEAM_HIDDEN || ( iTeam == TEAM_IRIS && iMarines++ < 8 ) )
 				pPlayer->Spawn();
 			else
-				pPlayer->StartObserverMode( OBS_MODE_DEATHCAM );
+				pPlayer->StartObserverMode( OBS_MODE_FIXED );
 		}
 	}
 

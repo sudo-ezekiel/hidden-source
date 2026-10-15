@@ -101,7 +101,7 @@ void CHiddenSelector::SelectWeightedHidden( CUtlVector<CBasePlayer *> &players )
 void CHiddenSelector::NotEnoughPlayers( CUtlVector<CBasePlayer *> &players, char *pszGameName, int iConnected, int iReady, int iNeeded )
 {
 	for ( int i = 0; i < iConnected; i++ )
-		players[i]->StartObserverMode( OBS_MODE_DEATHCAM );
+		players[i]->StartObserverMode( OBS_MODE_FIXED );
 
 	char szMessage[64];
 	int iMore;
