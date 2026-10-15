@@ -941,6 +941,18 @@ void CBreakable::Die( void )
     
 	if ( soundname )
 	{
+		if ( m_hBreaker && m_hBreaker->IsPlayer() )
+		{
+			IGameEvent * event = gameeventmanager->CreateEvent( "break_breakable" );
+			if ( event )
+			{
+				event->SetInt( "userid", ToBasePlayer( m_hBreaker )->GetUserID() );
+				event->SetInt( "entindex", entindex() );
+				event->SetInt( "material", cFlag );
+				gameeventmanager->FireEvent( event );
+			}
+		}
+
 		CSoundParameters params;
 		if ( GetParametersForSound( soundname, params, NULL ) )
 		{

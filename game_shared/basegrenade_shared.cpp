@@ -409,7 +409,8 @@ void CBaseGrenade::SlideTouch( CBaseEntity *pOther )
 
 void CBaseGrenade ::BounceSound( void )
 {
-	// Doesn't need to do anything anymore! Physics makes the sound.
+	// REBUILD: Hidden plays a bounce sound again (Valve left this empty: "Physics makes the sound")
+	EmitSound( "BaseGrenade.Bounce" );
 }
 
 void CBaseGrenade ::TumbleThink( void )
@@ -450,6 +451,7 @@ void CBaseGrenade::Precache( void )
 	BaseClass::Precache( );
 
 	PrecacheScriptSound( "BaseGrenade.Explode" );
+	PrecacheScriptSound( "BaseGrenade.Bounce" );
 }
 
 //-----------------------------------------------------------------------------

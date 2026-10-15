@@ -79,6 +79,7 @@
 #include "vphysics/friction.h"
 #include "physics_npc_solver.h"
 #include "tier0/vcrmode.h"
+#include "death_pose.h"
 
 extern ConVar sk_healthkit;
 
@@ -402,103 +403,20 @@ void CAI_BaseNPC::CleanupOnDeath( CBaseEntity *pCulprit, bool bFireDeathOutput )
 		DevMsg( "Unexpected double-death-cleanup\n" );
 }
 
-#define DEATH_FRAME_HEAD 1
-#define DEATH_FRAME_STOMACH 2
-#define DEATH_FRAME_LEFTARM 3
-#define DEATH_FRAME_RIGHTARM 4
-#define DEATH_FRAME_LEFTLEG 5
-#define DEATH_FRAME_RIGHTLEG 6
-
-Activity CAI_BaseNPC::GetDeathPoseActivity( const CTakeDamageInfo &info )
-{
-	Activity aActivity;
-
-	Vector vForward, vRight;
-	GetVectors( &vForward, &vRight, NULL );
-
-	Vector vDir = -info.GetDamageForce();
-	VectorNormalize( vDir );
-
-	float flDotForward	= DotProduct( vForward, vDir );
-	float flDotRight	= DotProduct( vRight, vDir );
-
-	bool bNegativeForward = false;
-	bool bNegativeRight = false;
-
-	if ( flDotForward < 0.0f )
-	{
-		bNegativeForward = true;
-		flDotForward = flDotForward * -1;
-	}
-
-	if ( flDotRight < 0.0f )
-	{
-		bNegativeRight = true;
-		flDotRight = flDotRight * -1;
-	}
-
-	if ( flDotRight > flDotForward )
-	{
-		if ( bNegativeRight == true )
-			aActivity = ACT_DIE_LEFTSIDE;
-		else 
-			aActivity = ACT_DIE_RIGHTSIDE;
-	}
-	else
-	{
-		if ( bNegativeForward == true )
-			aActivity = ACT_DIE_BACKSIDE;
-		else 
-			aActivity = ACT_DIE_FRONTSIDE;
-	}
-
-	return aActivity;
-}
-
 void CAI_BaseNPC::SelectDeathPose( const CTakeDamageInfo &info )
 {
 	if ( !GetModelPtr() )
 		return;
 
-	Activity aActivity = GetDeathPoseActivity( info );
-	int iDeathFrame = DEATH_FRAME_HEAD;
+	Activity aActivity = ACT_INVALID;
+	int iDeathFrame = 0;
 
-	switch( LastHitGroup() )
+	SelectDeathPoseActivityAndFrame( this, info, LastHitGroup(), aActivity, iDeathFrame );
+	if ( aActivity == ACT_INVALID )
 	{
-		//Do normal ragdoll stuff if no specific hitgroup was hit.
-		case HITGROUP_GENERIC:
-		default:
-		{
-			SetDeathPose( ACT_INVALID );
-			SetDeathPoseFrame( 0 );
-			return;
-		}
-			
-		case HITGROUP_HEAD:
-		{
-			iDeathFrame = DEATH_FRAME_HEAD;
-			break;
-		}
-		case HITGROUP_LEFTARM:
-			iDeathFrame = DEATH_FRAME_LEFTARM;
-			break;
-
-		case HITGROUP_RIGHTARM:
-			iDeathFrame = DEATH_FRAME_RIGHTARM;
-			break;
-
-		case HITGROUP_CHEST:
-		case HITGROUP_STOMACH:
-			iDeathFrame = DEATH_FRAME_STOMACH;
-			break;
-	
-		case HITGROUP_LEFTLEG:
-			iDeathFrame = DEATH_FRAME_LEFTLEG;
-			break;
-
-		case HITGROUP_RIGHTLEG:
-			iDeathFrame = DEATH_FRAME_RIGHTLEG;
-			break;
+		SetDeathPose( ACT_INVALID );
+		SetDeathPoseFrame( 0 );
+		return;
 	}
 
 	SetDeathPose( SelectWeightedSequence( aActivity ) );
