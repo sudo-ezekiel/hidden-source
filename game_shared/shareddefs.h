@@ -143,7 +143,7 @@ public:
 #ifdef CSTRIKE_DLL
 	#define MAX_PLAYERS				64  // Absolute max players supported
 #else
-	#define MAX_PLAYERS				32  // Absolute max players supported
+	#define MAX_PLAYERS				10  // Hidden: was 32 (array sizes in the binary, e.g. CPlayerResource's m_iPing[11])
 #endif
 
 #define MAX_PLACE_NAME_LENGTH		16
