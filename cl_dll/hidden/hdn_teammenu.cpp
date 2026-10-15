@@ -295,10 +295,11 @@ HDNTeamMenu::HDNTeamMenu( Panel *pParent ) : Frame( NULL, "team_menu" )
 //-----------------------------------------------------------------------------
 void HDNTeamMenu::OnThink()
 {
-	if ( !g_pGameRules )
+	C_SDKGameRules *pRules = SDKGameRules();	// REBUILD: name
+	if ( !pRules )
 		return;
 
-	if ( SDKGameRules()->IsCharacterTaken( 0 ) == true )
+	if ( pRules->IsCharacterTaken( 0 ) == true )
 	{
 		m_pStrike[6]->SetVisible( true );
 		m_pStrike[6]->SetAlpha( 127 );
@@ -318,7 +319,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[6]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 1 ) == true )
+	if ( pRules->IsCharacterTaken( 1 ) == true )
 	{
 		m_pStrike[4]->SetVisible( true );
 		m_pMem5Button->SetEnabled( false );
@@ -337,7 +338,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[4]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 2 ) == true )
+	if ( pRules->IsCharacterTaken( 2 ) == true )
 	{
 		m_pStrike[2]->SetVisible( true );
 		m_pMem3Button->SetEnabled( false );
@@ -356,7 +357,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[2]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 3 ) == true )
+	if ( pRules->IsCharacterTaken( 3 ) == true )
 	{
 		m_pStrike[5]->SetVisible( true );
 		m_pMem6Button->SetEnabled( false );
@@ -375,7 +376,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[5]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 4 ) == true )
+	if ( pRules->IsCharacterTaken( 4 ) == true )
 	{
 		m_pStrike[0]->SetVisible( true );
 		m_pMem1Button->SetEnabled( false );
@@ -394,7 +395,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[0]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 5 ) == true )
+	if ( pRules->IsCharacterTaken( 5 ) == true )
 	{
 		m_pStrike[3]->SetVisible( true );
 		m_pMem4Button->SetEnabled( false );
@@ -413,7 +414,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[3]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 6 ) == true )
+	if ( pRules->IsCharacterTaken( 6 ) == true )
 	{
 		m_pStrike[7]->SetVisible( true );
 		m_pMem8Button->SetEnabled( false );
@@ -432,7 +433,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[7]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 7 ) == true )
+	if ( pRules->IsCharacterTaken( 7 ) == true )
 	{
 		m_pStrike[1]->SetVisible( true );
 		m_pMem2Button->SetEnabled( false );
@@ -451,7 +452,7 @@ void HDNTeamMenu::OnThink()
 		m_pStrike[1]->SetVisible( false );
 	}
 
-	if ( SDKGameRules()->IsCharacterTaken( 8 ) == true )
+	if ( pRules->IsCharacterTaken( 8 ) == true )
 	{
 		m_pStrike[8]->SetVisible( true );
 		m_pMem9Button->SetEnabled( false );
@@ -627,15 +628,15 @@ void HDNTeamMenu::OnCommand( const char *command )
 		char szCommand[16];
 		const char *pszImage;
 
-		if ( !m_pPlayer->GetNoHidden() )
-		{
-			strcpy( szCommand, "choosehidden 1" );
-			pszImage = "selection/tick";
-		}
-		else
+		if ( m_pPlayer->GetNoHidden() )
 		{
 			strcpy( szCommand, "choosehidden 0" );
 			pszImage = "selection/cross";
+		}
+		else
+		{
+			strcpy( szCommand, "choosehidden 1" );
+			pszImage = "selection/tick";
 		}
 
 		m_pHiddenCross->SetImage( pszImage );

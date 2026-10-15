@@ -34,9 +34,9 @@ public:
 
 	// REBUILD: names of the four virtuals (client.dll slots 194 to 197)
 	virtual void InitPanel( vgui::Panel *pParent );
-	virtual void InitImages( void ) { m_iImageCount = m_Images.Count(); }
-	virtual void InitButtons( void ) { m_iButtonCount = m_Buttons.Count(); }
-	virtual void InitInfoImages( void ) { m_iInfoCount = m_InfoImages.Count(); }
+	virtual void InitImages( void );
+	virtual void InitButtons( void );
+	virtual void InitInfoImages( void );
 
 protected:
 	// REBUILD: names of the non-virtual helpers

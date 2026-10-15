@@ -121,6 +121,25 @@ int HDNMenu::GetCommandValue( const char *command )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: The derived menus fill the lists, then chain here to count them
+//			(out of line: client.dll calls these from the derived menus)
+//-----------------------------------------------------------------------------
+void HDNMenu::InitImages( void )
+{
+	m_iImageCount = m_Images.Count();
+}
+
+void HDNMenu::InitInfoImages( void )
+{
+	m_iInfoCount = m_InfoImages.Count();
+}
+
+void HDNMenu::InitButtons( void )
+{
+	m_iButtonCount = m_Buttons.Count();
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Shows the info image of the button under the cursor
 //-----------------------------------------------------------------------------
 void HDNMenu::OnThink()
