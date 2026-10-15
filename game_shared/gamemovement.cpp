@@ -868,6 +868,7 @@ void CGameMovement::CheckWaterJump( void )
 	feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
 
 	CEffectData data;
+	data.m_fFlags = 0;
 	data.m_vOrigin = feet;
 	data.m_vNormal.Init( 0, 0, 1 );
 	VectorAngles( data.m_vNormal, data.m_vAngles );
@@ -3348,6 +3349,7 @@ void CGameMovement::CheckFalling( void )
 			feet[2] = mv->m_vecAbsOrigin[2] + GetPlayerMins()[2] + 1;
 
 			CEffectData data;
+			data.m_fFlags = 0;
 			data.m_vOrigin = feet;
 			data.m_vNormal.Init( 0, 0, 1 );
 			VectorAngles( data.m_vNormal, data.m_vAngles );

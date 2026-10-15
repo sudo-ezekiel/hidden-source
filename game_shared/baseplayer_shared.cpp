@@ -474,6 +474,7 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 		if ( GetFlags() & FL_DUCKING )
 		{
 			CEffectData data;
+			data.m_fFlags = 0;
 			data.m_vOrigin = feet;
 			data.m_vNormal.Init( 0, 0, 1 );
 			VectorAngles( data.m_vNormal, data.m_vAngles );
@@ -483,6 +484,7 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 		else
 		{
 			CEffectData data;
+			data.m_fFlags = 0;
 			data.m_vOrigin = feet;
 			data.m_vNormal.Init( 0, 0, 1 );
 			VectorAngles( data.m_vNormal, data.m_vAngles );
