@@ -109,6 +109,90 @@ def msvc_source(dll, mapfile):
     return dict(ours), primary, {}
 
 
+_MSVC_BUILTIN = {"float": "M", "double": "N", "int": "H", "unsigned int": "I", "char": "D",
+                 "unsigned char": "E", "short int": "F", "short unsigned int": "G", "long int": "J",
+                 "long unsigned int": "K", "bool": "_N"}
+
+
+def _split_args(text):
+    """'float, 24' -> ['float', '24'], keeping nested '<...>' together."""
+    out, depth, cur = [], 0, ""
+    for ch in text:
+        if ch == "<":
+            depth += 1
+        elif ch == ">":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append(cur.strip())
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        out.append(cur.strip())
+    return out
+
+
+def _msvc_int(n):
+    if 1 <= n <= 10:
+        return f"$0{n - 1}"
+    digits = ""
+    while n:
+        digits = "ABCDEFGHIJKLMNOP"[n % 16] + digits
+        n //= 16
+    return f"$0{digits or 'A'}@"
+
+
+def _msvc_template(gcc_name, backrefs=None):
+    """MSVC RTTI spellings of a GCC template class name ('CInterpolatedVar<float>' ->
+    '?$CInterpolatedVar@M'). Class arguments can be class (V) or struct (U), which the GCC dump does
+    not say, so every combination is returned."""
+    m = re.match(r"^([\w:]+)<(.*)>$", gcc_name.strip())
+    if not m:
+        return []
+    table = [m.group(1)]
+    alts = [""]
+    for arg in _split_args(m.group(2)):
+        enc = _msvc_arg(arg, table)
+        if not enc:
+            return []
+        alts = [a + e for a in alts for e in enc]
+    return ["?$" + m.group(1) + "@" + a for a in alts]
+
+
+def _msvc_arg(arg, table):
+    if re.fullmatch(r"-?\d+u?", arg):
+        n = int(arg.rstrip("u"))
+        return [_msvc_int(n)] if n >= 0 else []
+    if arg in _MSVC_BUILTIN:
+        return [_MSVC_BUILTIN[arg]]
+    ptr = arg.endswith("*")
+    base = arg[:-1].strip() if ptr else arg
+    if "<" in base:
+        inner = _msvc_template(base)
+        names = [i + "@@" for i in inner]
+    elif base in table:
+        names = [f"{table.index(base)}@"]
+    elif re.fullmatch(r"\w+", base):
+        table.append(base)
+        names = [base + "@@"]
+    else:
+        return []
+    out = [k + n for n in names for k in ("V", "U")]
+    return ["PA" + o for o in out] if ptr else out
+
+
+def alias_templates(ref, ours, primary):
+    """Give our template classes the names client.dll's RTTI uses for them."""
+    for name in list(ours):
+        if "<" not in name:
+            continue
+        for cand in _msvc_template(name):
+            if cand in ref and cand not in ours:
+                ours[cand] = ours[name]
+                primary[cand] = primary.get(name)
+                break
+
+
 def remap_offsets(ref, bases, ours):
     """Key our secondary vftables by the reference's subobject offset, matching by base class name
     where the offsets differ (a data layout difference, reported separately from the slots)."""
@@ -333,6 +417,7 @@ def main():
         ours, primary, conflicts = gcc_source(args.dumps)
     else:
         raise SystemExit("need --dumps or --ours-dll/--ours-map")
+    alias_templates(ref, ours, primary)
     moved = remap_offsets(ref, bases, ours)
     report = check(ref, ours, primary)
     for cls, m in moved.items():
