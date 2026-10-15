@@ -997,6 +997,45 @@ void UTIL_SayTextFilter( IRecipientFilter& filter, const char *pText, CBasePlaye
 	MessageEnd();
 }
 
+void UTIL_SayText2Filter( IRecipientFilter& filter, CBasePlayer *pEntity, bool bChat, const char *msg_name, const char *param1, const char *param2, const char *param3, const char *param4 )
+{
+	UserMessageBegin( filter, "SayText2" );
+		if ( pEntity )
+		{
+			WRITE_BYTE( pEntity->entindex() );
+		}
+		else
+		{
+			WRITE_BYTE( 0 ); // world, dedicated server says
+		}
+
+		WRITE_BYTE( bChat );
+
+		WRITE_STRING( msg_name );
+
+		if ( param1 )
+			WRITE_STRING( param1 );
+		else
+			WRITE_STRING( "" );
+
+		if ( param2 )
+			WRITE_STRING( param2 );
+		else
+			WRITE_STRING( "" );
+
+		if ( param3 )
+			WRITE_STRING( param3 );
+		else
+			WRITE_STRING( "" );
+
+		if ( param4 )
+			WRITE_STRING( param4 );
+		else
+			WRITE_STRING( "" );
+
+	MessageEnd();
+}
+
 
 void UTIL_ShowMessage( const char *pString, CBasePlayer *pPlayer )
 {
