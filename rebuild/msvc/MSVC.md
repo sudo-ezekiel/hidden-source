@@ -1,4 +1,4 @@
-# MSVC 7.1 toolchain for client.dll
+# MSVC 7.1 toolchain for client.dll and server.dll
 
 Hidden's client.dll Rich header names cl 13.10.3077 and link 7.10.3077, the compiler of Visual
 Studio .NET 2003 RTM. The free way to get exactly that build is the Visual C++ Toolkit 2003,
@@ -192,3 +192,94 @@ Result: client.dll 3,223,552 bytes (client.dll 3,235,840); .text 0x238f3a (0x23b
 0x6a72d (0x6a7ad), .data 0x2f000 (0x2f000).
 
 The comparison is in CLIENT.md section 5.
+
+## Building server.dll
+
+    JOBS=6 sh rebuild/msvc/build_server.sh ~/.cache/hsrebuild-msvc-server-<name> [file.cpp ...]
+
+The same pipeline as the client, on dlls/hl_sdk.vcproj "Release SDK|Win32": 441 files, stdafx.cpp
+makes the precompiled header through cbase.h, 42 files compile without it. Output in
+`<work>/out/msvc/server`: server.dll, server.map, server.pdb, a `.obj.log` per file, server.dll.log
+and build.tsv. With file arguments (paths from the repo root) only those objects are rebuilt.
+
+Hidden's server.dll files:
+
+| File | Bytes | Notes |
+|---|---|---|
+| dll_2006-05-06_patch.dll | 4,341,760 | Has Hidden's own PDB: every function's name and extent (`procs.tsv`), the module list |
+| dll_2006-08-08_4.1.dll | 4,366,336 | 4.1 release, no PDB |
+| dll_2006-08-18_4b1.dll | 4,366,336 | The 4b1 release, the same build as the 4b1 server_i486.so; no PDB |
+
+All three are under `~/.cache/subject51764/hsrebuild/builds`, and the PDB tables under
+`decomp/server_pdb0506`.
+
+Switches, from the configuration, checked against the reference:
+
+- Compiler: /Ox /Og /Oi /Ot /G7 /GF /Gy /GR /ML /W4 /Zi, no /Ob (the client's settings), and the
+  defines NDEBUG, BOTS, SDK_DLL, USES_SAVERESTORE, GAME_DLL, _WINDOWS, VECTOR, _WIN32,
+  PROTECTED_THINGS_ENABLE and the sprintf, strncpy and _snprintf traps.
+- Linker: /DLL /INCREMENTAL:NO /DEBUG /MAP /SUBSYSTEM:WINDOWS /BASE:0x22000000 /MACHINE:X86,
+  /NODEFAULTLIB:LIBCD, winmm.lib, the IDE's default Windows libraries, tier0.lib and vstdlib.lib.
+  Our imports are those of the 2006-08-18 DLL, name for name and in order: 59 from KERNEL32,
+  3 from USER32, 26 from tier0, 25 from vstdlib. As for the client, nothing is folded or removed:
+  link 7.1's /DEBUG defaults /OPT:NOREF and /OPT:NOICF.
+- Rich header: 452 Utc1310_CPP objects, as in both August DLLs (the May DLL has 446, from an
+  older file list), 107 Utc1310_C and 35 Masm710 objects from libc.lib, 6 AliasObj710, 113
+  imports. Only the import library objects differ in origin (Hidden: Linker600 8447 and
+  Implib710 2067 and 2179; ours: Implib710 2179, 3077 and 4035).
+
+Link order. The IDE links in project order. The PDB's module list (modules.txt, which runs from
+the last object linked to the first) has the Hidden filter in alphabetical order, sdk_bot_temp.obj
+in the SDK filter, and func_monitor, grenade_tripmine and weapon_physcannon in the Hidden filter;
+dlls/hl_sdk.vcproj is in that order now, so project order is Hidden's. `server_link_order.txt` is
+the PDB's list, first to last, and build_server.sh also passes it to `vcproj_to_msvc.py
+--link-order`; an object the PDB lacks goes after the listed object of its filter whose name
+precedes it. With the vcproj as it is, both give the same 441 objects in the same order. Measured
+as the share of mapped functions in the same relative order: 99.17% against the May DLL and 99.17%
+against the 2006-08-18 DLL, from 98.00% and 97.43% in the project order before the Hidden
+filter was sorted. The DLL is 4,366,336 bytes, the size of both August DLLs;
+.text 0x2dc13a against 0x2dc1ba in the 2006-08-18 DLL, .rdata 0x0a57ad against 0x0a57dd, .data
+the same.
+
+## Comparing server.dll
+
+    sh rebuild/msvc/compare_server.sh <work> [Hidden's server.dll]
+
+`msvc_compare.py` maps and compares as for the client, with two more sources of names:
+
+- **The May DLL** (the default) is mapped by name. `--ref-procs procs.tsv` gives every reference
+  function's undecorated name, module and extent, so reference starts are taken from the PDB
+  alone (a jump or pointer target inside a PDB function is not a start), and functions pair by
+  name first: unique names, then by object file, then by identical bodies, then by similarity.
+  The rest (inline copies in several objects, LIBC) are mapped the client's way. Writes
+  `cmp_server.tsv`.
+- **An August DLL** has no PDB. compare_server.sh first maps it to the May DLL (`--ours-procs`,
+  the May DLL taking the place of ours) and keeps the pairs that are the same, or half alike and
+  64 bytes or more; those reference functions get the May names (`names_<dll>.tsv`, cached). The
+  August DLL is then mapped to ours by vftables and exports first, then by the carried names,
+  then the client's way. Small accessors are kept out because a class layout changed between May
+  and August: CBasePlayer is 12 bytes shorter in May, so each May accessor body is equal to the
+  next August one. Writes `cmp_server_<dll>.tsv`. NONAMES=1 skips the names.
+
+Every result is also scored on the stable subset (`msvc_subset.py`): the functions whose source
+did not change between Hidden's May and August .so files (`stable_may_aug.tsv`, GCC names, joined
+by name and arguments), written to `cmp_server*_stable.tsv`. `NAME=<part of a name, or a reference
+address>` prints diffs. "Same" was checked on 300 random same pairs: the bytes differ only at base
+relocations and at rel32 call and jump targets.
+
+Results (our build against each DLL; the subset has 16111 functions, 14622 of them are functions
+in our build, the rest MSVC inlined everywhere):
+
+| Reference | Mapped | Same | Changed | Stable subset: same / changed / unmapped |
+|---|---|---|---|---|
+| May 2006 (by the PDB) | 30759 of 30779 | 30000 | 759 | 14585 / 38 / 0 |
+| 2006-08-18 4b1 | 30158 of 30701 | 30007 | 151 | 14493 / 37 / 93 |
+| 2006-08-08 4.1 | 30156 of 30698 | 30004 | 152 | 14493 / 37 / 93 |
+
+Our source is the August 4b1 source, and the May DLL was built from older source than even the
+May .so: 30 of the 38 stable functions that differ from the May DLL are the same as the August
+one's. Against the 2006-08-18 DLL, 29 of the 37 that differ are the same as the May one's: the
+reference has no PDB, so some of its extents are cut at a tail call or run into the next function,
+and a few were compiled differently from the same source. Eight differ from both (FireBullets,
+CWeaponFN303::Reload, CheckBack, LevelInitPostEntity, ParseEntryExitAnims,
+CBludgeonWeaponSDKBase::Hit, SampleStep, SendPropUtlVector). SERVER-STATUS.md lists the causes.

@@ -273,7 +273,7 @@ void CBludgeonWeaponSDKBase::Swing( int bIsSecondary )
 	TraceAttackToTriggers( triggerInfo, tr.startpos, tr.endpos, vec3_origin );
 #endif
 
-	if ( tr.fraction == 1.0 )
+	if ( tr.fraction == 1.0f )
 	{
 		float bludgeonHullRadius = 1.732f * BLUDGEON_HULL_DIM;  // hull is +/- 16, so use cuberoot of 2 to determine how big the hull is from center to the corner point
 

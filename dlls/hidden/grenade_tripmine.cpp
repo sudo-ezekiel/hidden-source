@@ -38,10 +38,10 @@ BEGIN_DATADESC( CTripmineGrenade )
 	DEFINE_FIELD( m_angleOwner,	FIELD_VECTOR ),
 
 	// Function Pointers
-	DEFINE_FUNCTION( WarningThink ),
-	DEFINE_FUNCTION( PowerupThink ),
-	DEFINE_FUNCTION( BeamBreakThink ),
-	DEFINE_FUNCTION( DelayDeathThink ),
+	DEFINE_THINKFUNC( WarningThink ),
+	DEFINE_THINKFUNC( PowerupThink ),
+	DEFINE_THINKFUNC( BeamBreakThink ),
+	DEFINE_THINKFUNC( DelayDeathThink ),
 
 END_DATADESC()
 
@@ -311,5 +311,5 @@ void CTripmineGrenade::DelayDeathThink( void )
 	KillBeam();
 	MakeBeam();
 	SetThink( &CTripmineGrenade::BeamBreakThink );
-	SetNextThink( gpGlobals->curtime + 2.5 );
+	SetNextThink( gpGlobals->curtime + 2.5f );
 }

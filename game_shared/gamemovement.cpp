@@ -872,7 +872,7 @@ void CGameMovement::CheckWaterJump( void )
 	data.m_vOrigin = point;
 	data.m_vNormal.Init( 0, 0, 1 );
 	VectorAngles( data.m_vNormal, data.m_vAngles );
-	data.m_flScale = random->RandomFloat( 8, 12 );
+	data.m_flScale = random->RandomFloat( 8, 10 );
 	DispatchEffect( "watersplash", data );
 	
 	trace_t tr;
@@ -1993,7 +1993,7 @@ bool CGameMovement::CheckPounceButton( void )
 	}
 
 	// A pounce costs 20 stamina
-	if ( player->GetStamina() < 20.0f )
+	if ( player->GetStamina() < 20.0 )
 		return false;
 
 	// If we are in the water most of the way...
@@ -2044,7 +2044,7 @@ bool CGameMovement::CheckPounceButton( void )
 	float flPounceSpeed = 615.0f;
 	Vector vecForward = player->GetAutoaimVector( 0 );
 	vecForward *= flPounceSpeed;
-	mv->m_vecVelocity += vecForward;
+	VectorAdd( mv->m_vecVelocity, vecForward, mv->m_vecVelocity );
 
 	FinishGravity();
 
@@ -3360,7 +3360,7 @@ void CGameMovement::CheckFalling( void )
 			data.m_vOrigin = point;
 			data.m_vNormal.Init( 0, 0, 1 );
 			VectorAngles( data.m_vNormal, data.m_vAngles );
-			data.m_flScale = random->RandomFloat( 8, 12 );
+			data.m_flScale = random->RandomFloat( 8, 10 );
 			DispatchEffect( "watersplash", data );
 		}
 		else

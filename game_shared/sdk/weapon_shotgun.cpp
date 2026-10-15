@@ -286,7 +286,7 @@ void CWeaponShotgun::WeaponIdle()
 		else if ( pPlayer->GetSafe() )
 		{
 			SendWeaponAnim( ACT_VM_LOWERED );
-			SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
+			SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
 		}
 		else
 		{

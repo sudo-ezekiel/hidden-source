@@ -26,9 +26,25 @@ Mapping, each step repeated until nothing changes:
 - string: the same sequence of string literals, unique on both sides;
 - body: the same masked body (8 instructions or more), unique on both sides.
 
+With --ref-procs (a PDB's function list: hex address, size, G/L, module, undecorated name without
+arguments, as procs.tsv for Hidden's May server.dll), the reference's functions are the PDB's, and
+they are paired with ours by name before any other step: our map names are undecorated and cut to
+the same form (no arguments, no spaces, no class/struct keywords). A name that is unique on both
+sides pairs at once; overloads and same-named statics ($E5 initialisers) pair by object, then by
+identical masked body, then by the most similar body.
+Without a decompile (the August server.dll has neither PDB nor decompile), the reference's starts
+are the strong ones plus every code address .rdata or .data points at and every 16-byte aligned
+address after int3 padding, kept where the code before cannot fall through.
+
+--ref-names takes names for some of the reference's functions in procs.tsv's columns (the size is
+not used) and pairs by them the same way, without the PDB's extents: names carried over from the
+May DLL to a later one. --ours-procs makes the third argument a procs.tsv instead of a map file, so
+that one reference DLL can be mapped to another that has a PDB (the August DLL to the May DLL);
+the result's "our name" column then holds the PDB's names.
+
 Usage:
-    python3 -I msvc_compare.py <reference.dll> <our client.dll> <our client.map> <decomp dir>
-        --out <result.tsv> [--show NAME]
+    python3 -I msvc_compare.py <reference.dll> <our dll> <our map> [<decomp dir>]
+        --out <result.tsv> [--ref-procs procs.tsv] [--ref-names names.tsv] [--ours-procs] [--show NAME]
 
 Result columns: object (lib:object from the map, ours), status (same / changed / unmapped /
 only-ref / only-ours), similarity, ref size, our size, our name (mangled), demangled name,
@@ -50,6 +66,7 @@ from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pe_rtti  # noqa: E402
+from pe_seeds import relocations, section_of  # noqa: E402
 from vtable_names import msvc_simple_demangle  # noqa: E402
 
 HEX = re.compile(r"0x[0-9a-f]+")
@@ -163,7 +180,10 @@ def read_map(path):
                 va = int(parts[2], 16)
             except ValueError:
                 continue
-            funcs.setdefault(va, (parts[1], parts[-1]))
+            # A vector deleting destructor (??_E) that shares the scalar one's body (??_G) at one
+            # address: the PDB names it after the scalar one.
+            if va not in funcs or (funcs[va][0].startswith("??_E") and parts[1].startswith("??_G")):
+                funcs[va] = (parts[1], parts[-1])
     return funcs
 
 
@@ -174,6 +194,135 @@ def ref_starts(decomp, img):
             if line.startswith("//==== FUNC "):
                 starts.add(int(line.split()[2], 16))
     return starts
+
+
+def read_procs(path):
+    """A PDB's functions: address -> (name, module, size), without the zero-size labels ($$$00001)."""
+    out = {}
+    with open(path, errors="replace") as f:
+        for line in f:
+            p = line.rstrip("\n").split("\t")
+            if len(p) < 5 or not int(p[1]):
+                continue
+            out.setdefault(int(p[0], 16), (p[4], p[3], int(p[1])))
+    return out
+
+
+def pointer_seeds(img):
+    """Code addresses that .rdata or .data point at (vftables, function tables, callbacks)."""
+    out = set()
+    for site in relocations(img.pe):
+        t = img.pe.u32(site)
+        if t is not None and img.text[0] <= t < img.text[1] and section_of(img.pe, site) in (".rdata", ".data"):
+            out.add(t)
+    return out
+
+
+def padding_starts(img):
+    """16-byte aligned addresses that end a run of int3 padding: objdump's linear sweep decodes an
+    int3 right before them (a 0xcc byte alone can be the end of an address operand)."""
+    d, out = img.pe.data, set()
+    for a in range((img.text[0] + 15) & ~15, img.text[1], 16):
+        o = img.pe.off(a)
+        i = img.index.get(a)
+        if o and d[o] != 0xCC and i and img.ins[i - 1] == "int3":
+            out.add(a)
+    return out
+
+
+CALLCONV = re.compile(r"__(?:thiscall|cdecl|stdcall|fastcall) ")
+KEYWORDS = re.compile(r"\b(?:class|struct|union|enum) ")
+QUALIFIERS = (" const", " volatile")
+
+
+def undecorated_parts(sym, und):
+    """Our map symbol and its llvm-undname text -> (name, arguments with qualifiers), both in the
+    PDB's spelling except for spaces; (None, None) when the text does not parse. C names lose
+    their leading underscore and @N suffix."""
+    if not sym.startswith("?"):
+        s = re.sub(r"@\d+$", "", sym)
+        return (s[1:] if s[:1] in ("_", "@") else s), ""
+    if und == sym:
+        return None, None
+    start = None
+    for m in CALLCONV.finditer(und):
+        pre = und[:m.start()]
+        if pre.count("(") == pre.count(")") and pre.count("<") == pre.count(">"):
+            start = m.end()
+            break
+    if start is None:
+        return None, None
+    rest, tail = und[start:], ""
+    while rest.endswith(QUALIFIERS):
+        q = next(x for x in QUALIFIERS if rest.endswith(x))
+        tail = q + tail
+        rest = rest[:-len(q)]
+    if not rest.endswith(")"):
+        return None, None
+    depth = 0
+    for i in range(len(rest) - 1, -1, -1):
+        depth += {")": 1, "(": -1}.get(rest[i], 0)
+        if depth == 0:
+            break
+    name, args = rest[:i].replace(" dtor'", " destructor'"), rest[i:] + tail
+    return KEYWORDS.sub("", name), KEYWORDS.sub("", args)
+
+
+def name_key(name):
+    """A function name without arguments, as procs.tsv or undecorated_parts() spell it -> the key
+    both sides are paired by. Conversion operators lose const (the PDB writes it after the type)."""
+    k = name.replace(" ", "")
+    if re.search(r"operator[A-Za-z_]", k) and not re.search(r"operator(new|delete)", k):
+        k = k.replace("const", "")
+    return k
+
+
+def pair_by_name(m, ref_names, our_names):
+    """Pair reference and our functions with the same name_key(): a name unique on both sides at
+    once; within a name, by object, then by identical masked body, then by the most similar body."""
+    gr, go = defaultdict(list), defaultdict(list)
+    for a, (name, mod, *_) in ref_names.items():
+        if a in m.ref.img.start_set:
+            gr[name_key(name)].append((a, mod.lower()))
+    for a, (name, mod) in our_names.items():
+        if name is not None:
+            go[name_key(name)].append((a, mod.lower()))
+    n = 0
+    for key, rs in gr.items():
+        os_ = go.get(key)
+        if not os_:
+            continue
+        if len(rs) == 1 and len(os_) == 1:
+            n += m.add(rs[0][0], os_[0][0], "pdbname")
+            continue
+        for mod in {x for _, x in rs}:
+            r1 = [a for a, x in rs if x == mod]
+            o1 = [a for a, x in os_ if x == mod]
+            if len(r1) == 1 and len(o1) == 1:
+                n += m.add(r1[0], o1[0], "pdbname")
+        rl = [a for a, _ in rs if a not in m.r2o]
+        ol = [a for a, _ in os_ if a not in m.o2r]
+        if not rl or not ol:
+            continue
+        kr = {a: masked(m.ref.get(a)[0]) for a in rl}
+        ko = {b: masked(m.ours.get(b)[0]) for b in ol}
+        for a in rl:
+            same = [b for b in ol if ko[b] == kr[a]]
+            if len(same) == 1 and sum(kr[x] == kr[a] for x in rl) == 1:
+                n += m.add(a, same[0], "pdbname")
+        rl = [a for a in rl if a not in m.r2o]
+        ol = [b for b in ol if b not in m.o2r]
+        if len(rl) == 1 and len(ol) == 1:
+            n += m.add(rl[0], ol[0], "pdbname")
+            continue
+        if not rl or not ol or len(rl) * len(ol) > 400:
+            continue
+        scored = [(difflib.SequenceMatcher(None, kr[a], ko[b], autojunk=False).ratio(), a, b)
+                  for a in rl for b in ol if len(kr[a]) + len(ko[b]) < 6000]
+        for ratio, a, b in sorted(scored, reverse=True):
+            if ratio >= 0.5:
+                n += m.add(a, b, "pdbname")
+    return n
 
 
 def branch_targets(img):
@@ -456,15 +605,13 @@ def demangle(names):
                              text=True).stdout
     except OSError:
         return {n: n for n in names}
+    # One block per name, ending in an empty line: the name, then its undecorated form, which is
+    # missing when the name does not parse (the error goes to stderr).
     res = {}
-    lines = out.split("\n")
-    i = 0
-    while i + 1 < len(lines):
-        if lines[i] == "":
-            i += 1
-            continue
-        res[lines[i]] = lines[i + 1] if not lines[i + 1].startswith("error") else lines[i]
-        i += 3
+    for block in out.split("\n\n"):
+        lines = block.strip("\n").split("\n")
+        if len(lines) == 2:
+            res[lines[0]] = lines[1]
     return {n: res.get(n, n) for n in names}
 
 
@@ -473,13 +620,19 @@ def main():
     ap.add_argument("ref")
     ap.add_argument("ours")
     ap.add_argument("map")
-    ap.add_argument("decomp")
+    ap.add_argument("decomp", nargs="?")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--ref-procs", help="the reference's functions from its PDB (procs.tsv)")
+    ap.add_argument("--ref-names", help="names for reference functions, procs.tsv's columns, extents not used")
+    ap.add_argument("--ours-procs", action="store_true", help="<our map> is a procs.tsv: map two references")
     ap.add_argument("--show")
     args = ap.parse_args()
 
     ref, ours = Image(args.ref), Image(args.ours)
-    funcs = read_map(args.map)
+    if args.ours_procs:
+        funcs = {a: (n, mod) for a, (n, mod, _) in read_procs(args.map).items()}
+    else:
+        funcs = read_map(args.map)
     ours.names = {a: n for a, (n, _) in funcs.items()}
     objs = {a: o for a, (_, o) in funcs.items()}
     ours.finish(funcs)
@@ -489,7 +642,21 @@ def main():
     eo = ours.lo + entry_point(ours.pe)
     calls, jumps = branch_targets(ref)
     strong = {t for s in vr.values() for t in s} | calls | set(xr.values()) | {er}
-    weak = ref_starts(args.decomp, ref) | jumps
+    procs = read_procs(args.ref_procs) if args.ref_procs else {}
+    if args.decomp:
+        weak = ref_starts(args.decomp, ref) | jumps
+    else:
+        weak = pointer_seeds(ref) | padding_starts(ref) | jumps
+    # The PDB's extents are exact: no other start inside one of its functions (exception handler
+    # funclets, jump targets, pointers to code after a jump table).
+    ext = sorted((a, a + v[2]) for a, v in procs.items())
+    los = [a for a, _ in ext]
+
+    def outside(a):
+        i = bisect.bisect_right(los, a) - 1
+        return i < 0 or a >= ext[i][1] or a == los[i]
+    strong = {a for a in strong if outside(a)} | set(procs)
+    weak = {a for a in weak if outside(a)}
     ref.finish(strong | weak)
     # The decompile's seeds and jmp targets include points inside functions; a real start never
     # follows an instruction that falls through into it.
@@ -497,19 +664,35 @@ def main():
     print(f"reference: {len(ref.starts)} functions; ours: {len(ours.starts)} functions", file=sys.stderr)
 
     refnames = {}
-    with open(os.path.join(args.decomp, "names.tsv")) as f:
-        for line in f:
-            p = line.rstrip("\n").split("\t")
-            if len(p) >= 3 and p[0] != "address":
-                refnames[int(p[0], 16)] = (p[1], p[2])
+    names_tsv = os.path.join(args.decomp, "names.tsv") if args.decomp else ""
+    if os.path.exists(names_tsv):
+        with open(names_tsv) as f:
+            for line in f:
+                p = line.rstrip("\n").split("\t")
+                if len(p) >= 3 and p[0] != "address":
+                    refnames[int(p[0], 16)] = (p[1], p[2])
+    for a, (n, *_) in procs.items():
+        refnames[a] = (n, "pdb")
+    ref_names = dict(procs)
+    if args.ref_names:
+        for a, v in read_procs(args.ref_names).items():
+            if a in ref.start_set:
+                ref_names.setdefault(a, v)
+                refnames.setdefault(a, (v[0], "names"))
+    dem = {} if args.ours_procs else demangle(sorted(set(ours.names.values())))
+    our_names = {}
+    if ref_names:
+        for a, n in ours.names.items():
+            name = n if args.ours_procs else undecorated_parts(n, dem.get(n, n))[0]
+            our_names[a] = (name, objs.get(a, "").split(":")[-1])
 
-    m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames)
-    hints = start_hints(m)
+    m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names, bool(procs))
+    hints = {a for a in start_hints(m) if outside(a)}
     if hints:
         # A second pass with the reference starts the first one implied.
         print(f"{len(hints)} reference starts found through the mapping, mapping again", file=sys.stderr)
         ref.finish(set(ref.starts) | hints)
-        m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames)
+        m = run_mapping(ref, ours, vr, vo, (er, eo), xr, xo, refnames, ref_names, our_names, bool(procs))
 
     def label(t):
         r = m.r2o.get(t)
@@ -570,14 +753,13 @@ def main():
             _, _, sb = m.ours.get(o)
             rows.append((objs.get(o, "?"), "only-ours" if o in only_ours else "unmapped", 0.0, 0, sb,
                          ours.names[o], "", f"{o:08x}", "", ""))
-    dem = demangle(sorted({r[5] for r in rows if r[5]}))
     with open(args.out, "w") as f:
         for r in rows:
             f.write(f"{r[0]}\t{r[1]}\t{r[2]:.3f}\t{r[3]}\t{r[4]}\t{r[5]}\t{dem.get(r[5], '')}\t"
                     f"{r[6]}\t{r[7]}\t{r[8]}\t{r[9]}\n")
 
     def group(obj):
-        return obj.split(":")[0] if ":" in obj else "client"
+        return obj.split(":")[0] if ":" in obj else os.path.splitext(os.path.basename(args.ours))[0]
 
     nref = len(ref.starts)
     bref = sum(r[3] for r in rows if r[6])
@@ -600,8 +782,13 @@ def main():
         print(f"  {g}: " + ", ".join(f"{k} {v}" for k, v in sorted(c.items())), file=sys.stderr)
 
 
-def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames):
+def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames, ref_names, our_names, exact):
+    """exact: ref_names are the reference's own PDB names, paired before anything else; names
+    carried over from another DLL are paired after the vftables, which they can contradict (a small
+    accessor whose body moved to a neighbour's when a class layout changed)."""
     m = Mapper(ref, ours)
+    if ref_names and exact:
+        print(f"pdbname: {pair_by_name(m, ref_names, our_names)} pairs", file=sys.stderr)
     # vftables of the same class, subobject and slot count
     votes = defaultdict(Counter)
     for key, slots in vr.items():
@@ -617,6 +804,8 @@ def run_mapping(ref, ours, vr, vo, entries, xr, xo, refnames):
     for name, a in xr.items():
         if name in xo:
             m.add(a, xo[name], "vftable")
+    if ref_names and not exact:
+        print(f"pdbname: {pair_by_name(m, ref_names, our_names)} pairs", file=sys.stderr)
     # names.tsv names unique among ours
     simple = defaultdict(list)
     for a, n in ours.names.items():

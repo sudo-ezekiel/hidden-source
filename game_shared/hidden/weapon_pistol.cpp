@@ -256,12 +256,12 @@ void CWeaponPistol::WeaponIdle()
 	if ( pPlayer->GetSafe() )
 	{
 		SendWeaponAnim( ACT_VM_LOWERED );
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
 	}
 	// only idle if the slid isn't back
 	else if ( m_iClip1 != 0 )
 	{
-		SetWeaponIdleTime( gpGlobals->curtime + 5.0 );
+		SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
 		SendWeaponAnim( ACT_VM_IDLE );
 	}
 }

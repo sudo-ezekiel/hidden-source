@@ -19,9 +19,15 @@ slot run one at a time under flock. Files without the precompiled header get a P
 
 /FR (browse information) and /FD (IDE dependency tracking) are left out: they write side files only.
 
+--link-order names the objects (one per line, # comments) in the order to link them, such as the
+order of the modules in the original PDB. A project object the list does not name is linked right
+after the listed object of its own filter whose source file name precedes its own (Visual Studio
+keeps a filter's files sorted by name), or before the filter's first listed object.
+
 Usage:
     python3 -I vcproj_to_msvc.py <vcproj> "<Config|Win32>" <out dir> <out makefile>
         --host-root <source tree> [--kind dll|lib] [--slots N] [--lib <file.lib> ...] [--extra-cl SWITCH ...]
+        [--link-order <file>]
 
 <out dir> receives the objects, logs and the DLL or .lib. --lib replaces the project's own .lib
 inputs (by file name) with the given files; any project .lib not replaced is an error. Make variables
@@ -120,6 +126,28 @@ def cl_switches(cl):
     return out
 
 
+def link_order(files, filter_of, path):
+    """The objects in the order of the list at path; see --link-order."""
+    with open(path) as f:
+        order = [x.strip().lower() for x in f if x.strip() and not x.startswith("#")]
+    pos = {o: i for i, o in enumerate(order)}
+    name = {o: posixpath.basename(src).lower() for src, o, _ in files}
+    listed = [o for _, o, _ in files if o.lower() in pos]
+    key = {o: (pos[o.lower()], 0, "") for o in listed}
+    for i, (_, o, _) in enumerate(files):
+        if o in key:
+            continue
+        same = [x for x in listed if filter_of[x] == filter_of[o]]
+        before = [x for x in same if name[x] < name[o]]
+        if before:
+            key[o] = (key[max(before, key=lambda x: name[x])][0], 1, name[o])
+        elif same:
+            key[o] = (min(key[x][0] for x in same), -1, name[o])
+        else:
+            key[o] = (len(order), 0, f"{i:06d}")
+    return sorted(key, key=lambda o: key[o])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("vcproj")
@@ -131,6 +159,7 @@ def main():
     ap.add_argument("--slots", type=int, default=6)
     ap.add_argument("--lib", action="append", default=[], help="use this file for the project .lib of the same name")
     ap.add_argument("--extra-cl", action="append", default=[], help="add this cl.exe switch to every compile")
+    ap.add_argument("--link-order", help="file naming the objects in link order")
     args = ap.parse_args()
 
     with open(args.vcproj, "rb") as f:
@@ -147,6 +176,8 @@ def main():
 
     files = []  # (source relative to the project, object name, pch mode)
     proj_libs = []
+    parent = {c: p for p in root.iter() for c in p}
+    filter_of = {}
     for f in root.iter("File"):
         rel = norm(f.get("RelativePath") or "")
         excluded = False
@@ -175,8 +206,14 @@ def main():
         else:
             obj = stem + ".obj"
         files.append((rel, obj, mode))
+        p = parent.get(f)
+        while p is not None and p.tag != "Filter":
+            p = parent.get(p)
+        filter_of[obj] = id(p)
 
     objs = [o for _, o, _ in files]
+    if args.link_order:
+        objs = link_order(files, filter_of, args.link_order)
     dup = {o for o in objs if objs.count(o) > 1}
     if dup:
         raise SystemExit(f"object names collide: {sorted(dup)}")

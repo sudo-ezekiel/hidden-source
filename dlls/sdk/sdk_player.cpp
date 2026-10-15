@@ -142,18 +142,19 @@ ConCommand cc_CreatePredictionError( "CreatePredictionError", cc_CreatePredictio
 //-----------------------------------------------------------------------------
 int GetBombCount( void )
 {
-	if ( !hdn_limitbombs.GetBool() )
-		return 3;
-
-	int iMarines = 0;
-	for ( int i = 0; i <= gpGlobals->maxClients; i++ )
+	int iBombs = 3;
+	if ( hdn_limitbombs.GetBool() )
 	{
-		CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
-		if ( pPlayer && pPlayer->GetTeamNumber() == TEAM_IRIS )
-			iMarines++;
+		int iMarines = 0;
+		for ( int i = 0; i <= gpGlobals->maxClients; i++ )
+		{
+			CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
+			if ( pPlayer && pPlayer->GetTeamNumber() == TEAM_IRIS )
+				iMarines++;
+		}
+		iBombs = (int)( ceil( iMarines * 0.5 ) - 1 );
 	}
-
-	return (int)( ceil( iMarines * 0.5f ) - 1 );
+	return iBombs;
 }
 
 
