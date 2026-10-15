@@ -121,8 +121,10 @@ void CHudHealth::OnThink()
 		{
 			vgui::Panel *pViewport = g_pClientMode->GetViewport();
 			SetParent( pViewport );
-			m_flScaleX = pViewport->GetWide() * 0.0015625f;
-			m_flScaleY = pViewport->GetTall() * 0.0020833f;
+			int wide = pViewport->GetWide();
+			int tall = pViewport->GetTall();
+			m_flScaleX = wide * 0.0015625f;
+			m_flScaleY = tall * 0.0020833f;
 		}
 
 		if ( m_pPlayer->GetTeamNumber() == TEAM_HIDDEN )

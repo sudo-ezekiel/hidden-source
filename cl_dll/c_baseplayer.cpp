@@ -614,15 +614,26 @@ void C_BasePlayer::PostDataUpdate( DataUpdateType_t updateType )
 				// Set a new sensitivity that is proportional to the change from the FOV default and scaled
 				//  by a separate compensating factor
 				// Hidden: only the IRIS get the compensating factor
-				// REBUILD: client.dll asks GetTeamNumber() twice here; the exact expression is not known
-				float flFOVRatio = (float)localFOV / (float)iDefaultFOV; // linear fov downscale
-
+				// REBUILD: client.dll asks GetTeamNumber() twice, the second time inside the first
 				if ( GetTeamNumber() == TEAM_IRIS )
 				{
-					flFOVRatio *= zoom_sensitivity_ratio.GetFloat(); // sensitivity scale factor
+					if ( GetTeamNumber() == TEAM_IRIS )
+					{
+						float flFOVRatio = (float)localFOV / (float)iDefaultFOV; // linear fov downscale
+						flFOVRatio *= zoom_sensitivity_ratio.GetFloat(); // sensitivity scale factor
+						gHUD.m_flMouseSensitivity = flFOVRatio * sensitivity.GetFloat(); // regular sensitivity
+					}
+					else
+					{
+						float flFOVRatio = (float)localFOV / (float)iDefaultFOV; // linear fov downscale
+						gHUD.m_flMouseSensitivity = flFOVRatio * sensitivity.GetFloat(); // regular sensitivity
+					}
 				}
-
-				gHUD.m_flMouseSensitivity = flFOVRatio * sensitivity.GetFloat(); // regular sensitivity
+				else
+				{
+					float flFOVRatio = (float)localFOV / (float)iDefaultFOV; // linear fov downscale
+					gHUD.m_flMouseSensitivity = flFOVRatio * sensitivity.GetFloat(); // regular sensitivity
+				}
 			}
 		}
 

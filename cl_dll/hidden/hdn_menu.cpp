@@ -97,6 +97,11 @@ void HDNMenu::SetImagePos( ImagePanel *pImage, int x, int y )
 	pImage->SetVisible( true );
 }
 
+void HDNMenu::OnCommand( const char *command )
+{
+	BaseClass::OnCommand( command );
+}
+
 void HDNMenu::SendCommand( const char *command )
 {
 	engine->ClientCmd( command );

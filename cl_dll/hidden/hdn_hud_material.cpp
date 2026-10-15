@@ -88,7 +88,7 @@ void CHudMaterial::Paint( void )
 //-----------------------------------------------------------------------------
 void CHudMaterial::FireGameEvent( IGameEvent *event )
 {
-	if ( Q_strcmp( event->GetName(), "material_check" ) )
+	if ( Q_strcmp( "material_check", event->GetName() ) )
 		return;
 
 	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();

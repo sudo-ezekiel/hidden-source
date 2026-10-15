@@ -29,7 +29,7 @@ public:
 	virtual bool IsVisible() { return BaseClass::IsVisible(); }
 	virtual void SetParent( vgui::VPANEL parent ) { BaseClass::SetParent( parent ); }
 
-	virtual void OnCommand( const char *command ) { BaseClass::OnCommand( command ); }
+	virtual void OnCommand( const char *command );
 	virtual void OnThink();
 
 	// REBUILD: names of the four virtuals (client.dll slots 194 to 197)

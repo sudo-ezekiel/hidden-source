@@ -2433,15 +2433,15 @@ extern ConVar muzzleflash_light;
 void C_BaseAnimating::ProcessMuzzleFlashEvent()
 {
 	// Hidden: the model's "muzzle" attachment, when it has one
-	int iAttachment = -1;	// REBUILD: name
+	studiohdr_t *pStudioHdr = NULL;
 	if ( GetModel() )
-	{
-		studiohdr_t *pStudioHdr = modelinfo->GetStudiomodel( GetModel() );
-		if ( pStudioHdr )
-		{
-			iAttachment = Studio_FindAttachment( pStudioHdr, "muzzle" ) + 1;
-		}
-	}
+		pStudioHdr = modelinfo->GetStudiomodel( GetModel() );
+
+	int iAttachment;	// REBUILD: name
+	if ( !pStudioHdr )
+		iAttachment = -1;
+	else
+		iAttachment = Studio_FindAttachment( pStudioHdr, "muzzle" ) + 1;
 
 	// If we have an attachment, then stick a light on it.
 	if ( muzzleflash_light.GetBool() )

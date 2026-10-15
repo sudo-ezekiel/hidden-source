@@ -43,7 +43,7 @@ CClassMenu::CClassMenu(IViewPort *pViewPort) : Frame(NULL, PANEL_CLASS)
 {
 	m_pViewPort = pViewPort;
 	m_pFirstButton = NULL;
-	m_iScoreBoardKey = KEY_NONE; // this is looked up in Activate()
+	m_iScoreBoardKey = -1; // this is looked up in Activate()	(Hidden: an engine key code, as in the 2006 SDK)
 	m_iTeam = 0;
 
 	// initialize dialog
@@ -128,9 +128,9 @@ void CClassMenu::ShowPanel(bool bShow)
 			m_pFirstButton->ShowPage();
 		}
 		
-		if ( m_iScoreBoardKey == KEY_NONE ) 
+		if ( m_iScoreBoardKey < 0 ) 
 		{
-			m_iScoreBoardKey = gameuifuncs->GetVGUI2KeyCodeForBind( "showscores" );
+			m_iScoreBoardKey = gameuifuncs->GetEngineKeyCodeForBind( "showscores" );
 		}
 	}
 	else
@@ -174,7 +174,9 @@ void CClassMenu::SetVisibleButton(const char *textEntryName, bool state)
 
 void CClassMenu::OnKeyCodePressed(KeyCode code)
 {
-	if ( m_iScoreBoardKey!=KEY_NONE && m_iScoreBoardKey == code )
+	int lastPressedEngineKey = engine->GetLastPressedEngineKey();
+
+	if ( m_iScoreBoardKey >= 0 && m_iScoreBoardKey == lastPressedEngineKey )
 	{
 		gViewPortInterface->ShowPanel( PANEL_SCOREBOARD, true );
 	}

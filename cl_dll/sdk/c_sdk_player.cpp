@@ -231,17 +231,17 @@ void C_SDKRagdoll::CreateRagdoll()
 
 	// Hidden: the Hidden's ragdoll uses his own skin and body group; a marine's copies the player's.
 	// REBUILD: pPlayer is not checked for NULL here, as in client.dll
-	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
-	{
-		DevMsg( 1, "player is hidden\n" );
-		m_nSkin = 2;
-		m_nBody = 1;
-	}
-	else
+	if ( pPlayer->GetTeamNumber() != TEAM_HIDDEN )
 	{
 		DevMsg( 1, "player is marine\n" );
 		m_nSkin = pPlayer->m_nSkin;
 		m_nBody = pPlayer->m_nBody;
+	}
+	else
+	{
+		DevMsg( 1, "player is hidden\n" );
+		m_nSkin = 2;
+		m_nBody = 1;
 	}
 
 	// Turn it into a ragdoll.

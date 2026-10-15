@@ -87,7 +87,7 @@ CHudRadar::CHudRadar( const char *pElementName ) : CHudElement( pElementName ), 
 
 	m_iNumPlayers = 0;
 	m_iWide = GetWide();
-	m_flNextUpdate = gpGlobals->curtime + 0.1;
+	m_flNextUpdate = gpGlobals->curtime + 0.1f;
 
 	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT );
 
