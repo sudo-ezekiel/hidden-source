@@ -3364,6 +3364,12 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 				</File>
 				<File
 					RelativePath="..\game_shared\sdk\weapon_mp5.cpp">
+					<FileConfiguration
+						Name="Release SDK|Win32"
+						ExcludedFromBuild="TRUE">
+						<Tool
+							Name="VCCLCompilerTool"/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath="..\game_shared\sdk\weapon_sdkbase.cpp">
