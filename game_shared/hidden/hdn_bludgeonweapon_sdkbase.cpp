@@ -174,7 +174,7 @@ void CBludgeonWeaponSDKBase::ItemPostFrame( void )
 		return;
 
 	// Land a pigstick that is due
-	if ( m_bHitDelayed && m_flDelayedHit < gpGlobals->curtime )
+	if ( m_bHitDelayed && gpGlobals->curtime > m_flDelayedHit )
 	{
 		Swing( true );
 		return;
@@ -387,9 +387,9 @@ void CBludgeonWeaponSDKBase::ChooseIntersectionPointAndActivity( trace_t &tr, co
 //------------------------------------------------------------------------------
 void CBludgeonWeaponSDKBase::Hit( trace_t &tr, Activity hitActivity )
 {
+	CSDKPlayer *pPlayer = GetPlayerOwner();
 	float dmgScale = 37.0f;
 
-	CSDKPlayer *pPlayer = GetPlayerOwner();
 	if ( !pPlayer )
 		return;
 
@@ -428,7 +428,7 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &tr, Activity hitActivity )
 						iHealth = 100;
 
 					pRagdoll->SetHealth( -5 );
-					pPlayer->m_iHealth = iHealth;
+					pPlayer->SetHealth( iHealth );
 				}
 
 				CEffectData	data;
@@ -436,8 +436,8 @@ void CBludgeonWeaponSDKBase::Hit( trace_t &tr, Activity hitActivity )
 				data.m_vOrigin = tr.m_pEnt->GetAbsOrigin();
 				data.m_vNormal = -vForward;
 				data.m_flScale = RandomInt( 4, 8 );
-				data.m_fFlags = FX_BLOODSPRAY_ALL;
 				data.m_nColor = BLOOD_COLOR_RED;
+				data.m_fFlags = FX_BLOODSPRAY_ALL;
 
 				DispatchEffect( "BloodSpray", data );
 

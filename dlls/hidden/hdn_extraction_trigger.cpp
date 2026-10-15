@@ -121,7 +121,7 @@ void CExtractionBrush::EndTouch( CBaseEntity *pOther )
 {
 	for ( int i = 0; i < m_Players.Count(); i++ )
 	{
-		if ( m_Players[i].pPlayer == pOther )
+		if ( pOther == m_Players[i].pPlayer )
 		{
 			m_Players.Remove( i );
 			DevMsg( 1, "Players in Extraction Point :[%i]\n", m_Players.Count() );
@@ -135,7 +135,7 @@ void CExtractionBrush::StartTouch( CBaseEntity *pOther )
 	{
 		for ( int i = 0; i < m_Players.Count(); i++ )
 		{
-			if ( m_Players[i].pPlayer == pOther )
+			if ( pOther == m_Players[i].pPlayer )
 				return;
 		}
 

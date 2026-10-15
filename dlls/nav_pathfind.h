@@ -596,7 +596,12 @@ CNavArea *FindMinimumCostArea( CNavArea *startArea, CostFunctor &costFunc )
 		}
 	}
 
-	if (!cheapAreaSetCount)
+	if (cheapAreaSetCount)
+	{
+		// pick one of the areas at random
+		return cheapAreaSet[ RandomInt( 0, cheapAreaSetCount-1 ) ].area;
+	}
+	else
 	{
 		// degenerate case - no decent sized areas - pick a random area
 		int numAreas = TheNavAreaList.Count();
@@ -607,11 +612,7 @@ CNavArea *FindMinimumCostArea( CNavArea *startArea, CostFunctor &costFunc )
 			if (which-- == 0)
 				return TheNavAreaList[iter];
 		}
-	}
-	else
-	{
-		// pick one of the areas at random
-		return cheapAreaSet[ RandomInt( 0, cheapAreaSetCount-1 ) ].area;
+
 	}
 	return cheapAreaSet[ RandomInt( 0, cheapAreaSetCount-1 ) ].area;
 }

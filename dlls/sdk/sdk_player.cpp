@@ -470,14 +470,14 @@ void CSDKPlayer::Spawn()
 		// The support class always carries sonic grenades
 		if ( GetClass() == 1 )
 		{
-			if ( GetEquipment() == 3 )
-			{
-				GiveAmmo( 3, "sonic" );
-			}
-			else
+			if ( GetEquipment() != 3 )
 			{
 				GiveNamedItem( "weapon_sonic" );
 				GiveAmmo( 2, "sonic" );
+			}
+			else
+			{
+				GiveAmmo( 3, "sonic" );
 			}
 		}
 
@@ -600,8 +600,9 @@ void CSDKPlayer::CreateRagdollEntity( const CTakeDamageInfo &info )
 	}
 
 	// Hidden: in Overrun the marines blow apart
-	if ( m_iGameType == 2 )
+	switch ( m_iGameType )
 	{
+	case 2:
 		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 5 );
 		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs2.mdl", 5 );
 		CGib::SpawnSpecificGibs( this, 1, 750, 1500, "models/gibs/iris_gibs3.mdl", 5 );
@@ -774,7 +775,7 @@ void CSDKPlayer::PlayerUse( void )
 				pPlayer->SetAmmoRecieved();
 
 				// Helping out makes you more likely to be picked as the Hidden
-				m_iWeighting.GetForModify() += 20;
+				AddWeighting( 20 );
 			}
 
 			usedSomething = true;

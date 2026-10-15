@@ -103,9 +103,12 @@ CBasePlayer *GenericBotPutInServer( bool bFrozen, const char *botname, int team 
 	pPlayer->AddFlag( FL_CLIENT | FL_FAKECLIENT );
 
 	pPlayer->m_nBody_change = pPlayer->m_nSkin_change = random->RandomInt( 0, 8 );
-	pPlayer->SetEquipment( random->RandomInt( 0, 4 ) );
-	pPlayer->SetPrimary( random->RandomInt( 0, 3 ) );
-	pPlayer->SetSecondary( random->RandomInt( 0, 1 ) );
+	int iEquipment = random->RandomInt( 0, 4 );	// REBUILD: name
+	pPlayer->SetEquipment( iEquipment );
+	int iPrimary = random->RandomInt( 0, 3 );	// REBUILD: name
+	pPlayer->SetPrimary( iPrimary );
+	int iSecondary = random->RandomInt( 0, 1 );	// REBUILD: name
+	pPlayer->SetSecondary( iSecondary );
 	pPlayer->SetReady( true );
 
 	if ( bFrozen )

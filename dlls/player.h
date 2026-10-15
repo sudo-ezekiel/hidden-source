@@ -370,6 +370,7 @@ public:
 
 	virtual float			GetStamina( void ) { return m_flStamina; }
 	virtual void			SetStamina( float newStamina );
+	void					AddWeighting( int iWeighting ) { m_iWeighting.GetForModify() += iWeighting; }	// REBUILD: name
 
 	virtual void			SetRadio( float radiolimit ) { m_flRadioTimer = gpGlobals->curtime + radiolimit; }
 	virtual float			GetRadio( void ) { return m_flRadioTimer; }
@@ -404,10 +405,12 @@ public:
 	virtual void			UpdateStun( void );
 	virtual void			Shockwave( float bluramount, float time );
 
+	void					SetSpawnTimer( int time_of_death, int wait );
+	int						GetSpawnTimer( void ) const { return m_iTimer; }
+	void					SetSpawnBool( bool should_spawn );
+	bool					GetSpawnBool( void ) const { return m_bSpawn; }
 	const char				*GetCurrentLocation( void );
 	bool					SetCurrentLocation( char *m_location );
-	void					SetSpawnBool( bool should_spawn );
-	void					SetSpawnTimer( int time_of_death, int wait );
 
 	bool					HasPhysicsFlag( unsigned int flag ) { return (m_afPhysicsFlags & flag) != 0; }
 

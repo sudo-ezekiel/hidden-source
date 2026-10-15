@@ -101,13 +101,13 @@ void COverRunGameRules::SurvivalThink( void )
 {
 	GameThink();
 
-	int iTimeLeft = GetRoundTimerRemain() - m_pSurvivor->m_iTimer;
-	if ( m_iSurvivalTime != iTimeLeft && m_pSurvivor->IsAlive() )
+	int iTimeLeft = GetRoundTimerRemain() - m_pSurvivor->GetSpawnTimer();
+	if ( iTimeLeft != m_iSurvivalTime && m_pSurvivor->IsAlive() )
 	{
 		m_iSurvivalTime = iTimeLeft;
 
 		// Every 5 seconds, then every second at the end
-		if ( iTimeLeft < 6 || iTimeLeft % 5 == 0 )
+		if ( iTimeLeft <= 5 || iTimeLeft % 5 == 0 )
 		{
 			char szMessage[256];
 			Q_snprintf( szMessage, sizeof( szMessage ), "Survival/Hunt Time : %d Seconds(s)", iTimeLeft );
@@ -221,27 +221,27 @@ void COverRunGameRules::RespawnHiddens( void )
 
 	for ( int i = 0; i < iCount; i++ )
 	{
-		if ( !m_DeadPlayers[i] || !m_DeadPlayers[i]->m_bSpawn )
-			continue;
-
-		int iTimeLeft = GetRoundTimerRemain() - m_DeadPlayers[i]->m_iTimer;
-		if ( iTimeLeft < 0 )
-			iTimeLeft = 0;
-
-		char szMessage[256];
-		Q_snprintf( szMessage, sizeof( szMessage ), "Spawning In : %d Second(s)", iTimeLeft );
-		ClientPrint( m_DeadPlayers[i], HUD_PRINTCENTER, szMessage );
-
-		if ( iTimeLeft < 1 )
+		if ( m_DeadPlayers[i] && m_DeadPlayers[i]->GetSpawnBool() )
 		{
-			// Dead marines come back on the Hidden team
-			m_DeadPlayers[i]->SetSpawnBool( false );
-			m_DeadPlayers[i]->ChangeTeam( TEAM_HIDDEN );
-			m_DeadPlayers[i]->Spawn();
-		}
-		else
-		{
-			bWaiting = true;
+			int iTimeLeft = GetRoundTimerRemain() - m_DeadPlayers[i]->GetSpawnTimer();
+			if ( iTimeLeft < 0 )
+				iTimeLeft = 0;
+
+			char szMessage[256];
+			Q_snprintf( szMessage, sizeof( szMessage ), "Spawning In : %d Second(s)", iTimeLeft );
+			ClientPrint( m_DeadPlayers[i], HUD_PRINTCENTER, szMessage );
+
+			if ( iTimeLeft <= 0 )
+			{
+				// Dead marines come back on the Hidden team
+				m_DeadPlayers[i]->SetSpawnBool( false );
+				m_DeadPlayers[i]->ChangeTeam( TEAM_HIDDEN );
+				m_DeadPlayers[i]->Spawn();
+			}
+			else
+			{
+				bWaiting = true;
+			}
 		}
 	}
 
@@ -259,7 +259,7 @@ bool COverRunGameRules::IRISWins( void )
 
 		m_HiddenSelector.NewHidden( m_pSurvivor );
 		m_pSurvivor->IncrementFragCount( 2 );
-		m_pSurvivor->m_iWeighting.GetForModify() += 4900;
+		m_pSurvivor->AddWeighting( 4900 );
 		return true;
 	}
 
@@ -322,7 +322,7 @@ void COverRunGameRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInf
 				m_iSurvivalTime = GetRoundTimerRemain() - iSurvivalTime;
 				m_pSurvivor->SetSpawnTimer( GetRoundTimerRemain(), iSurvivalTime );
 				m_pSurvivor->IncrementFragCount( 1 );
-				m_pSurvivor->m_iWeighting.GetForModify() += 100;
+				m_pSurvivor->AddWeighting( 100 );
 
 				GameThinkSet( static_cast<GAMETHINKPTR>( &COverRunGameRules::StartSurvivalThink ) );
 			}
