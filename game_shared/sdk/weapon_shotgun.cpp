@@ -69,8 +69,6 @@ END_PREDICTION_DATA()
 LINK_ENTITY_TO_CLASS( weapon_shotgun, CWeaponShotgun );
 PRECACHE_WEAPON_REGISTER( weapon_shotgun );
 
-
-
 CWeaponShotgun::CWeaponShotgun()
 {
 	m_flPumpTime = 0;
@@ -89,6 +87,7 @@ void CWeaponShotgun::SetSafe()
 //-----------------------------------------------------------------------------
 bool CWeaponShotgun::Holster( CBaseCombatWeapon *pSwitchingTo )
 {
+#ifndef CLIENT_DLL
 	CSDKPlayer *pPlayer = GetPlayerOwner();
 	if ( !pPlayer )
 		return false;
@@ -96,6 +95,7 @@ bool CWeaponShotgun::Holster( CBaseCombatWeapon *pSwitchingTo )
 	// Show the shotgun on the player's back
 	if ( pPlayer->m_lifeState == LIFE_ALIVE )
 		pPlayer->SetBodygroup( 2, 1 );
+#endif
 
 	return BaseClass::Holster( pSwitchingTo );
 }
@@ -123,7 +123,7 @@ void CWeaponShotgun::PrimaryAttack()
 	if ( !pPlayer )
 		return;
 
-	if ( !m_bDeployed )
+	if ( !IsDeployed() )
 		return;
 
 	// No firing while safe
