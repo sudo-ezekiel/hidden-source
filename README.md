@@ -4,8 +4,6 @@ This is the C++ source code of Hidden: Source (beta 4b, 2006), the Half-Life 2 m
 the mod's own shipped binaries after the original source was lost. The code was reconstructed and
 recompiled until our builds matched Hidden's binaries function by function.
 
-It is a private copy for the Hidden: Source team. Please do not publish it.
-
 ## What is here
 
 - The repository root is the mod source folder (`src_mod`) of Valve's 2004 Source SDK, with Hidden's
