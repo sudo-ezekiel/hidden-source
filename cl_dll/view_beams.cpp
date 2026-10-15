@@ -21,6 +21,9 @@
 #include "view_shared.h"
 #include "viewrender.h"
 
+// Hidden: beam type 10, drawn like TE_BEAMPOINTS except for the Hidden (REBUILD: name)
+#define TE_BEAMPOINTS_NOTHIDDEN	10
+
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
@@ -1911,6 +1914,24 @@ void CViewRenderBeams::DrawBeam( Beam_t *pbeam )
 		}
 		break;
 
+	// Hidden: a points beam the Hidden does not see
+	case TE_BEAMPOINTS_NOTHIDDEN:
+		if ( C_BasePlayer::GetLocalPlayer()->GetTeamNumber() == TEAM_HIDDEN )
+			break;
+
+		if (halosprite)
+		{	
+			DrawBeamWithHalo( pbeam, frame, rendermode, color, srcColor, sprite, halosprite);
+		}
+		else
+		{
+			DrawSegs( NOISE_DIVISIONS, pbeam->rgNoise, sprite, frame, rendermode, 
+				pbeam->attachment[0], pbeam->delta, pbeam->width, pbeam->endWidth, 
+				pbeam->amplitude, pbeam->freq, pbeam->speed, pbeam->segments, 
+				pbeam->flags, color, pbeam->fadeLength );
+		}
+		break;
+
 	case TE_BEAMFOLLOW:
 		DrawBeamFollow( sprite, pbeam, frame, rendermode, gpGlobals->frametime, color );
 		break;
@@ -2114,6 +2135,10 @@ void CViewRenderBeams::DrawBeam( C_Beam* pbeam )
 			beam.numAttachments	= pbeam->m_nNumBeamEnts;
 			break;
 		}
+		case BEAM_HIDDEN_EXTRA:
+			// Hidden: a points beam the Hidden does not see
+			beam.type			= TE_BEAMPOINTS_NOTHIDDEN;
+			break;
 		case BEAM_POINTS:
 			// Already set up
 			break;

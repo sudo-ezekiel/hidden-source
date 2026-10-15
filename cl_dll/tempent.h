@@ -46,6 +46,7 @@
 #define FTENT_NEVERDIE			0x00400000 // Don't die as long as die != 0
 #define FTENT_BEOCCLUDED		0x00800000 // Don't draw if my specified normal's facing away from the view
 #define FTENT_CHANGERENDERONCOLLIDE	0x01000000	//when we collide with something, change our rendergroup to RENDER_GROUP_OTHER
+#define FTENT_COLLISIONGROUP	0x02000000	// if set, use the C_BaseEntity::GetCollisionGroup when doing collide trace
 
 //-----------------------------------------------------------------------------
 // Purpose: Should this derive from some other class

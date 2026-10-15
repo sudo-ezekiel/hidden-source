@@ -34,7 +34,7 @@ CLIENTEFFECT_MATERIAL( "effects/combinemuzzle2_nocull" )
 CLIENTEFFECT_MATERIAL( "effects/yellowflare_noz" )
 CLIENTEFFECT_REGISTER_END()
 
-ConVar hdn_sparks( "hdn_sparks", "1" );	// Hidden; REBUILD: client.dll registers it between tracer_extra and the spark effects and never reads it
+ConVar hdn_sparks( "hdn_sparks", "1" );	// Hidden; FX_MetalSpark reads it
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -563,7 +563,32 @@ void FX_MetalSpark( const Vector &position, const Vector &direction, const Vecto
 	sparkEmitter->SetGravity( METAL_SPARK_GRAVITY );
 	sparkEmitter->SetCollisionDamped( METAL_SPARK_DAMPEN );
 
-	int	numSparks = random->RandomInt( 4, 8 ) * ( iScale * 2 );
+	// Hidden: hdn_sparks picks how long the sparks last and how many there are
+	float flDieTimeMin, flDieTimeMax;	// REBUILD: names
+	switch ( hdn_sparks.GetInt() )
+	{
+	case 0:
+		flDieTimeMax = 0.4f;
+		flDieTimeMin = 0.25f;
+		iScale = 0;
+		break;
+	case 1:
+		flDieTimeMax = 0.45f;
+		flDieTimeMin = 0.3f;
+		break;
+	case 2:
+		flDieTimeMax = 0.65f;
+		flDieTimeMin = 0.5f;
+		iScale *= 2;
+		break;
+	default:
+		flDieTimeMax = 0.45f;
+		flDieTimeMin = 0.3f;
+		iScale *= 2;
+		break;
+	}
+
+	int	numSparks = random->RandomInt( 8, 12 ) * ( iScale * 2 );
 	
 	TrailParticle	*pParticle;
 	PMaterialHandle	hMaterial = sparkEmitter->GetPMaterial( "effects/spark" );
@@ -584,11 +609,11 @@ void FX_MetalSpark( const Vector &position, const Vector &direction, const Vecto
 		if( iScale > 1 && i%3 == 0 )
 		{
 			// Every third spark goes flying far if we're having a big batch of sparks.
-			pParticle->m_flDieTime	= random->RandomFloat( 0.15f, 0.25f );
+			pParticle->m_flDieTime	= random->RandomFloat( flDieTimeMin + 0.2f, flDieTimeMax + 0.2f );
 		}
 		else
 		{
-			pParticle->m_flDieTime	= random->RandomFloat( 0.05f, 0.1f );
+			pParticle->m_flDieTime	= random->RandomFloat( flDieTimeMin, flDieTimeMax );
 		}
 
 		float	spreadOfs = random->RandomFloat( 0.0f, 2.0f );
@@ -602,7 +627,7 @@ void FX_MetalSpark( const Vector &position, const Vector &direction, const Vecto
 		pParticle->m_flWidth		= random->RandomFloat( 1.0f, 4.0f );
 		pParticle->m_flLength		= random->RandomFloat( length*0.25f, length );
 		
-		pParticle->m_vecVelocity	= dir * random->RandomFloat( (METAL_SPARK_MINSPEED*(2.0f-spreadOfs)), (METAL_SPARK_MAXSPEED*(2.0f-spreadOfs)) );
+		pParticle->m_vecVelocity	= dir * ( random->RandomFloat( (METAL_SPARK_MINSPEED*(2.0f-spreadOfs)), (METAL_SPARK_MAXSPEED*(2.0f-spreadOfs)) ) * iScale );
 		
 		Color32Init( pParticle->m_color, 255, 255, 255, 255 );
 	}

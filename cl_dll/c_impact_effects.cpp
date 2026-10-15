@@ -23,6 +23,8 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
+extern ConVar hdn_particles;
+
 //Precahce the effects
 CLIENTEFFECT_REGISTER_BEGIN( PrecacheEffectImpacts )
 CLIENTEFFECT_MATERIAL( "effects/fleck_cement1" )
@@ -222,6 +224,9 @@ void FX_DebrisFlecks( const Vector& origin, trace_t *trace, char materialType, i
 
 	Vector	color;
 	GetColorForSurface( trace, &color );
+
+	// Hidden: debris flecks are twice the size
+	iScale *= 2;
 
 	if ( !bNoFlecks )
 	{
@@ -831,6 +836,31 @@ void FX_DustImpact( const Vector &origin, trace_t *tr, int iScale )
 	CSmartPtr<CDustParticle> pSimple = CDustParticle::Create( "dust" );
 	pSimple->SetSortOrigin( origin );
 
+	// Hidden: hdn_particles picks how long the dust lasts and how big it is
+	float flDieTimeA, flDieTimeB;	// REBUILD: names; client.dll passes them to RandomFloat as ( B, A )
+	switch ( hdn_particles.GetInt() )
+	{
+	case 0:
+		flDieTimeA = 0.5f;
+		flDieTimeB = 1.5f;
+		iScale = 0;
+		break;
+	case 1:
+		flDieTimeA = 1.0f;
+		flDieTimeB = 2.0f;
+		break;
+	case 2:
+		flDieTimeA = 1.5f;
+		flDieTimeB = 2.5f;
+		iScale *= 2;
+		break;
+	default:
+		flDieTimeA = 1.0f;
+		flDieTimeB = 2.0f;
+		iScale *= 2;
+		break;
+	}
+
 	SimpleParticle	*pParticle;
 
 	Vector	color;
@@ -846,7 +876,7 @@ void FX_DustImpact( const Vector &origin, trace_t *tr, int iScale )
 		if ( pParticle != NULL )
 		{
 			pParticle->m_flLifetime = 0.0f;
-			pParticle->m_flDieTime	= random->RandomFloat( 0.5f, 1.0f );
+			pParticle->m_flDieTime	= random->RandomFloat( flDieTimeB, flDieTimeA );
 
 			pParticle->m_vecVelocity.Random( -spread, spread );
 			pParticle->m_vecVelocity += ( tr->plane.normal * random->RandomFloat( 1.0f, 6.0f ) );
