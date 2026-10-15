@@ -925,9 +925,10 @@ void CBaseHudChat::FireGameEvent( IGameEvent *event )
 {
 	if ( !Q_strcmp( event->GetName(), "player_death" ) )
 	{
+		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
 		C_BasePlayer *pPlayer = USERID2PLAYER( event->GetInt( "userid" ) );
 
-		if ( pPlayer == C_BasePlayer::GetLocalPlayer() && cl_hdn_deadtext.GetInt() && m_nMessageMode )
+		if ( pPlayer == pLocalPlayer && cl_hdn_deadtext.GetInt() && m_nMessageMode )
 		{
 			SendDeadText();
 		}

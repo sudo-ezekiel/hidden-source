@@ -57,9 +57,8 @@ void CHudVoiceSelfStatus::ApplySchemeSettings(vgui::IScheme *pScheme)
 {
 	BaseClass::ApplySchemeSettings( pScheme );
 
-#ifdef HL2MP
+	// Hidden: client.dll clears the background as HL2MP does
 	SetBgColor( Color( 0, 0, 0, 0 ) );
-#endif
 }
 
 void CHudVoiceSelfStatus::VidInit( void )
@@ -144,9 +143,8 @@ void CHudVoiceStatus::ApplySchemeSettings(vgui::IScheme *pScheme)
 {
 	BaseClass::ApplySchemeSettings( pScheme );
 
-#ifdef HL2MP
+	// Hidden: client.dll clears the background as HL2MP does
 	SetBgColor( Color( 0, 0, 0, 0 ) );
-#endif
 }
 
 void CHudVoiceStatus::Init( void )

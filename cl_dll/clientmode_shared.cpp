@@ -171,6 +171,9 @@ void ClientModeShared::VGui_Shutdown()
 void ClientModeShared::Shutdown()
 {
 	HLTVCamera()->Shutdown();
+
+	// Hidden: stop listening for the events Init asked for
+	gameeventmanager->RemoveListener( this );
 }
 
 //-----------------------------------------------------------------------------
