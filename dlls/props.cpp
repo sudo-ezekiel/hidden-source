@@ -834,6 +834,15 @@ void CBreakableProp::CopyFadeFrom( CBreakableProp *pSource )
 	}
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CBreakableProp::SetFadeDistance( float minFadeDist, float maxFadeDist )
+{
+	m_fadeMinDist = minFadeDist;
+	m_fadeMaxDist = maxFadeDist;
+}
+
 
 //-----------------------------------------------------------------------------
 // Make physcannonable, or not
@@ -2532,7 +2541,12 @@ static CBreakableProp *BreakModelCreate_Prop( CBaseEntity *pOwner, breakmodel_t 
 		pEntity->SetModelName( AllocPooledString( pModel->modelName ) );
 		pEntity->SetModel( STRING(pEntity->GetModelName()) );
 		pEntity->SetCollisionGroup( pModel->collisionGroup );
-		
+
+		if ( pModel->fadeMinDist > 0 && pModel->fadeMaxDist >= pModel->fadeMinDist )
+		{
+			pEntity->SetFadeDistance( pModel->fadeMinDist, pModel->fadeMaxDist );
+		}
+
 		pEntity->Spawn();
 
 		// If we're burning, break into burning pieces
