@@ -15,6 +15,8 @@
 
 #if defined( CLIENT_DLL )
 	#include "c_sdk_player.h"
+	#include "iviewrender_beams.h"
+	#include "beamdraw.h"
 #else
 	#include "sdk_player.h"
 	#include "hl2_dll/grenade_tripmine.h"
@@ -76,6 +78,10 @@ public:
 
 	bool				Deploy( void );
 	bool				Holster( CBaseCombatWeapon *pSwitchingTo = NULL );
+
+#ifdef CLIENT_DLL
+	void				DrawEffects( void );
+#endif
 
 	CWeapon_Sonic();
 
@@ -207,6 +213,23 @@ bool CWeapon_Sonic::Holster( CBaseCombatWeapon *pSwitchingTo )
 	SetThink(NULL);
 	return BaseClass::Holster(pSwitchingTo);
 }
+
+#ifdef CLIENT_DLL
+//-----------------------------------------------------------------------------
+// Purpose: The sonic alarm has no laser: only kill a beam left on from before
+//-----------------------------------------------------------------------------
+void CWeapon_Sonic::DrawEffects( void )
+{
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: SLAM has no reload, but must call weapon idle to update state
