@@ -539,12 +539,12 @@ void CSDKPlayer::Spawn()
 	m_Local.m_iHideHUD = 0;
 
 	// Hidden: the aura trail the Hidden sees on marines
-	EntityParticleTrailInfo_t info;
-	info.m_strMaterialName = MAKE_STRING( "sprites/aura" );
-	info.m_flLifetime = 0.75f;
-	info.m_flStartSize = 14.0f;
-	info.m_flEndSize = 0.5f;
-	CEntityParticleTrail::Create( this, info, NULL );
+	EntityParticleTrailInfo_t m_ParticleTrail;
+	m_ParticleTrail.m_strMaterialName = MAKE_STRING( "sprites/aura" );
+	m_ParticleTrail.m_flLifetime = 0.75f;
+	m_ParticleTrail.m_flStartSize = 14.0f;
+	m_ParticleTrail.m_flEndSize = 0.5f;
+	CEntityParticleTrail::Create( this, m_ParticleTrail, NULL );
 }
 
 //-----------------------------------------------------------------------------

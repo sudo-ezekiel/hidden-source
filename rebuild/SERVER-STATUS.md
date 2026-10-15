@@ -7,7 +7,7 @@ The rebuilt Linux server is compared function by function with Hidden's shipped,
 
 | same | changed | only in Hidden's build | only in ours |
 |---|---|---|---|
-| 18364 | 49 | 0 | 0 |
+| 18366 | 47 | 0 | 0 |
 
 "Same" means the function compiles to exactly the same instructions as Hidden's, once addresses are
 normalised (call and jump targets become symbol names or offsets inside the function, absolute
@@ -15,7 +15,7 @@ addresses become a placeholder). The build uses GCC 3.4 for i386 with Hidden's f
 (`-mtune=i686 -march=pentium -mmmx -O3`). Nothing is missing: every function in Hidden's binary
 exists in the rebuild, and the rebuild has no extra functions.
 
-None of the 49 "changed" functions is known to behave differently from Hidden's. Each one has the
+None of the 47 "changed" functions is known to behave differently from Hidden's. Each one has the
 same calls, the same constants and the same control flow as far as we could check. What differs is
 how GCC compiled it: which register it picked, the order of independent instructions, or the order
 it laid out blocks. GCC 3.4 makes some of these choices from state that carries over from one
@@ -42,7 +42,7 @@ To see how one function differs:
 
     python3 -I rebuild/tools/fn_diff.py <Hidden's .so> ~/.cache/hsrebuild-work/out/server_i486.so "CBasePlayer::Spawn"
 
-## The 49 remaining functions
+## The 47 remaining functions
 
 "Masked" below means the comparison with registers and stack slot offsets replaced by placeholders.
 "Tried" lists the source forms that were built and measured without making the function same.
@@ -60,7 +60,6 @@ To see how one function differs:
 | player.cpp | CBasePlayer::SetupVisibility | 0.627 | Register choice. |
 | player.cpp | CBasePlayer::UpdateTransmitState, SetStamina, CSprayCan::~CSprayCan | 0.833, 0.962, 0.962 | Epilogue scratch register, or the register used to pass a zero. |
 | player.cpp | CBasePlayer::PlayerDeathThink, SetCurrentLocation | 0.901, 0.949 | Register choice. |
-| weapon_sdkbase.cpp | CWeaponSDKBase::Holster | 0.938 | Register choice. |
 
 ### Same instructions in a different order (instruction scheduling, often with register changes)
 
@@ -75,7 +74,6 @@ To see how one function differs:
 | player.cpp | CBasePlayer::CBasePlayer (both) | 0.994 | The loads of the DevMsg arguments are in a different order. |
 | sdk_client.cpp | InstallGameRules | 0.896 | Register choice and scheduling. |
 | sdk_gamerules.cpp | CSDKGameRules::IRISWins, ClientCommand | 0.812, 0.960 | Register choice and scheduling. |
-| weapon_pistol.cpp | CWeaponPistol::ItemPostFrame | 0.930 | Register choice around the inlined dry-fire WeaponSound call. |
 
 ### Small differences in register allocation, spills or block layout
 
@@ -104,6 +102,39 @@ To see how one function differs:
 | File | Function | Similarity | Notes |
 |---|---|---|---|
 | player_command.cpp | CPlayerMove::RunCommand | 0.270 | Calls, compares and their order match; the rarely used blocks are laid out in a different order, which moves almost every jump. |
-| player_lagcompensation.cpp | CLagCompensationManager::BacktrackPlayer | 0.792 | Hidden's build has 16 bytes more stack, from extra temporaries. Of the 49 this is the one most likely to hide a real source difference that has not been found. |
+| player_lagcompensation.cpp | CLagCompensationManager::BacktrackPlayer | 0.792 | Hidden's build has 16 bytes more stack, from extra temporaries. Of the 47 this is the one most likely to hide a real source difference that has not been found. |
 | sdk_gamerules.cpp | CSDKGameRules::RestartRound | 0.729 | The inlined CountHiddens and TotalPlayers loops have a different loop shape (rotated against jump-to-condition). Each of those functions is same on its own. |
 | sdk_gamerules.cpp | CSDKGameRules::IsRoundOver | 0.825 | Hidden's build has a duplicated loop-entry block that we could not reproduce; a different loop form in the source is possible. |
+
+## Function order and the May PDB's locals
+
+Function order inside a source file counts. When the definitions of Hidden's own .cpp files were put
+in the order of their first line in the May PDB, CWeaponPistol::ItemPostFrame and
+CWeaponSDKBase::Holster became same (the 49 became 47), and moving CSDKGameRules::GoToIntermission
+to its May place (after ClientConnected) turned DeathNotice and MarineDisconnected from same to
+changed, so it stays before DeathNotice. Functions that pass `__LINE__` to SharedRandomInt (the
+PrimaryAttack of the FN2000 and P90) keep their line numbers, since the line is an argument in the
+code: moving the P90's PrimaryAttack changed its copy in client.dll.
+
+The May PDB (rebuild/PDB.md) records the named locals that kept a stack slot or register in May's
+build. For each of the 49 functions its locals were compared with ours, and where they differ the
+PDB's form was built and compared. The PDB does not record block scopes in this build (every local
+is at depth 0) and its record order is not the declaration order, so only the set of locals is
+evidence.
+
+| Function | What the PDB has | Tried | Result |
+|---|---|---|---|
+| CLagCompensationManager::BacktrackPlayer | A float `dist` (sharing frac's slot) that ours lacks; the rest as ours | `float dist = orgdiff.Length();` before the sv_unlag_maxdistance test, used in the test and in the DevMsg | 0.792 to 0.441, reverted |
+| | | `dist` inside `if ( sv_unlag_maxdistance.GetFloat() > 0 )`, with the distance test nested | 0.801, still 0x13c of stack against Hidden's 0x14c and 758 instructions against 785; reverted (only a same function is kept) |
+| CSDKGameRules::IsRoundOver, IRISWins | Not in the May PDB (added after May) | Nothing to try | |
+| CBasePlayer::OnTakeDamage_Alive | An int `damage` where ours reads info.GetDamage() into a float for the event; the rest of May's body differs (no weighting) | `int damage = info.GetDamage();` before UTIL_LogPrintf, passed for the `(int)` argument | 0.624, unchanged; reverted |
+| CGameMovement::CheckPounceButton | Only vecForward; no float for the pounce speed | `vecForward *= 615.0f;` without flPounceSpeed | 0.980 to 0.900, reverted |
+| CBasePlayer::SetStamina | No locals; ours has flStamina | The test written on `m_flStamina + newStamina` | 0.962, unchanged; reverted |
+| CGameMovement::AirMove | vStart, vForward, vEnd and tr beside the Valve locals | vStart, vForward and vEnd declared at the top with the others | 0.840 to 0.725, reverted |
+| CTripmineGrenade::OnTakeDamage_Alive | vecGibVelocity, vecGibAVelocity and data, as ours | The gib vectors declared before the CEffectData | 0.996 to 0.688, reverted |
+| CSDKPlayer::Spawn | `m_ParticleTrail` for the trail info | Renamed (ours was `info`); a name does not change GCC's code | 0.875, unchanged |
+| CBasePlayer::PlayerDeathThink, SetupVisibility, Spawn; CEnvSplash::InputSplash; CFN303Ball::BoltTouch; CHLTVDirector::CreateShotFromEvent; CNavMesh::GetActiveNavArea; CPhysicsHook::LevelInitPreEntity; CPlayerMove::RunCommand; CreateServerCorpseRagdoll; CWeaponFN2000 and CWeaponP90 PrimaryAttack; MakeSniperSpots | The same named locals as ours | Nothing to try | |
+| CBaseEntity::GetVectors, IsInWorld; CBasePlayer::CBasePlayer, SetCurrentLocation, SetFOV, UpdateTransmitState; CGameMovement::FullWalkMove; CNavMesh::CommandNavWarpToMark; CRagdollProp::RecheckCollisionFilter, SetDebrisThink; CSDKGameRules::ClientCommand, RestartRound; CWeaponSDKBase::CreateLaserPointer; InstallGameRules; PassServerEntityFilter | Parameters only, no named locals | Nothing to try | |
+| CHiddenSelector::SelectHidden | May's takes (int, int, bool) and has a different body | Nothing to try | |
+| CHDNBot::~CHDNBot, CUtlLinkedList<CNavArea*,int>::Purge, FindMinimumCostArea<ShortestPathCost>, CEvacuationGameRulesProxy::~CEvacuationGameRulesProxy, the RespawnHiddens of both rules, CSprayCan::~CSprayCan | Not in the May PDB (post-May code, or not emitted there) | Nothing to try | |
+| CWeaponPistol::ItemPostFrame, CWeaponSDKBase::Holster | | Same after the function reordering | |
