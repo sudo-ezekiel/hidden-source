@@ -128,7 +128,19 @@ void ClientModeShared::Init()
 	Assert( m_pViewport );
 	m_pViewport->LoadControlSettings("scripts/HudLayout.res");
 
-	gameeventmanager->AddListener( this, false );
+	gameeventmanager->AddListener( this, "player_connect", false );
+	gameeventmanager->AddListener( this, "player_disconnect", false );
+	gameeventmanager->AddListener( this, "player_team", false );
+	gameeventmanager->AddListener( this, "server_cvar", false );
+	gameeventmanager->AddListener( this, "player_changename", false );
+	gameeventmanager->AddListener( this, "game_round_restart", false );
+	gameeventmanager->AddListener( this, "game_round_end", false );
+	gameeventmanager->AddListener( this, "iris_radio", false );
+	gameeventmanager->AddListener( this, "player_hurt", false );
+	gameeventmanager->AddListener( this, "player_death", false );
+	gameeventmanager->AddListener( this, "aura_start", false );
+	gameeventmanager->AddListener( this, "aura_end", false );
+	gameeventmanager->AddListener( this, "game_round_start", false );
 
 	HLTVCamera()->Init();
 
@@ -456,9 +468,12 @@ void ClientModeShared::LevelInit( const char *newmap )
 		m_pChatElement->LevelInit( newmap );
 	}
 
-	KeyValues * event = new KeyValues( "game_newmap" );
-	event->SetString("mapname", newmap );
-	gameeventmanager->FireEventClientOnly( event );
+	IGameEvent *event = gameeventmanager->CreateEvent( "game_newmap" );
+	if ( event )
+	{
+		event->SetString("mapname", newmap );
+		gameeventmanager->FireEventClientSide( event );
+	}
 
 	// Create a vgui context for all of the in-game vgui panels...
 	if ( s_hVGuiContext == DEFAULT_VGUI_CONTEXT )
@@ -547,7 +562,7 @@ float ClientModeShared::GetViewModelFOV( void )
 
 class CHudChat;
 
-void ClientModeShared::FireGameEvent(KeyValues * event)
+void ClientModeShared::FireGameEvent( IGameEvent *event )
 {
 	CBaseHudChat *hudChat = (CBaseHudChat *)GET_HUDELEMENT( CHudChat );
 
