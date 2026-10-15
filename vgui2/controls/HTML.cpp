@@ -132,13 +132,13 @@ void HTML::PaintBackground()
 
 	if (m_bRegenerateHTMLBitmap)
 	{
+		int w, h;
+		GetSize(w, h);
 		if ( !surface()->SupportsFeature( ISurface::DIRECT_HWND_RENDER ) )
 		{	
 			surface()->PaintHTMLWindow(browser);
 		}
 		m_bRegenerateHTMLBitmap = false;
-		int w, h;
-		GetSize(w, h);
 		CalcScrollBars(w, h);
 	}
 
@@ -170,7 +170,8 @@ void HTML::PaintBackground()
 				border->GetInset( left, top, right, bottom );
 			}
 
-			surface()->DrawSetColor( GetBgColor() );
+			// client.dll fills under the scrollbars with this colour, not the bg color
+			surface()->DrawSetColor( 88, 20, 21, 255 );
 			if ( m_iScrollBorderX )
 			{
 				surface()->DrawFilledRect( w-m_iScrollBorderX - right, top, w - right, h - bottom );

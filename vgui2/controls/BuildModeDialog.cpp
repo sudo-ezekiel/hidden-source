@@ -254,6 +254,7 @@ void BuildModeDialog::CreateControls()
 	m_pAddNewControlCombo->AddItem("Divider", NULL);
 	m_pAddNewControlCombo->AddItem("ImagePanel", NULL);
 	m_pAddNewControlCombo->AddItem("Label", NULL);
+	m_pAddNewControlCombo->AddItem("URLLabel", NULL);
 	m_pAddNewControlCombo->AddItem("ProgressBar", NULL);
 	m_pAddNewControlCombo->AddItem("RadioButton", NULL);
 	m_pAddNewControlCombo->AddItem("TextEntry", NULL);

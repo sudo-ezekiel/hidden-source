@@ -1434,6 +1434,7 @@ void SectionedListPanel::SetSelectedItem(CItemButton *item)
 		m_hSelectedItem->SetSelected(true);
 	}
 
+	Repaint();
 	PostActionSignal(new KeyValues("ItemSelected", "itemID", m_hSelectedItem.Get() ? m_hSelectedItem->GetID() : -1));
 }
 
