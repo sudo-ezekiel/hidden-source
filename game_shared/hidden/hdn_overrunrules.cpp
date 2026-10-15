@@ -12,12 +12,8 @@
 #include "tier0/memdbgon.h"
 
 
-#ifndef CLIENT_DLL
-
 ConVar hdn_deathwait( "hdn_deathwait", "5", FCVAR_REPLICATED | FCVAR_NOTIFY, "Time between respawns in OverRun" );
 ConVar hdn_survivaltime( "hdn_survivaltime", "15", FCVAR_REPLICATED | FCVAR_NOTIFY, "survival time limit" );
-
-#endif
 
 REGISTER_GAMERULES_CLASS( COverRunGameRules );
 
