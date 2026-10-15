@@ -15,6 +15,7 @@
 	#include "prediction.h"
 	#include "c_basedoor.h"
 	#include "c_world.h"
+	#include "c_te_effect_dispatch.h"
 
 	#define CRecipientFilter C_RecipientFilter
 
@@ -25,6 +26,7 @@
 	#include "world.h"
 	#include "doors.h"
 	#include "ai_basenpc.h"
+	#include "te_effect_dispatch.h"
 
 	extern int TrainSpeed(int iSpeed, int iMax);
 	
@@ -413,7 +415,7 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 	else
 	{
 		velwalk = 90;
-		velrun = 220;
+		velrun = 180;		// Hidden: was 220
 		flduck = 0;
 	}
 
@@ -468,6 +470,25 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 		psurface = physprops->GetSurfaceData( physprops->GetSurfaceIndex( "water" ) );
 		fvol = fWalking ? 0.2 : 0.5;
 		m_flStepSoundTime = fWalking ? 400 : 300;		
+
+		if ( GetFlags() & FL_DUCKING )
+		{
+			CEffectData data;
+			data.m_vOrigin = feet;
+			data.m_vNormal.Init( 0, 0, 1 );
+			VectorAngles( data.m_vNormal, data.m_vAngles );
+			data.m_flScale = random->RandomFloat( 8, 12 );
+			DispatchEffect( "waterripple", data );
+		}
+		else
+		{
+			CEffectData data;
+			data.m_vOrigin = feet;
+			data.m_vNormal.Init( 0, 0, 1 );
+			VectorAngles( data.m_vNormal, data.m_vAngles );
+			data.m_flScale = random->RandomFloat( 8, 12 );
+			DispatchEffect( "watersplash", data );
+		}
 	}
 	else
 	{
@@ -515,6 +536,12 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 	if ( GetFlags() & FL_DUCKING )
 	{
 		fvol *= 0.65;
+	}
+
+	// Hidden: the Hidden's steps are quieter
+	if ( GetTeamNumber() == TEAM_HIDDEN )
+	{
+		fvol *= 0.45;
 	}
 
 	PlayStepSound( feet, psurface, fvol, false );
