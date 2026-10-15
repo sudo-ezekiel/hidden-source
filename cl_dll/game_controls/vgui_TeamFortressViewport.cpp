@@ -38,6 +38,8 @@
 #include "vguitextwindow.h"
 #include "IGameUIFuncs.h"
 #include "mapoverview.h"
+#include "NavProgress.h"
+#include "hidden/hdn_radiomenu.h"
 #include "hud.h"
 
 // our definition
@@ -152,6 +154,8 @@ void CBaseViewport::CreateDefaultPanels( void )
 	AddNewPanel( CreatePanelByName( PANEL_INFO ) );
 	AddNewPanel( CreatePanelByName( PANEL_SPECGUI ) );
 	AddNewPanel( CreatePanelByName( PANEL_SPECMENU ) );
+	AddNewPanel( CreatePanelByName( PANEL_NAV_PROGRESS ) );
+	AddNewPanel( CreatePanelByName( PANEL_RADIO ) );
 	// AddNewPanel( CreatePanelByName( PANEL_TEAM ) );
 	// AddNewPanel( CreatePanelByName( PANEL_CLASS ) );
 	// AddNewPanel( CreatePanelByName( PANEL_BUY ) );
@@ -199,6 +203,14 @@ IViewPortPanel* CBaseViewport::CreatePanelByName(const char *szPanelName)
 	else if ( Q_strcmp(PANEL_SPECGUI, szPanelName) == 0 )
 	{
 		newpanel = new CSpectatorGUI( this );
+	}
+	else if ( Q_strcmp(PANEL_NAV_PROGRESS, szPanelName) == 0 )
+	{
+		newpanel = new CNavProgress( this );
+	}
+	else if ( Q_strcmp(PANEL_RADIO, szPanelName) == 0 )
+	{
+		newpanel = new HDNRadioMenu( this );
 	}
 	
 	return newpanel; 
@@ -351,7 +363,7 @@ CBaseViewport::~CBaseViewport()
 // Purpose: called when the VGUI subsystem starts up
 //			Creates the sub panels and initialises them
 //-----------------------------------------------------------------------------
-void CBaseViewport::Start( IGameUIFuncs *pGameUIFuncs, IGameEventManager * pGameEventManager )
+void CBaseViewport::Start( IGameUIFuncs *pGameUIFuncs, IGameEventManager2 * pGameEventManager )
 {
 	m_GameuiFuncs = pGameUIFuncs;
 	m_GameEventManager = pGameEventManager;
@@ -362,7 +374,7 @@ void CBaseViewport::Start( IGameUIFuncs *pGameUIFuncs, IGameEventManager * pGame
 
 	CreateDefaultPanels();
 
-	m_GameEventManager->AddListener( this, false );
+	m_GameEventManager->AddListener( this, "game_newmap", false );
 	
 	m_bInitialized = true;
 }
@@ -485,7 +497,7 @@ void CBaseViewport::HideClientUI()
 //-----------------------------------------------------------------------------
 // Purpose: passes death msgs to the scoreboard to display specially
 //-----------------------------------------------------------------------------
-void CBaseViewport::FireGameEvent( KeyValues * event)
+void CBaseViewport::FireGameEvent( IGameEvent * event)
 {
 	const char * type = event->GetName();
 
@@ -493,6 +505,11 @@ void CBaseViewport::FireGameEvent( KeyValues * event)
 	{
 		// hide all panels when reconnecting 
 		ShowPanel( PANEL_ALL, false );
+
+		if ( engine->IsHLTV() )
+		{
+			ShowPanel( PANEL_SPECGUI, true );
+		}
 	}
 }
 

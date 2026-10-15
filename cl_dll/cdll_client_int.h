@@ -43,7 +43,7 @@ class IMaterialSystemHardwareConfig;
 class ISharedGameRules;
 class IEngineTrace;
 class IGameUIFuncs;
-class IGameEventManager;
+class IGameEventManager2;
 class IPhysicsGameTrace;
 class CGlobalVarsBase;
 
@@ -71,7 +71,7 @@ extern IEngineSound *enginesound;
 extern IMatSystemSurface *g_pMatSystemSurface;
 extern IEngineTrace *enginetrace;
 extern IGameUIFuncs *gameuifuncs;
-extern IGameEventManager *gameeventmanager;
+extern IGameEventManager2 *gameeventmanager;
 extern IPhysicsGameTrace *physgametrace;
 extern CGlobalVarsBase *gpGlobals;
 

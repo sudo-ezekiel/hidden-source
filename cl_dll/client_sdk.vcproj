@@ -2438,12 +2438,6 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 						<Tool
 							Name="VCCLCompilerTool"/>
 					</FileConfiguration>
-					<FileConfiguration
-						Name="Release SDK|Win32"
-						ExcludedFromBuild="TRUE">
-						<Tool
-							Name="VCCLCompilerTool"/>
-					</FileConfiguration>
 				</File>
 				<File
 					RelativePath="..\game_shared\hl2\env_headcrabcanister_shared.cpp">
@@ -2707,12 +2701,6 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 					RelativePath="hl2_hud\hud_damageindicator.cpp">
 					<FileConfiguration
 						Name="Debug SDK|Win32"
-						ExcludedFromBuild="TRUE">
-						<Tool
-							Name="VCCLCompilerTool"/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Release SDK|Win32"
 						ExcludedFromBuild="TRUE">
 						<Tool
 							Name="VCCLCompilerTool"/>
@@ -3423,6 +3411,66 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 			<Filter
 				Name="Hidden HUD"
 				Filter="">
+				<File
+					RelativePath=".\hidden\hdn_hud_hammo.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_hhealth.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_hstamina.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_hstaminabar.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_htimer.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_ihealth.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_ilocation.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_itimer.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_location.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_material.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_name.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_radar.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_hud_roundtimer.cpp">
+				</File>
+				<File
+					RelativePath=".\sdk\sdk_hud_health.cpp">
+				</File>
+				<File
+					RelativePath=".\game_controls\NavProgress.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_radiomenu.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\MyPanel.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_menu.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_teammenu.cpp">
+				</File>
+				<File
+					RelativePath=".\hidden\hdn_weaponmenu.cpp">
+				</File>
 			</Filter>
 			<Filter
 				Name="Hidden Rules"

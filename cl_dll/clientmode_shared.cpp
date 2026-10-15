@@ -26,6 +26,9 @@
 #include "particlemgr.h"
 #include "c_vguiscreen.h"
 #include "c_team.h"
+#include "physpropclientside.h"
+#include "c_soundscape.h"
+#include "c_te_legacytempents.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -128,7 +131,19 @@ void ClientModeShared::Init()
 	Assert( m_pViewport );
 	m_pViewport->LoadControlSettings("scripts/HudLayout.res");
 
-	gameeventmanager->AddListener( this, false );
+	gameeventmanager->AddListener( this, "player_connect", false );
+	gameeventmanager->AddListener( this, "player_disconnect", false );
+	gameeventmanager->AddListener( this, "player_team", false );
+	gameeventmanager->AddListener( this, "server_cvar", false );
+	gameeventmanager->AddListener( this, "player_changename", false );
+	gameeventmanager->AddListener( this, "game_round_restart", false );
+	gameeventmanager->AddListener( this, "game_round_end", false );
+	gameeventmanager->AddListener( this, "iris_radio", false );
+	gameeventmanager->AddListener( this, "player_hurt", false );
+	gameeventmanager->AddListener( this, "player_death", false );
+	gameeventmanager->AddListener( this, "aura_start", false );
+	gameeventmanager->AddListener( this, "aura_end", false );
+	gameeventmanager->AddListener( this, "game_round_start", false );
 
 	HLTVCamera()->Init();
 
@@ -456,9 +471,12 @@ void ClientModeShared::LevelInit( const char *newmap )
 		m_pChatElement->LevelInit( newmap );
 	}
 
-	KeyValues * event = new KeyValues( "game_newmap" );
-	event->SetString("mapname", newmap );
-	gameeventmanager->FireEventClientOnly( event );
+	IGameEvent *event = gameeventmanager->CreateEvent( "game_newmap" );
+	if ( event )
+	{
+		event->SetString("mapname", newmap );
+		gameeventmanager->FireEventClientSide( event );
+	}
 
 	// Create a vgui context for all of the in-game vgui panels...
 	if ( s_hVGuiContext == DEFAULT_VGUI_CONTEXT )
@@ -547,7 +565,7 @@ float ClientModeShared::GetViewModelFOV( void )
 
 class CHudChat;
 
-void ClientModeShared::FireGameEvent(KeyValues * event)
+void ClientModeShared::FireGameEvent( IGameEvent *event )
 {
 	CBaseHudChat *hudChat = (CBaseHudChat *)GET_HUDELEMENT( CHudChat );
 
@@ -592,9 +610,119 @@ void ClientModeShared::FireGameEvent(KeyValues * event)
 		}
 	}
 	
+	else if ( Q_strcmp( "player_changename", event->GetName() ) == 0 )
+	{
+		if ( !hudChat )
+			return;
+
+		hudChat->Printf( "%s changed name to %s\n", event->GetString("oldname"), event->GetString("newname") );
+	}
+
 	else if ( Q_strcmp( "server_cvar", event->GetName() ) == 0 )
 	{
 		hudChat->Printf( "Server cvar \"%s\" changed to %s\n", event->GetString("cvarname"), event->GetString("cvarvalue") );
+	}
+
+	else if ( Q_strcmp( "game_round_restart", event->GetName() ) == 0 )
+	{
+		// recreate all client side physics props
+		C_PhysPropClientside::RecreateAll();
+
+		// Just tell engine to clear decals
+		engine->ClientCmd( "r_cleardecals\n" );
+
+		tempents->Clear();
+
+		// stop any looping sounds
+		enginesound->StopAllSounds( true );
+		Soundscape_OnStopAllSounds();	// Tell the soundscape system.
+
+		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+		if ( pLocalPlayer )
+			pLocalPlayer->ClearDamageList();
+	}
+
+	else if ( Q_strcmp( "game_round_start", event->GetName() ) == 0 )
+	{
+		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+		if ( pLocalPlayer && pLocalPlayer->GetTeamNumber() == TEAM_IRIS )
+			pLocalPlayer->EmitSound( "IRIS.RoundStart" );
+	}
+
+	else if ( Q_strcmp( "game_round_end", event->GetName() ) == 0 )
+	{
+		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+		if ( pLocalPlayer )
+		{
+			if ( pLocalPlayer->IsAlive() && pLocalPlayer->GetTeamNumber() == TEAM_IRIS )
+				pLocalPlayer->EmitSound( "IRIS.RoundEnd" );
+
+			pLocalPlayer->PrintDamageList();
+			pLocalPlayer->m_bDamageListPrinted = false;
+		}
+	}
+
+	else if ( Q_strcmp( "iris_radio", event->GetName() ) == 0 )
+	{
+		// Living IRIS hear the radio calls
+		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+		if ( !pLocalPlayer || pLocalPlayer->GetTeamNumber() == TEAM_HIDDEN || !pLocalPlayer->IsAlive() )
+			return;
+
+		int iMessage = event->GetInt( "message" );
+		int iUserID = event->GetInt( "userid" );
+
+		switch ( iMessage )
+		{
+		case 0:
+			pLocalPlayer->EmitSound( "IRIS.AgentDown" );
+			break;
+		case 1:
+			pLocalPlayer->EmitSound( "IRIS.EnemySighted" );
+			break;
+		case 2:
+			pLocalPlayer->EmitSound( "IRIS.Affirmative" );
+			break;
+		case 3:
+			pLocalPlayer->EmitSound( "IRIS.RequestingAmmo" );
+			break;
+		case 4:
+			// Everyone else answers a report-in call
+			pLocalPlayer->EmitSound( "IRIS.ReportIn" );
+			if ( iUserID != pLocalPlayer->GetUserID() )
+				engine->ClientCmd( "radio 10\n" );
+			break;
+		case 10:
+			pLocalPlayer->EmitSound( "IRIS.ReportingIn" );
+			break;
+		}
+	}
+
+	else if ( Q_strcmp( "player_hurt", event->GetName() ) == 0 )
+	{
+		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+		if ( !pLocalPlayer )
+			return;
+
+		C_BasePlayer *pVictim = USERID2PLAYER( event->GetInt("userid") );
+		C_BasePlayer *pAttacker = USERID2PLAYER( event->GetInt("attacker") );
+
+		// Keep the damage the local player dealt or took for the damage list
+		if ( pVictim == pLocalPlayer || pAttacker == pLocalPlayer )
+		{
+			PlayerDamageRecord_t damage = { event->GetInt("attacker"), event->GetInt("userid"), event->GetFloat("damage"), 0 };
+			pLocalPlayer->AddDamage( damage );
+		}
+	}
+
+	else if ( Q_strcmp( "player_death", event->GetName() ) == 0 )
+	{
+		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
+		if ( !pLocalPlayer )
+			return;
+
+		if ( USERID2PLAYER( event->GetInt("userid") ) == pLocalPlayer )
+			pLocalPlayer->PrintDamageList();
 	}
 
 	else

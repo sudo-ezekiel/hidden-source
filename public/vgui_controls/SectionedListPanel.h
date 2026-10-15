@@ -75,6 +75,8 @@ public:
 	virtual bool RemoveItem(int itemID);
 
 	// clears the list
+	// REBUILD: Hidden's vgui_controls declares RemoveAll() before DeleteAllItems() (vftable order)
+	virtual void RemoveAll()		{ DeleteAllItems(); }
 	virtual void DeleteAllItems();
 
 	// set the text color of an item

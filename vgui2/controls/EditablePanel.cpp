@@ -799,6 +799,18 @@ void EditablePanel::SetControlEnabled(const char *controlName, bool enabled)
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: Shortcut function to setting visibility state of control
+//-----------------------------------------------------------------------------
+void EditablePanel::SetControlVisible(const char *controlName, bool visible)
+{
+	Panel *control = FindChildByName(controlName);
+	if (control)
+	{
+		control->SetVisible(visible);
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Shortcut function to set data in child controls
 //-----------------------------------------------------------------------------
 void EditablePanel::SetControlString(const char *controlName, const char *string)

@@ -97,12 +97,19 @@ protected:
 	MESSAGE_FUNC_INT( OnSliderMoved, "ScrollBarSliderMoved", position );
 	virtual void RespondToScrollArrow(int const direction);
 
+	// Hidden: the bar passes clicks on to its buttons and slider
+	virtual void OnMousePressed(MouseCode code);
+	virtual void OnMouseReleased(MouseCode code);
+
 private:
 	Button* _button[2];
 	ScrollBarSlider* _slider;
+	int		m_iPressedPart;	// REBUILD: name; 0 and 1 the buttons, 2 the slider, -1 none
 	int     _buttonPressedScrollValue;
 	int		_scrollDelay; // used to control delays in scrolling
 	bool	_respond;
+	int		m_iPressedX;	// REBUILD: names; the cursor where the slider was pressed
+	int		m_iPressedY;
 };
 
 }

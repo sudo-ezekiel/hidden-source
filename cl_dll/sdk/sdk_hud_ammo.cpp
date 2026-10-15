@@ -1,8 +1,8 @@
-//========= Copyright © 1996-2003, Valve LLC, All rights reserved. ============
+//========= Copyright © 1996-2005, Valve Corporation, All rights reserved. ============//
 //
 // Purpose: 
 //
-//=============================================================================
+//=============================================================================//
 
 #include "cbase.h"
 #include "hud.h"
@@ -10,9 +10,12 @@
 #include "hud_macros.h"
 #include "hud_numericdisplay.h"
 #include "iclientmode.h"
-
-#include <vgui/ISurface.h>
+#include "iclientvehicle.h"
 #include <vgui_controls/AnimationController.h>
+#include <vgui/ILocalize.h>
+
+// memdbgon must be the last include file in a .cpp file!!!
+#include "tier0/memdbgon.h"
 
 //-----------------------------------------------------------------------------
 // Purpose: Displays current ammunition level
@@ -25,37 +28,23 @@ public:
 	CHudAmmo( const char *pElementName );
 	void Init( void );
 	void VidInit( void );
+	void Reset();
 
 	void SetAmmo(int ammo, bool playAnimation);
 	void SetAmmo2(int ammo2, bool playAnimation);
-		
+
 protected:
 	virtual void OnThink();
-	virtual void Paint( void );
-	virtual void ApplySchemeSettings(vgui::IScheme *pScheme);
-	
+
+	void UpdateAmmoDisplays();
+	void UpdatePlayerAmmo( C_BasePlayer *player );
+
 private:
 	CHandle< C_BaseCombatWeapon > m_hCurrentActiveWeapon;
+	CHandle< C_BaseEntity > m_hCurrentVehicle;
 	int		m_iAmmo;
 	int		m_iAmmo2;
-
-	bool	m_bUsesClips;
-
-	int		m_iAdditiveWhiteID;
-
-	CPanelAnimationVarAliasType( float, digit_xpos, "digit_xpos", "50", "proportional_float" );
-	CPanelAnimationVarAliasType( float, digit_ypos, "digit_ypos", "2", "proportional_float" );
-	CPanelAnimationVarAliasType( float, digit2_xpos, "digit2_xpos", "0", "proportional_float" );
-	CPanelAnimationVarAliasType( float, digit2_ypos, "digit2_ypos", "0", "proportional_float" );
-	CPanelAnimationVarAliasType( float, bar_xpos, "bar_xpos", "0", "proportional_float" );
-	CPanelAnimationVarAliasType( float, bar_ypos, "bar_ypos", "0", "proportional_float" );
-	CPanelAnimationVarAliasType( float, bar_width, "bar_width", "2", "proportional_float" );
-	CPanelAnimationVarAliasType( float, bar_height, "bar_height", "2", "proportional_float" );
-	CPanelAnimationVarAliasType( float, icon_xpos, "icon_xpos", "0", "proportional_float" );
-	CPanelAnimationVarAliasType( float, icon_ypos, "icon_ypos", "0", "proportional_float" );
-
-	CPanelAnimationVar( Color, m_TextColor, "TextColor", "FgColor" );
-	CPanelAnimationVar( vgui::HFont, m_hNumberFont, "NumberFont", "HudNumbers" );
+	C_BasePlayer *m_pPlayer;	// Hidden: the local player, stored every think
 };
 
 DECLARE_HUDELEMENT( CHudAmmo );
@@ -65,10 +54,9 @@ DECLARE_HUDELEMENT( CHudAmmo );
 //-----------------------------------------------------------------------------
 CHudAmmo::CHudAmmo( const char *pElementName ) : BaseClass(NULL, "HudAmmo"), CHudElement( pElementName )
 {
-	m_iAdditiveWhiteID = vgui::surface()->CreateNewTextureID();
-	vgui::surface()->DrawSetTextureFile( m_iAdditiveWhiteID, "vgui/white_additive" , true, false);
+	SetPaintEnabled( false );
 
-	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_WEAPONSELECTION );
+	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT | HIDEHUD_WEAPONSELECTION );
 }
 
 //-----------------------------------------------------------------------------
@@ -80,11 +68,6 @@ void CHudAmmo::Init( void )
 	m_iAmmo2	= -1;
 }
 
-void CHudAmmo::ApplySchemeSettings(vgui::IScheme *pScheme)
-{
-	BaseClass::ApplySchemeSettings(pScheme);
-}
-
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
@@ -93,23 +76,38 @@ void CHudAmmo::VidInit( void )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: Resets hud after save/restore
+//-----------------------------------------------------------------------------
+void CHudAmmo::Reset()
+{
+	BaseClass::Reset();
+
+	m_hCurrentActiveWeapon = NULL;
+	m_hCurrentVehicle = NULL;
+	m_iAmmo = 0;
+	m_iAmmo2 = 0;
+
+	UpdateAmmoDisplays();
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: called every frame to get ammo info from the weapon
 //-----------------------------------------------------------------------------
-void CHudAmmo::OnThink()
+void CHudAmmo::UpdatePlayerAmmo( C_BasePlayer *player )
 {
+	// Clear out the vehicle entity
+	m_hCurrentVehicle = NULL;
+
 	C_BaseCombatWeapon *wpn = GetActiveWeapon();
-	C_BasePlayer *player = C_BasePlayer::GetLocalPlayer();
-	if (!wpn || !player || !wpn->UsesPrimaryAmmo())
+	if ( !wpn || !player || !wpn->UsesPrimaryAmmo() )
 	{
 		SetPaintEnabled(false);
 		SetPaintBackgroundEnabled(false);
 		return;
 	}
-	else
-	{
-		SetPaintEnabled(true);
-		SetPaintBackgroundEnabled(true);
-	}
+
+	SetPaintEnabled(true);
+	SetPaintBackgroundEnabled(false);
 
 	// get the ammo in our clip
 	int ammo1 = wpn->Clip1();
@@ -141,16 +139,106 @@ void CHudAmmo::OnThink()
 		// update whether or not we show the total ammo display
 		if (wpn->UsesClipsForAmmo1())
 		{
-			m_bUsesClips = true;
-
+			SetShouldDisplaySecondaryValue(true);
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponUsesClips");
 		}
 		else
 		{
-			m_bUsesClips = false;
+			if ( player->GetTeamNumber() == TEAM_HIDDEN )
+				g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponDoesNotUseClipsHidden");
+			else
+				g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponDoesNotUseClips");
+			SetShouldDisplaySecondaryValue(false);
 		}
 
+		g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponChanged");
 		m_hCurrentActiveWeapon = wpn;
 	}
+}
+
+/*
+void CHudAmmo::UpdateVehicleAmmo( C_BasePlayer *player, IClientVehicle *pVehicle )
+{
+	m_hCurrentActiveWeapon = NULL;
+	CBaseEntity *pVehicleEnt = pVehicle->GetVehicleEnt();
+
+	if ( !pVehicleEnt || pVehicle->GetPrimaryAmmoType() < 0 )
+	{
+		SetPaintEnabled(false);
+		SetPaintBackgroundEnabled(false);
+		return;
+	}
+
+	SetPaintEnabled(true);
+	SetPaintBackgroundEnabled(true);
+
+	// get the ammo in our clip
+	int ammo1 = pVehicle->GetPrimaryAmmoClip();
+	int ammo2;
+	if (ammo1 < 0)
+	{
+		// we don't use clip ammo, just use the total ammo count
+		ammo1 = pVehicle->GetPrimaryAmmoCount();
+		ammo2 = 0;
+	}
+	else
+	{
+		// we use clip ammo, so the second ammo is the total ammo
+		ammo2 = pVehicle->GetPrimaryAmmoCount();
+	}
+
+	if (pVehicleEnt == m_hCurrentVehicle)
+	{
+		// same weapon, just update counts
+		SetAmmo(ammo1, true);
+		SetAmmo2(ammo2, true);
+	}
+	else
+	{
+		// diferent weapon, change without triggering
+		SetAmmo(ammo1, false);
+		SetAmmo2(ammo2, false);
+
+		// update whether or not we show the total ammo display
+		if (pVehicle->PrimaryAmmoUsesClips())
+		{
+			SetShouldDisplaySecondaryValue(true);
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponUsesClips");
+		}
+		else
+		{
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponDoesNotUseClips");
+			SetShouldDisplaySecondaryValue(false);
+		}
+
+		g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponChanged");
+		m_hCurrentVehicle = pVehicleEnt;
+	}
+}
+*/
+
+//-----------------------------------------------------------------------------
+// Purpose: called every frame to get ammo info from the weapon
+//-----------------------------------------------------------------------------
+void CHudAmmo::OnThink()
+{
+	m_pPlayer = C_BasePlayer::GetLocalPlayer();
+	if ( m_pPlayer && m_pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+	{
+		SetFgColor( Color( 228, 207, 154, 200 ) );
+	}
+
+	UpdateAmmoDisplays();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: updates the ammo display counts
+//-----------------------------------------------------------------------------
+void CHudAmmo::UpdateAmmoDisplays()
+{
+	C_BasePlayer *player = C_BasePlayer::GetLocalPlayer();
+	
+	UpdatePlayerAmmo( player );
 }
 
 //-----------------------------------------------------------------------------
@@ -162,17 +250,17 @@ void CHudAmmo::SetAmmo(int ammo, bool playAnimation)
 	{
 		if (ammo == 0)
 		{
-			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("PrimaryAmmoEmpty");
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("AmmoEmpty");
 		}
 		else if (ammo < m_iAmmo)
 		{
 			// ammo has decreased
-			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("PrimaryAmmoDecrement");
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("AmmoDecreased");
 		}
 		else
 		{
 			// ammunition has increased
-			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("PrimaryAmmoIncrement");
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("AmmoIncreased");
 		}
 
 		m_iAmmo = ammo;
@@ -190,86 +278,138 @@ void CHudAmmo::SetAmmo2(int ammo2, bool playAnimation)
 	{
 		if (ammo2 == 0)
 		{
-			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("SecondaryAmmoEmpty");
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("Ammo2Empty");
 		}
 		else if (ammo2 < m_iAmmo2)
 		{
 			// ammo has decreased
-			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("SecondaryAmmoDecrement");
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("Ammo2Decreased");
 		}
 		else
 		{
 			// ammunition has increased
-			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("SecondaryAmmoIncrement");
+			g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("Ammo2Increased");
 		}
 
 		m_iAmmo2 = ammo2;
 	}
+
+	SetSecondaryValue(ammo2);
 }
 
-void CHudAmmo::Paint( void )
+//-----------------------------------------------------------------------------
+// Purpose: Displays the secondary ammunition level
+//-----------------------------------------------------------------------------
+class CHudSecondaryAmmo : public CHudNumericDisplay, public CHudElement
 {
-	float alpha = 1.0f;
-	Color fgColor = GetFgColor();
-	fgColor[3] *= alpha;
-	SetFgColor( fgColor );
+	DECLARE_CLASS_SIMPLE( CHudSecondaryAmmo, CHudNumericDisplay );
 
-	int x, y;
+public:
+	CHudSecondaryAmmo( const char *pElementName ) : BaseClass( NULL, "HudAmmoSecondary" ), CHudElement( pElementName )
+	{
+		m_iAmmo = -1;
 
-	if( m_bUsesClips )
-	{
-		x = digit_xpos;
-		y = digit_ypos;
-	}
-	else
-	{
-		x = digit2_xpos;
-		y = digit2_ypos;
+		SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_WEAPONSELECTION | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT );
 	}
 
-	// Assume constant width font
-	int charWidth = vgui::surface()->GetCharacterWidth( m_hNumberFont, '0' );
-
-	int digits = clamp( log10((double)m_iAmmo)+1, 1, 3 );
-	
-	x += ( 3 - digits ) * charWidth;
-
-	// draw primary ammo
-	vgui::surface()->DrawSetTextColor(GetFgColor());
-	PaintNumbers( m_hNumberFont, x, y, m_iAmmo );
-
-	//draw reserve ammo
-	if( m_bUsesClips )
+	void Init( void )
 	{
-		//draw the divider
-		Color c = GetFgColor();
-		vgui::surface()->DrawSetColor(c);
-		vgui::surface()->DrawSetTexture( m_iAdditiveWhiteID );
-		vgui::surface()->DrawTexturedRect( bar_xpos, bar_ypos, bar_xpos + bar_width, bar_ypos + bar_height );
-
-		digits = clamp( log10((double)m_iAmmo2)+1, 1, 3 );
-		x = digit2_xpos + ( 3 - digits ) * charWidth;
-
-		// draw secondary ammo
-		vgui::surface()->DrawSetTextColor(GetFgColor());
-		PaintNumbers( m_hNumberFont, x, digit2_ypos, m_iAmmo2 );
 	}
 
-	//draw the icon
-	C_BaseCombatWeapon *wpn = GetActiveWeapon();
-	if( wpn )
+	void VidInit( void )
 	{
-		int ammoType = wpn->GetPrimaryAmmoType();
+	}
 
-		CHudTexture *icon = gWR.GetAmmoIconFromWeapon( ammoType );
-
-		if( icon )
+	void SetAmmo( int ammo )
+	{
+		if (ammo != m_iAmmo)
 		{
-			float icon_tall = GetTall() - YRES(2);
-			float scale = icon_tall / (float)icon->Height();
-			float icon_wide = ( scale ) * (float)icon->Width();
+			if (ammo == 0)
+			{
+				g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("AmmoSecondaryEmpty");
+			}
+			else if (ammo < m_iAmmo)
+			{
+				// ammo has decreased
+				g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("AmmoSecondaryDecreased");
+			}
+			else
+			{
+				// ammunition has increased
+				g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("AmmoSecondaryIncreased");
+			}
 
-			icon->DrawSelf( icon_xpos, icon_ypos, icon_wide, icon_tall, GetFgColor() );
+			m_iAmmo = ammo;
+		}
+		SetDisplayValue( ammo );
+	}
+
+	void Reset()
+	{
+		// hud reset, update ammo state
+		BaseClass::Reset();
+		m_iAmmo = 0;
+		m_hCurrentActiveWeapon = NULL;
+		SetAlpha( 0 );
+		UpdateAmmoState();
+	}
+
+protected:
+	virtual void OnThink()
+	{
+		// set whether or not the panel draws based on if we have a weapon that supports secondary ammo
+		C_BaseCombatWeapon *wpn = GetActiveWeapon();
+		C_BasePlayer *player = C_BasePlayer::GetLocalPlayer();
+		IClientVehicle *pVehicle = player ? player->GetVehicle() : NULL;
+		if (!wpn || !player || pVehicle)
+		{
+			m_hCurrentActiveWeapon = NULL;
+			SetPaintEnabled(false);
+			SetPaintBackgroundEnabled(false);
+			return;
+		}
+		else
+		{
+			SetPaintEnabled(true);
+			SetPaintBackgroundEnabled(true);
+		}
+
+		UpdateAmmoState();
+	}
+
+	void UpdateAmmoState()
+	{
+		C_BaseCombatWeapon *wpn = GetActiveWeapon();
+		C_BasePlayer *player = C_BasePlayer::GetLocalPlayer();
+
+		if (player && wpn && wpn->UsesSecondaryAmmo())
+		{
+			SetAmmo(player->GetAmmoCount(wpn->GetSecondaryAmmoType()));
+		}
+
+		if ( m_hCurrentActiveWeapon != wpn )
+		{
+			if ( wpn->UsesSecondaryAmmo() )
+			{
+				// we've changed to a weapon that uses secondary ammo
+				if ( player->GetTeamNumber() == TEAM_HIDDEN )
+					g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponUsesSecondaryAmmoHidden");
+				else
+					g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponUsesSecondaryAmmo");
+			}
+			else 
+			{
+				// we've changed away from a weapon that uses secondary ammo
+				g_pClientMode->GetViewportAnimationController()->StartAnimationSequence("WeaponDoesNotUseSecondaryAmmo");
+			}
+			m_hCurrentActiveWeapon = wpn;
 		}
 	}
-}
+
+private:
+	CHandle< C_BaseCombatWeapon > m_hCurrentActiveWeapon;
+	int		m_iAmmo;
+};
+
+DECLARE_HUDELEMENT( CHudSecondaryAmmo );
+

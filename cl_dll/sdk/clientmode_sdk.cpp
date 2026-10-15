@@ -123,11 +123,6 @@ int ClientModeSDKNormal::GetDeathMessageStartHeight( void )
 	return m_pViewport->GetDeathMessageStartHeight();
 }
 
-void ClientModeSDKNormal::FireGameEvent( KeyValues * event)
-{
-	BaseClass::FireGameEvent( event );
-}
-
 
 void ClientModeSDKNormal::PostRenderVGui()
 {

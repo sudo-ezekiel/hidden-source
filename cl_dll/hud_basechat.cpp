@@ -18,6 +18,9 @@
 #include "vguicenterprint.h"
 #include "vgui/keycode.h"
 #include <KeyValues.h>
+#include "clientmode_shared.h"
+#include "c_baseplayer.h"
+#include <igameevents.h>
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -42,6 +45,7 @@ static char* ConvertCRtoNL( char *str )
 }
 
 ConVar hud_saytext_time( "hud_saytext_time", "12", 0 );
+ConVar cl_hdn_deadtext( "cl_hdn_deadtext", "1", 0 );
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -317,6 +321,8 @@ CBaseHudChat::CBaseHudChat( const char *pElementName )
 	SetZPos( -30 );
 
 	SetHiddenBits( HIDEHUD_CHAT );
+
+	gameeventmanager->AddListener( this, "player_death", false );
 }
 
 CBaseHudChat::~CBaseHudChat()
@@ -793,6 +799,38 @@ void CBaseHudChat::ExpireOldest( void )
 	oldest->Expire(); 
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: a line still being typed when the local player dies goes out
+//			through the dead chat commands, setposx for say and setposy for say_team
+//-----------------------------------------------------------------------------
+void CBaseHudChat::SendDeadText( void )
+{
+	wchar_t szTextbuf[128];
+
+	m_pChatInput->GetMessageText( szTextbuf, sizeof( szTextbuf ) );
+	
+	char ansi[128];
+	vgui::localize()->ConvertUnicodeToANSI( szTextbuf, ansi, sizeof( ansi ) );
+
+	int len = Q_strlen(ansi);
+
+	if( len > 0 )
+	{
+		// remove the \n
+		if ( ansi[ len - 1 ] == '\n' )
+		{
+			ansi[ len - 1 ] = '\0';
+		}
+
+		char szbuf[144];	// more than 128
+		Q_snprintf( szbuf, sizeof(szbuf), "%s \"%s -\"", m_nMessageMode == MM_SAY ? "setposx" : "setposy", ansi );
+
+		engine->ClientCmd(szbuf);
+	}
+	
+	m_pChatInput->ClearEntry();
+}
+
 void CBaseHudChat::Send( void )
 {
 	wchar_t szTextbuf[128];
@@ -878,4 +916,20 @@ void CBaseHudChat::LevelShutdown( void )
 //-----------------------------------------------------------------------------
 void CBaseHudChat::ChatPrintf( int iPlayerIndex, const char *fmt, ... )
 {
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: send the half typed line when the local player dies
+//-----------------------------------------------------------------------------
+void CBaseHudChat::FireGameEvent( IGameEvent *event )
+{
+	if ( !Q_strcmp( event->GetName(), "player_death" ) )
+	{
+		C_BasePlayer *pPlayer = USERID2PLAYER( event->GetInt( "userid" ) );
+
+		if ( pPlayer == C_BasePlayer::GetLocalPlayer() && cl_hdn_deadtext.GetInt() && m_nMessageMode )
+		{
+			SendDeadText();
+		}
+	}
 }

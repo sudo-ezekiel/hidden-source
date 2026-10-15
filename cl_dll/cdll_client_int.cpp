@@ -100,7 +100,7 @@ IMatSystemSurface *g_pMatSystemSurface = NULL;
 ISharedGameRules *sharedgamerules = NULL;
 IEngineTrace *enginetrace = NULL;
 IGameUIFuncs *gameuifuncs = NULL;
-IGameEventManager *gameeventmanager = NULL;
+IGameEventManager2 *gameeventmanager = NULL;
 ISoundEmitterSystemBase *soundemitterbase = NULL;
 
 IGameSystem *SoundEmitterSystem();
@@ -401,7 +401,7 @@ int CHLClient::Init( CreateInterfaceFn appSystemFactory, CreateInterfaceFn physi
 		(filesystem = (IFileSystem *)appSystemFactory(FILESYSTEM_INTERFACE_VERSION, NULL)) == NULL ||
 		(random = (IUniformRandomStream *)appSystemFactory(VENGINE_CLIENT_RANDOM_INTERFACE_VERSION, NULL)) == NULL ||
 		(gameuifuncs = (IGameUIFuncs * )appSystemFactory( VENGINE_GAMEUIFUNCS_VERSION, NULL )) == NULL ||
-		(gameeventmanager = (IGameEventManager *)appSystemFactory(INTERFACEVERSION_GAMEEVENTSMANAGER,NULL)) == NULL ||
+		(gameeventmanager = (IGameEventManager2 *)appSystemFactory(INTERFACEVERSION_GAMEEVENTSMANAGER2,NULL)) == NULL ||
 		(soundemitterbase = (ISoundEmitterSystemBase *)appSystemFactory(SOUNDEMITTERSYSTEM_INTERFACE_VERSION, NULL)) == NULL 
 		)
 	{

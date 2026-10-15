@@ -147,6 +147,10 @@ ScrollBar::ScrollBar(Panel *parent, const char *panelName, bool vertical) : Pane
 	Panel::SetPaintEnabled(true);
 	SetButtonPressedScrollValue(20);
 
+	// Hidden
+	SetEnabled( true );
+	SetMouseInputEnabled( true );
+
 	Validate();
 }
 
@@ -211,6 +215,165 @@ void ScrollBar::SetPaintEnabled(bool state)
 	{
 		_slider->SetPaintEnabled( state );
 	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: finds the button or the slider under the cursor (the bar's
+//			parent placed in its own parent) and passes the press on to it
+//-----------------------------------------------------------------------------
+void ScrollBar::OnMousePressed(MouseCode code)
+{
+	int cursorX, cursorY;
+	input()->GetCursorPos( cursorX, cursorY );
+
+	int x, y;
+	GetPos( x, y );
+	int sliderPosX, sliderPosY;
+	_slider->GetPos( sliderPosX, sliderPosY );
+
+	int barX = 0, barY = 0;
+	int sliderX = 0, sliderY = 0;
+
+	Panel *pParent = GetParent();
+	if ( pParent )
+	{
+		int parentX, parentY;
+		pParent->GetPos( parentX, parentY );
+
+		if ( !stricmp( GetName(), "VertScrollBar" ) )
+		{
+			DevMsg( "Vertical\n" );
+
+			int parentWide, parentTall;
+			pParent->GetSize( parentWide, parentTall );
+			int wide, tall;
+			GetSize( wide, tall );
+
+			barX = parentX + parentWide - wide;
+			barY = parentY;
+
+			int buttonWide, buttonTall;
+			_button[0]->GetSize( buttonWide, buttonTall );
+
+			sliderX = barX;
+			sliderY = parentY + buttonTall;
+		}
+		else if ( !stricmp( GetName(), "HorizScrollBar" ) )
+		{
+			DevMsg( "Horizontal\n" );
+
+			barX = parentX;
+			barY = parentY + pParent->GetTall() - GetTall();
+
+			sliderX = parentX + _button[0]->GetWide();
+			sliderY = barY;
+		}
+
+		Panel *pGrandParent = pParent->GetParent();
+		if ( pGrandParent )
+		{
+			int grandParentX, grandParentY;
+			pGrandParent->GetPos( grandParentX, grandParentY );
+
+			barX += grandParentX;
+			barY += grandParentY;
+			sliderX += grandParentX;
+			sliderY += grandParentY;
+		}
+	}
+
+	if ( !stricmp( GetName(), "VertScrollBar" ) )
+	{
+		if ( cursorX < barX )
+			return;
+
+		int buttonWide, buttonTall;
+		_button[0]->GetSize( buttonWide, buttonTall );
+		if ( cursorX > barX + buttonWide )
+			return;
+
+		if ( cursorY >= barY && cursorY <= barY + _button[0]->GetTall() )
+		{
+			// Button's mouse handlers are protected, Panel's are public
+			static_cast< Panel * >( _button[0] )->OnMousePressed( code );
+			m_iPressedPart = 0;
+			input()->SetMouseCapture( GetVPanel() );
+			DevMsg( "Vert top button\n" );
+		}
+
+		if ( cursorY >= barY + GetTall() - _button[1]->GetTall() && cursorY <= barY + GetTall() )
+		{
+			static_cast< Panel * >( _button[1] )->OnMousePressed( code );
+			m_iPressedPart = 1;
+			input()->SetMouseCapture( GetVPanel() );
+			DevMsg( "Vert bottom button\n" );
+		}
+
+		if ( cursorX >= sliderX && cursorX <= sliderX + _slider->GetWide() &&
+			 cursorY >= sliderY && cursorY <= sliderY + _slider->GetTall() )
+		{
+			_slider->OnMousePressed( code );
+			m_iPressedPart = 2;
+			input()->SetMouseCapture( GetVPanel() );
+			m_iPressedX = cursorX;
+			m_iPressedY = cursorY;
+			DevMsg( "Vert slider\n" );
+		}
+	}
+	else if ( !stricmp( GetName(), "HorizScrollBar" ) )
+	{
+		if ( cursorY < barY || cursorY > barY + _button[0]->GetTall() )
+			return;
+
+		if ( cursorX >= barX && cursorX <= barX + _button[0]->GetWide() )
+		{
+			static_cast< Panel * >( _button[0] )->OnMousePressed( code );
+			m_iPressedPart = 0;
+			input()->SetMouseCapture( GetVPanel() );
+			DevMsg( "Horiz left button\n" );
+		}
+
+		if ( cursorX >= barX + GetWide() - _button[1]->GetWide() && cursorX <= barX + GetWide() )
+		{
+			static_cast< Panel * >( _button[1] )->OnMousePressed( code );
+			m_iPressedPart = 1;
+			input()->SetMouseCapture( GetVPanel() );
+			DevMsg( "Horiz right button\n" );
+		}
+
+		if ( cursorY >= sliderY && cursorY <= sliderY + _slider->GetTall() &&
+			 cursorX >= sliderX && cursorX <= sliderX + _slider->GetWide() )
+		{
+			_slider->OnMousePressed( code );
+			m_iPressedPart = 2;
+			input()->SetMouseCapture( GetVPanel() );
+			m_iPressedX = cursorX;
+			m_iPressedY = cursorY;
+			DevMsg( "Horiz slider\n" );
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: passes the release on to the pressed button or slider
+//-----------------------------------------------------------------------------
+void ScrollBar::OnMouseReleased(MouseCode code)
+{
+	if ( m_iPressedPart == 0 || m_iPressedPart == 1 )
+	{
+		static_cast< Panel * >( _button[m_iPressedPart] )->OnMouseReleased( code );
+		input()->SetMouseCapture( NULL );
+	}
+	else if ( m_iPressedPart == 2 )
+	{
+		DevMsg( "Releasing the slider.\n" );
+		_slider->OnMouseReleased( code );
+		input()->SetMouseCapture( NULL );
+	}
+
+	m_iPressedX = -1;
+	m_iPressedY = -1;
+	m_iPressedPart = -1;
 }
 
 //-----------------------------------------------------------------------------

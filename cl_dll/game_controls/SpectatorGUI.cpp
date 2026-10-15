@@ -34,6 +34,8 @@
 #include <imapoverview.h>
 #include <shareddefs.h>
 #include <igameresources.h>
+#include "sdk_gamerules.h"
+#include "hidden/hdn_spectator.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -439,9 +441,7 @@ void CSpectatorGUI::Update()
 	surface()->GetScreenSize(wide, tall);
 	m_pTopBar->GetBounds( bx, by, bwide, btall );
 
-	IGameResources *gr = GameResources();
 	int specmode = GetSpectatorMode();
-	int playernum = GetSpectatorTargetPlayer();
 
 	IViewPortPanel *overview = gViewPortInterface->FindPanelByName( PANEL_OVERVIEW );
 
@@ -473,34 +473,7 @@ void CSpectatorGUI::Update()
 		m_pTopBar->SetPos( 0, 0 );
 	}
 
-	m_pPlayerLabel->SetVisible( (specmode == OBS_MODE_IN_EYE) || (specmode == OBS_MODE_CHASE) );
-
-	// update player name filed, text & color
-
-	if ( playernum > 0 && gr)
-	{
-		Color c = gr->GetTeamColor( gr->GetTeam(playernum) ); // Player's team color
-
-		m_pPlayerLabel->SetFgColor( c );
-		
-		wchar_t playerText[ 80 ], playerName[ 64 ], health[ 10 ];
-		wcscpy( playerText, L"Unable to find #Spec_PlayerItem*" );
-		memset( playerName, 0x0, sizeof( playerName ) * sizeof( wchar_t ) );
-		
-		localize()->ConvertANSIToUnicode( gr->GetPlayerName( playernum ), playerName, sizeof( playerName ) );
-		int iHealth = gr->GetHealth( playernum );
-		if ( iHealth > 0  && gr->IsAlive(playernum) )
-		{
-			_snwprintf( health, sizeof( health ), L"%i", iHealth );
-			localize()->ConstructString( playerText, sizeof( playerText ), localize()->Find( "#Spec_PlayerItem_Team" ), 2, playerName,  health );
-		}
-		else
-		{
-			localize()->ConstructString( playerText, sizeof( playerText ), localize()->Find( "#Spec_PlayerItem" ), 1, playerName );
-		}
-
-		m_pPlayerLabel->SetText( playerText );
-	}
+	m_pPlayerLabel->SetVisible( specmode == OBS_MODE_IN_EYE );
 
 	// update extra info field
 	wchar_t string1[1024];
@@ -524,7 +497,31 @@ void CSpectatorGUI::Update()
 		localize()->ConstructString( string1,sizeof( string1 ), localize()->Find("#Spec_Map" ),1, wMapName );
 	}
 
+	// Hidden: the name of the watched player, or the location of the info_spectator camera
+	const char *pszLocation = NULL;
+
+	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+	if ( pPlayer )
+	{
+		C_BaseEntity *pTarget = pPlayer->GetObserverTarget();
+
+		if ( pTarget->IsPlayer() )
+		{
+			pszLocation = ToBasePlayer( pTarget )->GetPlayerName();
+		}
+		else if ( strcmp( pTarget->GetClassname(), "info_spectator" ) )
+		{
+			pszLocation = static_cast< C_HDNSpectator * >( pTarget )->GetLocation();
+		}
+	}
+
+	if ( !pszLocation )
+		pszLocation = "";
+
+	SetLabelText("cameralocation", pszLocation );
 	SetLabelText("extrainfo", string1 );
+
+	UpdateTimer();
 }
 
 
@@ -589,6 +586,41 @@ void CSpectatorMenu::Update( void )
 }
 
 //-----------------------------------------------------------------------------
+// Purpose: keeps the player combo box on the player being watched
+//-----------------------------------------------------------------------------
+void CSpectatorMenu::OnThink()
+{
+	BaseClass::OnThink();
+
+	IGameResources *gr = GameResources();
+	if ( !gr )
+		return;
+
+	// make sure the player combo box is up to date
+	int playernum = GetSpectatorTargetPlayer();
+	const char *selectedPlayerName = gr->GetPlayerName( playernum );
+	const char *currentPlayerName = "";
+	KeyValues *kv = m_pPlayerList->GetActiveItemUserData();
+	if ( kv )
+	{
+		currentPlayerName = kv->GetString("player");
+	}
+	if ( !FStrEq( currentPlayerName, selectedPlayerName ) )
+	{
+		for ( int i=0; i<m_pPlayerList->GetItemCount(); ++i )
+		{
+			KeyValues *kv = m_pPlayerList->GetItemUserData( i );
+			if ( kv && FStrEq( kv->GetString( "player" ), selectedPlayerName ) )
+			{
+				m_pPlayerList->ActivateItemByRow( i );
+				m_pPlayerList->SetText( selectedPlayerName );
+				break;
+			}
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
 // Purpose: Updates the timer label if one exists
 //-----------------------------------------------------------------------------
 void CSpectatorGUI::UpdateTimer()
@@ -597,7 +629,12 @@ void CSpectatorGUI::UpdateTimer()
 
 	int timer = 0;
 
-	_snwprintf ( szText, sizeof( szText ), L"%d:%02d\n", (timer / 60), (timer % 60) );
+	if ( g_pGameRules )
+	{
+		timer = SDKGameRules()->GetRoundTimerRemain();
+	}
+
+	_snwprintf ( szText, sizeof( szText ), L"%d:%02d", (timer / 60), (timer % 60) );
 
 	szText[63] = 0;
 

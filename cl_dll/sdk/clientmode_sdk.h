@@ -31,7 +31,6 @@ public:
 
 	int				GetDeathMessageStartHeight( void );
 
-	virtual void	FireGameEvent( KeyValues * event);
 	virtual void	PostRenderVGui();
 
 	

@@ -147,6 +147,7 @@ public:
 	void ScreenToLocal(int &x, int &y);
 	void ParentLocalToScreen(int &x, int &y);
 	void MakePopup(bool showTaskbarIcon = true,bool disabled = false);		// turns the panel into a popup window (ie. can draw outside of it's parents space)
+	virtual void OnMove();
 
 	// panel hierarchy
 	virtual Panel *GetParent();
@@ -378,6 +379,8 @@ private:
 	MESSAGE_FUNC( InternalMouseFocusTicked, "MouseFocusTicked" );
 
 	MESSAGE_FUNC( InternalInvalidateLayout, "Invalidate" );
+
+	MESSAGE_FUNC( InternalMove, "Move" );
 
 	virtual void InternalFocusChanged(bool lost);	// called when the focus gets changed
 	virtual void PaintTraverse(bool Repaint, bool allowForce = true);

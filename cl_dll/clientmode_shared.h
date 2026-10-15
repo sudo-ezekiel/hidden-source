@@ -32,7 +32,7 @@ class Panel;
 extern IClientMode *GetClientModeNormal(); // must be implemented
 
 // This class implements client mode functionality common to HL2 and TF2.
-class ClientModeShared : public IClientMode, public IGameEventListener
+class ClientModeShared : public IClientMode, public IGameEventListener2
 {
 // IClientMode overrides.
 public:
@@ -88,7 +88,7 @@ public:
 	virtual vgui::AnimationController *GetViewportAnimationController()
 		{ return m_pViewport->GetAnimationController(); }
 	
-	virtual void FireGameEvent( KeyValues * event);
+	virtual void FireGameEvent( IGameEvent *event );
 			
 protected:
 	CBaseViewport			*m_pViewport;

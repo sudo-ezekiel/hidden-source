@@ -14,6 +14,7 @@
 #include "imessagechars.h"
 #include "inetgraphpanel.h"
 #include "idebugoverlaypanel.h"
+#include "hidden/IMyPanel.h"
 #include <vgui/isurface.h>
 #include <vgui/IVGui.h>
 #include <vgui/IInput.h>
@@ -144,6 +145,10 @@ bool VGui_Startup( CreateInterfaceFn appSystemFactory )
 //-----------------------------------------------------------------------------
 void VGui_CreateGlobalPanels( void )
 {
+	// Hidden: the tutorial menu lives under the GameUI panel
+	VPANEL GameUiDll = enginevgui->GetPanel( PANEL_GAMEUIDLL );
+	mypanel->Create( GameUiDll );
+
 	VPANEL gameParent = enginevgui->GetPanel( PANEL_CLIENTDLL );
 	VPANEL toolParent = enginevgui->GetPanel( PANEL_TOOLS );
 
@@ -173,6 +178,8 @@ void VGui_Shutdown()
 	internalCenterPrint->Destroy();
 	textmessage->Destroy();
 	//console->Destroy();
+
+	mypanel->Destroy();
 
 	if ( g_pClientMode )
 	{

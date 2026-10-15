@@ -22,7 +22,7 @@
 #define MAX_TRAIL_LENGTH	30
 #define OVERVIEW_MAP_SIZE	1024	// an overview map is 1024x1024 pixels
 
-class CMapOverview : public vgui::Panel, public IViewPortPanel, public IGameEventListener
+class CMapOverview : public vgui::Panel, public IViewPortPanel, public IGameEventListener2
 {
 
 	DECLARE_CLASS_SIMPLE( CMapOverview, vgui::Panel );
@@ -73,8 +73,7 @@ public: // IViewPortPanel interface:
 
 public: // IGameEventListener
 
-	virtual void FireGameEvent( KeyValues * event);
-	virtual bool IsServerSide() { return false; };
+	virtual void FireGameEvent( IGameEvent *event );
 
 public:	// VGUI overrides
 
@@ -105,6 +104,12 @@ public:	// IMapOverview Interfaces
 	virtual Vector2D WorldToMap( const Vector &worldpos );
 
 	virtual void SetPlayerPositions(int index, const Vector &position, const QAngle &angle);
+
+	// REBUILD: names from the 2006 SDK's CMapOverview; client.dll's take the player index
+	// (slots 156 to 158, called from Update and DrawMapPlayers)
+	virtual bool CanPlayerBeSeen( int index );
+	virtual bool CanPlayerHealthBeSeen( int index ) { return true; }
+	virtual bool CanPlayerNameBeSeen( int index ) { return true; }
 	
 private:
 	

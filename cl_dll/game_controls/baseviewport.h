@@ -22,10 +22,10 @@ using namespace vgui;
 
 class IBaseFileSystem;
 class IGameUIFuncs;
-class IGameEventManager;
+class IGameEventManager2;
 
 //==============================================================================
-class CBaseViewport : public vgui::EditablePanel, public IViewPort, public IGameEventListener
+class CBaseViewport : public vgui::EditablePanel, public IViewPort, public IGameEventListener2
 {
 	DECLARE_CLASS_SIMPLE( CBaseViewport, vgui::EditablePanel );
 
@@ -44,7 +44,7 @@ public:
 	virtual void CreateDefaultPanels( void );
 	virtual void UpdateAllPanels( void );
 
-	virtual void Start( IGameUIFuncs *pGameUIFuncs, IGameEventManager * pGameEventManager );
+	virtual void Start( IGameUIFuncs *pGameUIFuncs, IGameEventManager2 * pGameEventManager );
 	virtual void SetParent(vgui::VPANEL parent);
 
 	virtual void ReloadScheme(const char *fromFile);
@@ -63,7 +63,7 @@ public:
 	// virtual void ChatInputPosition( int *x, int *y );
 	
 public: // IGameEventListener:
-	void FireGameEvent( KeyValues * event);
+	void FireGameEvent( IGameEvent * event);
 
 
 protected:
@@ -116,7 +116,7 @@ protected:
 
 protected:
 	IGameUIFuncs*		m_GameuiFuncs; // for key binding details
-	IGameEventManager*  m_GameEventManager;
+	IGameEventManager2*  m_GameEventManager;
 	CBackGroundPanel	*m_pBackGround;
 
 	CUtlVector<IViewPortPanel*> m_Panels;

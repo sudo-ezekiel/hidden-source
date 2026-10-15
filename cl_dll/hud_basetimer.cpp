@@ -35,9 +35,13 @@ void CHudBaseTimer::SetSeconds(int seconds)
 
 void CHudBaseTimer::PaintTime(HFont font, int xpos, int ypos, int mins, int secs)
 {
+	// Hidden: the time is drawn as minutes.seconds from the total, so a timer may
+	// set only the seconds (the round timer does)
+	secs += mins * 60;
+
 	surface()->DrawSetTextFont(font);
 	wchar_t unicode[6];
-	swprintf(unicode, L"%d:%.2d", mins, secs);
+	swprintf(unicode, L"%02d.%02d", secs / 60, secs % 60);
 	
 	surface()->DrawSetTextPos(xpos, ypos);
 	for (wchar_t *ch = unicode; *ch != 0; ch++)
