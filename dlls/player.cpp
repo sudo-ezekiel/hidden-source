@@ -2116,7 +2116,7 @@ bool CBasePlayer::StartObserverMode(int mode)
 	//whether to draw the player or not with ShouldDraw
 	//AddEffects( EF_NODRAW );		
 
-	m_iHealth = 1;
+	m_iHealth = 0;		// Hidden: was 1
 	m_lifeState = LIFE_DEAD; // Can't be dead, otherwise movement doesn't work right.
 	pl.deadflag = true;
 
@@ -2125,7 +2125,7 @@ bool CBasePlayer::StartObserverMode(int mode)
 
 bool CBasePlayer::SetObserverMode(int mode, bool ignoreDeadSpecMode)
 {
-	if ( mode < OBS_MODE_NONE || mode > OBS_MODE_ROAMING )
+	if ( mode < OBS_MODE_NONE || mode > OBS_MODE_DEATHCAM )
 		return false;
 
 
@@ -2151,27 +2151,23 @@ bool CBasePlayer::SetObserverMode(int mode, bool ignoreDeadSpecMode)
 	switch ( mode )
 	{
 		case OBS_MODE_NONE:
-		case OBS_MODE_FIXED :
-		case OBS_MODE_DEATHCAM :
 			SetFOV( this, 0 );	// Reset FOV
 			SetViewOffset( vec3_origin );
 			SetMoveType( MOVETYPE_NONE );
 			break;
 
-		case OBS_MODE_CHASE :
+		// Hidden: the fixed cameras and the death cam sit on their target
+		case OBS_MODE_FIXED :
+		case OBS_MODE_DEATHCAM :
+			SetObserverTarget( m_hObserverTarget );
+			SetMoveType( MOVETYPE_NONE );
+			break;
+
 		case OBS_MODE_IN_EYE :	
 			// udpate FOV and viewmodels
 			SetObserverTarget( m_hObserverTarget );	
 			SetMoveType( MOVETYPE_OBSERVER );
 			break;
-			
-		case OBS_MODE_ROAMING :
-			SetFOV( this, 0 );	// Reset FOV
-			SetObserverTarget( m_hObserverTarget );
-			SetViewOffset( vec3_origin );
-			SetMoveType( MOVETYPE_OBSERVER );
-			break;
-
 	}
 
 	CheckObserverSettings();
@@ -2186,7 +2182,7 @@ int CBasePlayer::GetObserverMode()
 
 void CBasePlayer::ForceObserverMode(int mode, bool ignoreDeadSpecMode)
 {
-	int tempMode = OBS_MODE_ROAMING;
+	int tempMode = OBS_MODE_FIXED;
 
 	if ( m_iObserverMode == mode )
 		return;
@@ -2241,12 +2237,12 @@ void CBasePlayer::CheckObserverSettings()
 	// make sure our last mode is valid
 	if ( m_iObserverLastMode < OBS_MODE_FIXED )
 	{
-		m_iObserverLastMode = OBS_MODE_ROAMING;
+		m_iObserverLastMode = OBS_MODE_IN_EYE;
 	}
 
 	// check if our spectating target is still a valid one
 	
-	if (  m_iObserverMode == OBS_MODE_IN_EYE || m_iObserverMode == OBS_MODE_CHASE )
+	if ( m_iObserverMode == OBS_MODE_DEATHCAM || m_iObserverMode == OBS_MODE_IN_EYE || m_iObserverMode == OBS_MODE_FIXED )
 	{
 		if ( !IsValidObserverTarget( m_hObserverTarget.Get() ) )
 		{
@@ -2260,22 +2256,14 @@ void CBasePlayer::CheckObserverSettings()
 			else
 			{
 				// couldn't find new taget, switch to temporary mode
-				if ( mp_forcecamera.GetInt() == 1 )
-				{
-					ForceObserverMode( OBS_MODE_FIXED, true );
-				}
-				else
-				{
-					ForceObserverMode( OBS_MODE_ROAMING, false );
-				}
+				ForceObserverMode( OBS_MODE_FIXED, true );
 			}
 		}
 				
 		CBasePlayer *target = ToBasePlayer( m_hObserverTarget.Get() );
 
-		// for ineye mode we have to copy several data to see exactly the same 
-
-		if ( target && m_iObserverMode == OBS_MODE_IN_EYE )
+		// Hidden: watching a player, copy his FOV, view offset, view angles and position
+		if ( target )
 		{
 			float fFov = target->GetFOV();
 
@@ -2284,21 +2272,13 @@ void CBasePlayer::CheckObserverSettings()
 				SetFOV( this, fFov, 0 );
 			}
 
-			int flagMask =	FL_ONGROUND | FL_DUCKING ;
-
-			int flags = target->GetFlags() & flagMask;
-
-			if ( (GetFlags() & flagMask) != flags )
-			{
-				flags |= GetFlags() & (~flagMask); // keep other flags
-				ClearFlags();
-				AddFlag( flags );
-			}
-
 			if ( target->GetViewOffset() != GetViewOffset()	)
 			{
 				SetViewOffset( target->GetViewOffset() );
 			}
+
+			SnapEyeAngles( target->EyeAngles() );
+			Teleport( &target->GetAbsOrigin(), &target->EyeAngles(), NULL );
 		}
 	}
 }
@@ -2384,43 +2364,11 @@ bool CBasePlayer::SetObserverTarget(CBaseEntity *target)
 	// set new target
 	m_hObserverTarget.Set( target ); 
 
+	// Hidden: move to the target (a camera or a player)
+	Teleport( &target->GetAbsOrigin(), NULL, NULL );
+
 	// reset fov to default
 	SetFOV( this, 0 );	
-	
-	if ( m_iObserverMode == OBS_MODE_ROAMING )
-	{
-		Vector	dir, end;
-		Vector	start = target->EyePosition();
-		
-		AngleVectors( target->EyeAngles(), &dir );
-		VectorNormalize( dir );
-		VectorMA( start, -64.0f, dir, end );
-
-		Ray_t ray;
-		ray.Init( start, end, VEC_DUCK_HULL_MIN	, VEC_DUCK_HULL_MAX );
-
-		trace_t	tr;
-		UTIL_TraceRay( ray, MASK_PLAYERSOLID, target, COLLISION_GROUP_PLAYER_MOVEMENT, &tr );
-
-		JumptoPosition( tr.endpos, target->EyeAngles() );
-	}
-	else if ( m_iObserverMode == OBS_MODE_IN_EYE )
-	{
-		// only update view models in ineye mode
-		if ( target->IsPlayer() )
-		{
-			CBasePlayer * pPlayer = ToBasePlayer( target );
-
-			// copy viewmodels from target 
-			for ( int i = 0; i < MAX_VIEWMODELS; i++ )
-			{
-				m_hObserverViewModel.Set( i, pPlayer->GetViewModel(i) );
-			}
-
-			// set FOV of player we observe
-			SetFOV( this, pPlayer->GetFOV() );	
-		}
-	}
 
 	return true;
 }
@@ -2430,16 +2378,22 @@ bool CBasePlayer::IsValidObserverTarget(CBaseEntity * target)
 	if ( target == NULL )
 		return false;
 
-	// MOD AUTHORS: Add checks on target here or in derived methode
+	// Hidden: the map's spectator cameras are always valid
+	if ( !Q_strcmp( target->GetClassname(), "info_spectator" ) )
+		return true;
 
 	if ( !target->IsPlayer() )	// only track players
 		return false;
 
 	CBasePlayer * player = ToBasePlayer( target );
 
-	/* Don't spec observers or players who haven't picked a class yet
- 	if ( player->IsObserver() )
-		return false;	*/
+	// Hidden: never spectate the Hidden
+	if ( player->GetTeamNumber() == TEAM_HIDDEN )
+		return false;
+
+	// Don't spec observers
+	if ( player->IsObserver() )
+		return false;
 
 	if ( player->IsEffectActive( EF_NODRAW ) ) // don't watch invisible players
 		return false;
@@ -2447,24 +2401,10 @@ bool CBasePlayer::IsValidObserverTarget(CBaseEntity * target)
 	if ( player->m_lifeState == LIFE_RESPAWNABLE ) // target is dead, waiting for respawn
 		return false;
 
+	// Hidden: no watching dead players at all
 	if ( player->m_lifeState == LIFE_DEAD || player->m_lifeState == LIFE_DYING )
-	{
-		if ( (player->m_flDeathTime + DEATH_ANIMATION_TIME ) < gpGlobals->curtime )
-		{
-			return false;	// allow watching until 2 seconds after death to see death animation
-		}
-	}
-		
-	switch ( mp_forcecamera.GetInt() )	// check forcecamera settings
-	{
-		case OBS_ALLOW_ALL	:	break;
-		case OBS_ALLOW_TEAM :	if ( (this->GetTeamNumber() != target->GetTeamNumber()) &&
-									 (this->GetTeamNumber() != TEAM_SPECTATOR) )
-								  return false;
-								break;
-		case OBS_ALLOW_NONE :	return false;
-	}
-	
+		return false;
+
 	return true;	// passed all test
 }
 
@@ -2473,48 +2413,78 @@ CBaseEntity * CBasePlayer::FindNextObserverTarget(bool bReverse)
 	// MOD AUTHORS: Modify the logic of this function if you want to restrict the observer to watching
 	//				only a subset of the players. e.g. Make it check the target's team.
 
-/*	if ( m_flNextFollowTime && m_flNextFollowTime > gpGlobals->time )
-	{
-		return;
-	} 
-
-	m_flNextFollowTime = gpGlobals->time + 0.25;
-	*/	// TODO move outside this function
-
-	int		startIndex;
-	
-	if ( m_hObserverTarget )
-	{
-		// start using last followed player
-		startIndex = m_hObserverTarget->entindex();	
-	}
-	else
+	if ( m_iObserverMode == OBS_MODE_IN_EYE )
 	{
 		// start using own player index
-		startIndex = this->entindex();
-	}
+		int startIndex = this->entindex();
 
-	int	currentIndex = startIndex;
-	int iDir = bReverse ? -1 : 1; 
-	
-	do
-	{
-		currentIndex += iDir;
+		if ( m_hObserverTarget )
+		{
+			// start using last followed player
+			startIndex = m_hObserverTarget->entindex();
+		}
 
-		// Loop through the clients
-  		if (currentIndex > gpGlobals->maxClients)
-  			currentIndex = 1;
-		else if (currentIndex < 1)
-  			currentIndex = gpGlobals->maxClients;
+		// Hidden: the last target may have been a camera
+		if ( startIndex > gpGlobals->maxClients )
+		{
+			startIndex = this->entindex();
+		}
+
+		int	currentIndex = startIndex;
+		int iDir = bReverse ? -1 : 1; 
+		
+		do
+		{
+			currentIndex += iDir;
+
+			// Loop through the clients
+  			if (currentIndex > gpGlobals->maxClients)
+  				currentIndex = 1;
+			else if (currentIndex < 1)
+  				currentIndex = gpGlobals->maxClients;
 
 			CBaseEntity * nextTarget = UTIL_PlayerByIndex( currentIndex );
 
-		if ( IsValidObserverTarget( nextTarget ) )
+			if ( IsValidObserverTarget( nextTarget ) )
+			{
+				return nextTarget;	// found next valid player
+			}
+		} while ( currentIndex != startIndex );
+
+		// Hidden: nobody to watch, go back to the cameras
+		SetObserverMode( OBS_MODE_FIXED, false );
+		m_iObserverMode = OBS_MODE_FIXED;
+	}
+
+	// Hidden: step through the spectator cameras InitialSpawn collected
+	if ( m_iObserverMode == OBS_MODE_FIXED )
+	{
+		if ( m_hObserverTarget )
 		{
-			return nextTarget;	// found next valid player
+			for ( int i = 0; i < m_ObserverTargets.Count(); i++ )
+			{
+				if ( m_hObserverTarget.Get() == m_ObserverTargets[i] )
+				{
+					if ( !bReverse )
+					{
+						if ( i == m_ObserverTargets.Count() - 1 )
+							return m_ObserverTargets[0];
+
+						return m_ObserverTargets[i + 1];
+					}
+
+					if ( i == 0 )
+						return m_ObserverTargets[m_ObserverTargets.Count() - 1];
+
+					return m_ObserverTargets[i - 1];
+				}
+			}
 		}
-	} while ( currentIndex != startIndex );
-		
+
+		if ( m_ObserverTargets.Count() > 0 )
+			return m_ObserverTargets[0];
+	}
+
 	return NULL;
 }
 
