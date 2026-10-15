@@ -502,6 +502,14 @@ public:
 				pModel->collisionGroup = COLLISION_GROUP_DEBRIS;
 			}
 		}
+		else if ( !strcmpi( pKey, "fademindist" ) )
+		{
+			pModel->fadeMinDist = atof(pValue);
+		}
+		else if ( !strcmpi( pKey, "fademaxdist" ) )
+		{
+			pModel->fadeMaxDist = atof(pValue);
+		}
 		else if ( !strcmpi( pKey, "debris" ) )
 		{
 			pModel->collisionGroup = atoi(pValue) > 0 ? COLLISION_GROUP_DEBRIS : COLLISION_GROUP_INTERACTIVE;
@@ -528,7 +536,9 @@ public:
 		pModel->modelName[0] = 0;
 		pModel->offset = vec3_origin;
 		pModel->health = 1;
-		pModel->fadeTime = 20;
+		pModel->fadeTime = 20.0f;
+		pModel->fadeMinDist = 0.0f;
+		pModel->fadeMaxDist = 0.0f;
 		pModel->burstScale = m_defaultBurstScale;
 		pModel->collisionGroup = m_defaultCollisionGroup;
 		pModel->isRagdoll = false;
@@ -809,6 +819,8 @@ void PropBreakableCreateAll( int modelindex, IPhysicsObject *pPhysics, const bre
 
 				breakModel.health = 1;
 				breakModel.fadeTime = RandomFloat(5,10);
+				breakModel.fadeMinDist = 0.0f;
+				breakModel.fadeMaxDist = 0.0f;
 				breakModel.burstScale = params.defBurstScale;
 				breakModel.collisionGroup = COLLISION_GROUP_DEBRIS;
 				breakModel.isRagdoll = false;

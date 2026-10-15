@@ -145,6 +145,10 @@ void Host_Say( edict_t *pEdict, bool teamonly )
 		if ( !pPlayer->CanSpeak() )
 			return;
 
+		// See if the player wants to modify of check the text
+		pPlayer->CheckChatText( p, 127 );	// though the buffer szTemp that p points to is 256, 
+											// chat text is capped to 127 in CheckChatText above
+
 		Assert( STRING( pPlayer->pl.netname ) );
 		bSenderDead = ( pPlayer->m_lifeState != LIFE_ALIVE );
 	}
@@ -153,12 +157,233 @@ void Host_Say( edict_t *pEdict, bool teamonly )
 		bSenderDead = false;
 	}
 
-	const char *pszPrefix = g_pGameRules->GetChatPrefix( teamonly, pPlayer );
+	const char *pszFormat = NULL;
+	const char *pszPrefix = NULL;
+	const char *pszLocation = NULL;
+	if ( g_pGameRules )
+	{
+		pszFormat = g_pGameRules->GetChatFormat( teamonly, pPlayer );
+		pszPrefix = g_pGameRules->GetChatPrefix( teamonly, pPlayer );	
+		pszLocation = g_pGameRules->GetChatLocation( teamonly, pPlayer );
+	}
+
+	const char *pszPlayerName = pPlayer ? pPlayer->GetPlayerName():"Console";
 
 	if ( pszPrefix && strlen( pszPrefix ) > 0 )
-		 Q_snprintf( text,sizeof(text), "%s %s: ", pszPrefix, pPlayer? pPlayer->GetPlayerName():"Console" );
+	{
+		// Hidden: the location goes in brackets after the name
+		if ( pszLocation && strlen( pszLocation ) )
+		{
+			Q_snprintf( text, sizeof(text), "%s %s : (%s) ", pszPrefix, pszPlayerName, pszLocation );
+		}
+		else
+		{
+			Q_snprintf( text, sizeof(text), "%s %s: ", pszPrefix, pszPlayerName );
+		}
+	}
 	else
-		 Q_snprintf( text,sizeof(text), "%s: ", pPlayer? pPlayer->GetPlayerName():"Console" );
+	{
+		Q_snprintf( text, sizeof(text), "%s: ", pszPlayerName );
+	}
+
+	j = sizeof(text) - 2 - strlen(text);  // -2 for /n and null terminator
+	if ( (int)strlen(p) > j )
+		p[j] = 0;
+
+	Q_strncat( text, p, sizeof( text ), COPY_ALL_CHARACTERS );
+	Q_strncat( text, "\n", sizeof( text ), COPY_ALL_CHARACTERS );
+
+	// loop through all players
+	// Start with the first player.
+	// This may return the world in single player if the client types something between levels or during spawn
+	// so check it, or it will infinite loop
+
+	client = NULL;
+	for ( int i = 1; i <= gpGlobals->maxClients; i++ )
+	{
+		client = UTIL_PlayerByIndex( i );
+		if ( !client || !client->edict() )
+			continue;
+		
+		if ( client->edict() == pEdict )
+			continue;
+
+		if ( !(client->IsNetClient()) )	// Not a client ? (should never be true)
+			continue;
+
+		if ( teamonly && g_pGameRules->PlayerCanHearChat( client, pPlayer ) != GR_TEAMMATE )
+			continue;
+
+		if ( !client->CanHearChatFrom( pPlayer ) )
+			continue;
+
+		// Hidden: the living don't hear the dead
+		if ( bSenderDead && client->m_lifeState == LIFE_ALIVE )
+			continue;
+
+		CSingleUserRecipientFilter user( client );
+		user.MakeReliable();
+
+		if ( pszFormat )
+		{
+			UTIL_SayText2Filter( user, pPlayer, true, pszFormat, pszPlayerName, p, pszLocation );
+		}
+		else
+		{
+			UTIL_SayTextFilter( user, text, pPlayer, true );
+		}
+	}
+
+	if ( pPlayer )
+	{
+		// print to the sending client
+		CSingleUserRecipientFilter user( pPlayer );
+		user.MakeReliable();
+
+		if ( pszFormat )
+		{
+			UTIL_SayText2Filter( user, pPlayer, true, pszFormat, pszPlayerName, p, pszLocation );
+		}
+		else
+		{
+			UTIL_SayTextFilter( user, text, pPlayer, true );
+		}
+	}
+
+	// echo to server console
+	// Adrian: Only do this if we're running a dedicated server since we already print to console on the client.
+	if ( engine->IsDedicatedServer() )
+		 Msg( "%s", text );
+
+	Assert( p );
+
+	int userid = 0;
+	const char *networkID = "Console";
+	const char *playerName = "Console";
+	const char *playerTeam = "Console";
+	if ( pPlayer )
+	{
+		userid = pPlayer->GetUserID();
+		networkID = pPlayer->GetNetworkIDString();
+		playerName = pPlayer->GetPlayerName();
+		CTeam *team = pPlayer->GetTeam();
+		if ( team )
+		{
+			playerTeam = team->GetName();
+		}
+	}
+		
+	if ( teamonly )
+		UTIL_LogPrintf( "\"%s<%i><%s><%s>\" say_team \"%s\"\n", playerName, userid, networkID, playerTeam, p );
+	else
+		UTIL_LogPrintf( "\"%s<%i><%s><%s>\" say \"%s\"\n", playerName, userid, networkID, playerTeam, p );
+
+	IGameEvent * event = gameeventmanager->CreateEvent( "player_say" );
+
+	if ( event )
+	{
+		event->SetInt("userid", userid );
+		event->SetString("text", p );
+		event->SetInt("priority", 1 );	// HLTV event priority, not transmitted
+		gameeventmanager->FireEvent( event );
+	}
+}
+
+//// HOST_DSAY
+// Hidden: Host_Say for the dead players, behind the "setposx" and "setposy" commands.
+// It uses the dead chat prefix and goes to everyone who can hear the sender.
+//
+void Host_DSay( edict_t *pEdict, bool teamonly )
+{
+	CBasePlayer *client;
+	int		j;
+	char	*p;
+	char	text[256];
+	char    szTemp[256];
+	const char *cpSay = "setposx";
+	const char *cpSayTeam = "setposy";
+	const char *pcmd = engine->Cmd_Argv(0);
+
+	// We can get a raw string now, without the "say " prepended
+	if ( engine->Cmd_Argc() == 0 )
+		return;
+
+	if ( !stricmp( pcmd, cpSay) || !stricmp( pcmd, cpSayTeam ) )
+	{
+		if ( engine->Cmd_Argc() >= 2 )
+		{
+			p = (char *)engine->Cmd_Args();
+		}
+		else
+		{
+			// say with a blank message, nothing to do
+			return;
+		}
+	}
+	else  // Raw text, need to prepend argv[0]
+	{
+		if ( engine->Cmd_Argc() >= 2 )
+		{
+			Q_snprintf( szTemp,sizeof(szTemp), "%s %s", ( char * )pcmd, (char *)engine->Cmd_Args() );
+		}
+		else
+		{
+			// Just a one word command, use the first word...sigh
+			Q_snprintf( szTemp,sizeof(szTemp), "%s", ( char * )pcmd );
+		}
+		p = szTemp;
+	}
+
+	// make sure the text has vlaid content
+	p = CheckChatText( p );
+
+	if ( !p )
+		return;
+
+	CBasePlayer *pPlayer = NULL;
+	if ( pEdict )
+	{
+		pPlayer = ((CBasePlayer *)CBaseEntity::Instance( pEdict ));
+
+		Assert( pPlayer );
+
+		if ( !pPlayer->CanSpeak() )
+			return;
+
+		// See if the player wants to modify of check the text
+		pPlayer->CheckChatText( p, 127 );	// though the buffer szTemp that p points to is 256, 
+											// chat text is capped to 127 in CheckChatText above
+
+		Assert( STRING( pPlayer->pl.netname ) );
+	}
+
+	const char *pszFormat = NULL;
+	const char *pszPrefix = NULL;
+	const char *pszLocation = NULL;
+	if ( g_pGameRules )
+	{
+		pszFormat = g_pGameRules->GetChatFormat( teamonly, pPlayer );
+		pszPrefix = g_pGameRules->GetDeadChatPrefix( teamonly, pPlayer );	
+		pszLocation = g_pGameRules->GetChatLocation( teamonly, pPlayer );
+	}
+
+	const char *pszPlayerName = pPlayer ? pPlayer->GetPlayerName():"Console";
+
+	if ( pszPrefix && strlen( pszPrefix ) > 0 )
+	{
+		if ( pszLocation && strlen( pszLocation ) )
+		{
+			Q_snprintf( text, sizeof(text), "%s %s : (%s) ", pszPrefix, pszPlayerName, pszLocation );
+		}
+		else
+		{
+			Q_snprintf( text, sizeof(text), "%s %s: ", pszPrefix, pszPlayerName );
+		}
+	}
+	else
+	{
+		Q_snprintf( text, sizeof(text), "%s: ", pszPlayerName );
+	}
 
 	j = sizeof(text) - 2 - strlen(text);  // -2 for /n and null terminator
 	if ( (int)strlen(p) > j )
@@ -194,7 +419,14 @@ void Host_Say( edict_t *pEdict, bool teamonly )
 		CSingleUserRecipientFilter user( client );
 		user.MakeReliable();
 
-		UTIL_SayTextFilter( user, text, pPlayer, true );
+		if ( pszFormat )
+		{
+			UTIL_SayText2Filter( user, pPlayer, true, pszFormat, pszPlayerName, p, pszLocation );
+		}
+		else
+		{
+			UTIL_SayTextFilter( user, text, pPlayer, true );
+		}
 	}
 
 	if ( pPlayer )
@@ -203,7 +435,14 @@ void Host_Say( edict_t *pEdict, bool teamonly )
 		CSingleUserRecipientFilter user( pPlayer );
 		user.MakeReliable();
 
-		UTIL_SayTextFilter( user, text, pPlayer, true );
+		if ( pszFormat )
+		{
+			UTIL_SayText2Filter( user, pPlayer, true, pszFormat, pszPlayerName, p, pszLocation );
+		}
+		else
+		{
+			UTIL_SayTextFilter( user, text, pPlayer, true );
+		}
 	}
 
 	// echo to server console
@@ -233,8 +472,17 @@ void Host_Say( edict_t *pEdict, bool teamonly )
 		UTIL_LogPrintf( "\"%s<%i><%s><%s>\" say_team \"%s\"\n", playerName, userid, networkID, playerTeam, p );
 	else
 		UTIL_LogPrintf( "\"%s<%i><%s><%s>\" say \"%s\"\n", playerName, userid, networkID, playerTeam, p );
-}
 
+	IGameEvent * event = gameeventmanager->CreateEvent( "player_say" );
+
+	if ( event )
+	{
+		event->SetInt("userid", userid );
+		event->SetString("text", p );
+		event->SetInt("priority", 1 );	// HLTV event priority, not transmitted
+		gameeventmanager->FireEvent( event );
+	}
+}
 
 void ClientPrecache( void )
 {
@@ -622,12 +870,51 @@ void CC_Player_Buddha( void )
 }
 static ConCommand buddha("buddha", CC_Player_Buddha, "Toggle.  Player takes damage but won't die. (Shows red cross when health is zero)", FCVAR_CHEAT);
 
+#define TALK_INTERVAL 0.66 // min time between say commands from a client
+
+// Hidden: "setposx" and "setposy" are say and say_team for the dead players (see Host_DSay).
+// The names and the help text hide what they do.
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+void CC_setpos_x( void )
+{
+	CBasePlayer *pPlayer = ToBasePlayer( UTIL_GetCommandClient() ); 
+	if (pPlayer )
+	{
+		if (( pPlayer->LastTimePlayerTalked() + TALK_INTERVAL ) < gpGlobals->curtime) 
+		{
+			Host_DSay( pPlayer->edict(), 0 );
+			pPlayer->NotePlayerTalked();
+		}
+	}
+	else
+	{
+		Host_DSay( NULL, 0 );
+	}
+}
+static ConCommand setposx("setposx", CC_setpos_x, "Move player to specified origin (must have sv_cheats).");
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+void CC_setpos_y( void )
+{
+	CBasePlayer *pPlayer = ToBasePlayer( UTIL_GetCommandClient() ); 
+	if (pPlayer)
+	{
+		if (( pPlayer->LastTimePlayerTalked() + TALK_INTERVAL ) < gpGlobals->curtime) 
+		{
+			Host_DSay( pPlayer->edict(), 1 );
+			pPlayer->NotePlayerTalked();
+		}
+	}
+}
+static ConCommand setposy("setposy", CC_setpos_y, "Move player to specified origin (must have sv_cheats).");
+
 // Hidden: "setposz" switches an I.R.I.S. player to another model body and skin; the name
 // and the help text hide what it does.
 void CC_setpos_z( void );
 static ConCommand setposz("setposz", CC_setpos_z, "Move player to specified origin (must have sv_cheats).");
 
-#define TALK_INTERVAL 0.66 // min time between say commands from a client
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 void CC_Player_Say( void )

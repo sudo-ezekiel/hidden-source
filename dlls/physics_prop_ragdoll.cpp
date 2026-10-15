@@ -20,6 +20,7 @@
 #include "AI_Criteria.h"
 #include "ragdoll_shared.h"
 #include "hierarchy.h"
+#include "gib.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -50,6 +51,8 @@ const float ATTACHED_DAMPING_SCALE = 50.0f;
 //-----------------------------------------------------------------------------
 LINK_ENTITY_TO_CLASS( physics_prop_ragdoll, CRagdollProp );
 LINK_ENTITY_TO_CLASS( prop_ragdoll, CRagdollProp );
+// Hidden: player corpses, which the Hidden can feed on or gib (see CreateServerCorpseRagdoll)
+LINK_ENTITY_TO_CLASS( corpse_ragdoll, CRagdollProp );
 EXTERN_SEND_TABLE(DT_Ragdoll)
 
 IMPLEMENT_SERVERCLASS_ST(CRagdollProp, DT_Ragdoll)
@@ -177,6 +180,8 @@ void CRagdollProp::Spawn( void )
 	{
 		AddEFlags( EFL_NO_DISSOLVE );
 	}
+
+	m_iHealth = 25;
 }
 
 void CRagdollProp::SetSourceClassName( const char *pClassname )
@@ -249,6 +254,7 @@ CRagdollProp::CRagdollProp( void )
 	m_allAsleep = false;
 	m_flFadeScale = 1;
 	m_flDefaultFadeScale = 1;
+	m_iHealth = 25;
 }
 
 CRagdollProp::~CRagdollProp( void )
@@ -264,6 +270,18 @@ void CRagdollProp::Precache( void )
 int CRagdollProp::ObjectCaps()
 {
 	return BaseClass::ObjectCaps() | FCAP_WCEDIT_POSITION;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: a player using a ragdoll picks it up
+//-----------------------------------------------------------------------------
+void CRagdollProp::Use( CBaseEntity *pActivator, CBaseEntity *pCaller, USE_TYPE useType, float value )
+{
+	CBasePlayer *pPlayer = ToBasePlayer( pActivator );
+	if ( pPlayer )
+	{
+		pPlayer->PickupObject( this, true );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1042,12 +1060,12 @@ bool CRagdollProp::IsFading()
 
 void CRagdollProp::SetHealth( int iHealth )
 {
-	m_iRagdollHealth += iHealth;
+	m_iHealth += iHealth;
 }
 
 int CRagdollProp::GetHealth( void )
 {
-	return m_iRagdollHealth;
+	return m_iHealth;
 }
 
 void CRagdollProp::FadeOutThink(void) 
@@ -1272,8 +1290,166 @@ CBaseEntity *CreateServerRagdoll( CBaseAnimating *pAnimating, int forceBone, con
 			pPhysics->ApplyForceCenter( info.GetDamageForce() * pPhysics->GetMass() * massScale );
 		}
 	}
+	// REBUILD: Hidden removed the InitRagdoll call for every other kind of damage; players get
+	// their ragdolls from CreateServerCorpseRagdoll instead.
+
+	// Are we dissolving?
+	if ( pAnimating->IsDissolving() )
+	{
+		pRagdoll->TransferDissolveFrom( pAnimating );
+	}
+	else if ( bUseLRURetirement )
+	{
+		pRagdoll->AddSpawnFlags( SF_RAGDOLLPROP_USE_LRU_RETIREMENT );
+		s_RagdollLRU.MoveToTopOfLRU( pRagdoll );
+	}
+
+	// Tracker 22598:  If we don't set the OBB mins/maxs to something valid here, then the client will have a zero sized hull
+	//  for the ragdoll for one frame until Vphysics updates the real obb bounds after the first simulation frame.  Having
+	//  a zero sized hull makes the ragdoll think it should be faded/alpha'd to zero for a frame, so you get a blink where
+	//  the ragdoll doesn't draw initially.
+	Vector mins, maxs;
+	mins = pAnimating->CollisionProp()->OBBMins();
+	maxs = pAnimating->CollisionProp()->OBBMaxs();
+	pRagdoll->CollisionProp()->SetCollisionBounds( mins, maxs );
+
+	return pRagdoll;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: a player's corpse. Like CreateServerRagdoll, but a big hit (over 100 damage
+//			to an IRIS, or any blast) tears the body apart into gibs and a torso ragdoll.
+//-----------------------------------------------------------------------------
+CBaseEntity *CreateServerCorpseRagdoll( CBaseAnimating *pAnimating, int forceBone, const CTakeDamageInfo &info, int collisionGroup, bool bUseLRURetirement )
+{
+	SyncAnimatingWithPhysics( pAnimating );
+
+	CRagdollProp *pRagdoll = (CRagdollProp *)CBaseEntity::CreateNoSpawn( "corpse_ragdoll", pAnimating->GetAbsOrigin(), vec3_angle, NULL );
+	pRagdoll->CopyAnimationDataFrom( pAnimating );
+
+	pRagdoll->InitRagdollAnimation();
+	matrix3x4_t pBoneToWorld[MAXSTUDIOBONES], pBoneToWorldNext[MAXSTUDIOBONES];
+	
+	const float dt = 0.1f;
+
+	// NOTE: This currently is only necessary to prevent manhacks from
+	// colliding with server ragdolls they kill
+	pRagdoll->SetKiller( info.GetInflictor() );
+	pRagdoll->SetSourceClassName( pAnimating->GetClassname() );
+
+	// UNDONE: Extract velocity from bones via animation (like we do on the client)
+	// UNDONE: For now, just move each bone by the total entity velocity if set.
+	pAnimating->SetupBones( pBoneToWorld, BONE_USED_BY_ANYTHING );
+	memcpy( pBoneToWorldNext, pBoneToWorld, sizeof(pBoneToWorld) );
+	Vector vel = pAnimating->GetAbsVelocity();
+	if ( vel.LengthSqr() > 0 )
+	{
+		int numbones = pAnimating->GetModelPtr()->numbones;
+		for ( int i = 0; i < numbones; i++ )
+		{
+			Vector pos;
+			MatrixGetColumn( pBoneToWorldNext[i], 3, pos );
+			pos += vel * dt;
+			MatrixSetColumn( pos, 3, pBoneToWorldNext[i] );
+		}
+	}
+
+	// Is this a vehicle / NPC collision?
+	if ( (info.GetDamageType() & DMG_VEHICLE) && pAnimating->MyNPCPointer() )
+	{
+		// init the ragdoll with no forces
+		pRagdoll->InitRagdoll( vec3_origin, -1, vec3_origin, pBoneToWorld, pBoneToWorldNext, dt, collisionGroup, true );
+
+		// apply vehicle forces
+		// Get a list of bones with hitboxes below the plane of impact
+		int boxList[128];
+		Vector normal(0,0,-1);
+		int count = pAnimating->GetHitboxesFrontside( boxList, ARRAYSIZE(boxList), normal, DotProduct( normal, info.GetDamagePosition() ) );
+		
+		// distribute force over mass of entire character
+		float massScale = Studio_GetMass(pAnimating->GetModelPtr());
+		massScale = clamp( massScale, 1, 1e4 );
+		massScale = 1 / massScale;
+
+		// distribute the force
+		// BUGBUG: This will hit the same bone twice if it has two hitboxes!!!!
+		ragdoll_t *pRagInfo = pRagdoll->GetRagdoll();
+		for ( int i = 0; i < count; i++ )
+		{
+			int physBone = pAnimating->GetPhysicsBone( pAnimating->GetHitboxBone( boxList[i] ) );
+			IPhysicsObject *pPhysics = pRagInfo->list[physBone].pObject;
+			pPhysics->ApplyForceCenter( info.GetDamageForce() * pPhysics->GetMass() * massScale );
+		}
+	}
+	else if ( ( pAnimating->GetTeamNumber() != TEAM_HIDDEN && info.GetDamage() > 100 ) || info.GetDamageType() == DMG_BLAST )
+	{
+		DevMsg( 1, "hitting for over 100 damage\n" );
+
+		// Throw the pieces away from the attacker
+		CTakeDamageInfo gibInfo = info;
+		Vector vecDir = info.GetAttacker()->EyePosition();
+		VectorNormalize( vecDir );
+		gibInfo.SetDamage( 50 );
+		CalculateMeleeDamageForce( &gibInfo, vecDir, pAnimating->GetAbsOrigin() );
+
+		int iGibSet = random->RandomInt( 1, 3 );
+		CBasePlayer *pPlayer = ToBasePlayer( pAnimating );
+
+		UTIL_BloodSpray( pAnimating->GetAbsOrigin(), vecDir, BLOOD_COLOR_RED, 10, FX_BLOODSPRAY_ALL );
+
+		// The ragdoll becomes a torso; the rest flies off as gibs
+		switch ( iGibSet )
+		{
+		case 3:
+			pRagdoll->SetModel( "models/gibs/iristorso_3.mdl" );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs2.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs3.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs4.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs6.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs7.mdl", 10 );
+			break;
+
+		case 2:
+			pRagdoll->SetModel( "models/gibs/iristorso_2.mdl" );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs2.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs4.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs5.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs6.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs7.mdl", 10 );
+			break;
+
+		default:
+			pRagdoll->SetModel( "models/gibs/iristorso_1.mdl" );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs1.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs2.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs3.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs3.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs4.mdl", 10 );
+			CGib::SpawnSpecificGibs( pAnimating, 1, 750, 1500, "models/gibs/iris_gibs6.mdl", 10 );
+			break;
+		}
+
+		// Match the torso skin to the player's class
+		if ( pPlayer->GetClass() == 0 )
+		{
+			pRagdoll->m_nSkin = 2;
+		}
+		else
+		{
+			pRagdoll->m_nSkin = 1;
+		}
+
+		pRagdoll->InitRagdoll( gibInfo.GetDamageForce(), forceBone, gibInfo.GetDamagePosition(), pBoneToWorld, pBoneToWorldNext, dt, collisionGroup, true );
+
+		// A torn up corpse has less left to feed on
+		pRagdoll->SetHealth( -25 );
+	}
 	else
 	{
+		DevMsg( 1, "standard hit\n" );
 		pRagdoll->InitRagdoll( info.GetDamageForce(), forceBone, info.GetDamagePosition(), pBoneToWorld, pBoneToWorldNext, dt, collisionGroup, true );
 	}
 

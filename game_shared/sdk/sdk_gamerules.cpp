@@ -32,13 +32,14 @@
 #include "tier0/memdbgon.h"
 
 
-#ifndef CLIENT_DLL
-
 ConVar mp_roundtime( "mp_roundtime", "240", FCVAR_REPLICATED | FCVAR_NOTIFY, "length of a round in seconds" );
 ConVar hdn_hiddenrounds( "hdn_hiddenrounds", "5", FCVAR_REPLICATED | FCVAR_NOTIFY, "0 is unlimited" );
 ConVar hdn_radio_limit( "hdn_radio_limit", "5", FCVAR_REPLICATED | FCVAR_NOTIFY, "time limit, in seconds, between radio messages / taunts", true, 0, false, 0, NULL );
 ConVar hdn_deathnotices( "hdn_deathnotices", "0", FCVAR_REPLICATED | FCVAR_NOTIFY, "display death notices" );
 ConVar hdn_jointime( "hdn_jointime", "15", FCVAR_REPLICATED | FCVAR_NOTIFY, "delay, in seconds, before attempting to start the first round after a map change" );
+
+#ifndef CLIENT_DLL
+
 ConVar hdn_limitbombs( "hdn_limitbombs", "1", FCVAR_REPLICATED | FCVAR_NOTIFY, "limits the number of hidden bombs if enabled" );
 
 extern ConVar mp_chattime;
@@ -1142,13 +1143,24 @@ IMPLEMENT_NETWORKCLASS_ALIASED( SDKGameRulesProxy, DT_SDKGameRulesProxy )
 		return BaseClass::ClientConnected( pEntity, pszName, pszAddress, reject, maxrejectlen );
 	}
 
-	int CSDKGameRules::GetRoundTimerRemain( void )
-	{
-		if ( m_fStart < 0 )
-			return 0;
+#endif
 
-		return m_iDuration - (int)( gpGlobals->curtime - m_fStart );
-	}
+int CSDKGameRules::GetRoundTimerRemain( void )
+{
+	if ( m_fStart < 0 )
+		return 0;
+
+	return m_iDuration - (int)( gpGlobals->curtime - m_fStart );
+}
+
+#ifdef CLIENT_DLL
+
+bool CSDKGameRules::IsCharacterTaken( int iCharacter )
+{
+	return m_bPlayer[iCharacter];
+}
+
+#else
 
 	bool CSDKGameRules::IsRoundOver( void )
 	{

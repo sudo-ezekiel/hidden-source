@@ -1386,7 +1386,11 @@ void CBaseEntity::PhysicsCheckWaterTransition( void )
 	if ( cont & MASK_WATER )
 	{
 		if (oldcont == CONTENTS_EMPTY)
-		{	
+		{
+#ifndef CLIENT_DLL
+			Splash();
+#endif // !CLIENT_DLL
+
 			// just crossed into water
 			EmitSound( "BaseEntity.EnterWater" );
 
