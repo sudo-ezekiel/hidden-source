@@ -59,6 +59,8 @@ ConVar func_breakdmg_bullet( "func_breakdmg_bullet", "0.5" );
 ConVar func_breakdmg_club( "func_breakdmg_club", "1.5" );
 ConVar func_breakdmg_explosive( "func_breakdmg_explosive", "1.25" );
 
+ConVar sv_turbophysics( "sv_turbophysics", "0", 0, "Turns on turbo physics" );
+
 //-----------------------------------------------------------------------------
 // Purpose: Breakable objects take different levels of damage based upon the damage type.
 //			This isn't contained by CBaseProp, because func_breakables use it as well.
@@ -1048,7 +1050,25 @@ void CBreakableProp::Event_Killed( const CTakeDamageInfo &info )
 		VPhysicsTakeDamage( info );
 	}
 	Break( info.GetInflictor(), info );
-	BaseClass::Event_Killed( info );
+
+	// Hidden: a broken prop is hidden rather than removed, so CBaseEntity::Reset can bring it
+	// back for the next round. Same steps as CPhysicsPropRespawnable::Event_Killed.
+	PhysCleanupFrictionSounds( this );
+
+	VPhysicsDestroyObject();
+
+	CBaseEntity::PhysicsRemoveTouchedList( this );
+	CBaseEntity::PhysicsRemoveGroundList( this );
+	DestroyAllDataObjects();
+
+	AddEffects( EF_NODRAW );
+
+	if ( IsOnFire() || IsDissolving() )
+	{
+		UTIL_Remove( GetEffectEntity() );
+	}
+
+	SetContextThink( NULL, 0, "PROP_CLEARFLAGS" );
 }
 
 //-----------------------------------------------------------------------------
@@ -1285,6 +1305,22 @@ IPhysicsObject *CBreakableProp::GetRootPhysicsObjectForBreak()
 
 void CBreakableProp::Break( CBaseEntity *pBreaker, const CTakeDamageInfo &info )
 {
+	IGameEvent * event = gameeventmanager->CreateEvent( "break_prop" );
+
+	if ( event )
+	{
+		if ( pBreaker && pBreaker->IsPlayer() )
+		{
+			event->SetInt( "userid", ToBasePlayer( pBreaker )->GetUserID() );
+		}
+		else
+		{
+			event->SetInt( "userid", 0 );
+		}
+		event->SetInt( "entindex", entindex() );
+		gameeventmanager->FireEvent( event );
+	}
+
 	m_takedamage = DAMAGE_NO;
 	m_OnBreak.FireOutput( pBreaker, this );
 
@@ -2994,7 +3030,8 @@ void CBasePropDoor::CalcDoorSounds()
 		{
 			// Open / close / move sounds are looked up by skin index.
 			char szSkin[80];
-			Q_snprintf( szSkin, sizeof( szSkin ), "skin%d", m_nSkin );
+			int skin = m_nSkin;	// Hidden: as in Valve's later SDK; a network var cannot go through "..."
+			Q_snprintf( szSkin, sizeof( szSkin ), "skin%d", skin );
 			KeyValues *pkvSkinData = pkvDoorSounds->FindKey( szSkin );
 			if ( pkvSkinData )
 			{
@@ -4649,6 +4686,23 @@ class CPhysicsPropMultiplayer : public CPhysicsProp, public IMultiplayerPhysics
 	float	GetMass() { return m_fMass; }
 	bool	IsAsleep() { return !m_bAwake; }
 
+	virtual void VPhysicsUpdate( IPhysicsObject *pPhysics )
+	{
+		BaseClass::VPhysicsUpdate( pPhysics );
+
+		if ( sv_turbophysics.GetBool() )
+		{
+			if ( m_bAwake )
+			{
+				SetCollisionGroup( COLLISION_GROUP_PUSHAWAY );
+			}
+			else
+			{
+				SetCollisionGroup( COLLISION_GROUP_NONE );
+			}
+		}
+	}
+
 	virtual void Spawn( void )
 	{
 		BaseClass::Spawn();
@@ -4701,3 +4755,109 @@ IMPLEMENT_SERVERCLASS_ST( CPhysicsPropMultiplayer, DT_PhysicsPropMultiplayer )
 	SendPropInt( SENDINFO( m_iPhysicsMode ), 2, SPROP_UNSIGNED ),
 	SendPropFloat( SENDINFO( m_fMass ), 0, SPROP_NOSCALE ),
 END_SEND_TABLE()
+
+#define RESPAWNABLE_PROP_DEFAULT_TIME 60.0f
+
+// Valve's HL2MP respawning physics prop (mid-2005 SDK)
+class CPhysicsPropRespawnable : public CPhysicsProp
+{
+	DECLARE_CLASS( CPhysicsPropRespawnable, CPhysicsProp );
+	DECLARE_DATADESC();
+
+public:
+
+	CPhysicsPropRespawnable();
+
+	virtual void Spawn( void );
+	virtual void Event_Killed( const CTakeDamageInfo &info );
+
+	void	Materialize( void );
+
+private:
+
+	Vector m_vOriginalSpawnOrigin;
+	QAngle m_vOriginalSpawnAngles;
+
+	Vector m_vOriginalMins;
+	Vector m_vOriginalMaxs;
+
+	float m_flRespawnTime;
+};
+
+LINK_ENTITY_TO_CLASS( prop_physics_respawnable, CPhysicsPropRespawnable );
+
+BEGIN_DATADESC( CPhysicsPropRespawnable )
+	DEFINE_THINKFUNC( Materialize ),
+	DEFINE_KEYFIELD( m_flRespawnTime, FIELD_FLOAT, "RespawnTime" ),
+END_DATADESC()
+
+CPhysicsPropRespawnable::CPhysicsPropRespawnable( void )
+{
+	m_flRespawnTime = 0.0f;
+}
+
+void CPhysicsPropRespawnable::Spawn( void )
+{
+	BaseClass::Spawn();
+
+	m_vOriginalSpawnOrigin = GetAbsOrigin();
+	m_vOriginalSpawnAngles = GetAbsAngles();
+
+	m_vOriginalMins = CollisionProp()->OBBMins();
+	m_vOriginalMaxs = CollisionProp()->OBBMaxs();
+
+	if ( m_flRespawnTime == 0.0f )
+	{
+		m_flRespawnTime = RESPAWNABLE_PROP_DEFAULT_TIME;
+	}
+}
+
+void CPhysicsPropRespawnable::Event_Killed( const CTakeDamageInfo &info )
+{
+	IPhysicsObject *pPhysics = VPhysicsGetObject();
+	if ( pPhysics && !pPhysics->IsMoveable() )
+	{
+		pPhysics->EnableMotion( true );
+		VPhysicsTakeDamage( info );
+	}
+
+	Break( info.GetInflictor(), info );
+
+	PhysCleanupFrictionSounds( this );
+
+	VPhysicsDestroyObject();
+
+	CBaseEntity::PhysicsRemoveTouchedList( this );
+	CBaseEntity::PhysicsRemoveGroundList( this );
+	DestroyAllDataObjects();
+
+	AddEffects( EF_NODRAW );
+
+	if ( IsOnFire() || IsDissolving() )
+	{
+		UTIL_Remove( GetEffectEntity() );
+	}
+
+	Teleport( &m_vOriginalSpawnOrigin, &m_vOriginalSpawnAngles, NULL );
+
+	SetContextThink( NULL, 0, "PROP_CLEARFLAGS" );
+
+	SetThink( &CPhysicsPropRespawnable::Materialize );
+	SetNextThink( gpGlobals->curtime + m_flRespawnTime );
+}
+
+void CPhysicsPropRespawnable::Materialize( void )
+{
+	trace_t tr;
+	UTIL_TraceHull( m_vOriginalSpawnOrigin, m_vOriginalSpawnOrigin, m_vOriginalMins, m_vOriginalMaxs, MASK_SOLID, this, COLLISION_GROUP_NONE, &tr );
+
+	if ( tr.startsolid || tr.allsolid )
+	{
+		//Try again in a second.
+		SetNextThink( gpGlobals->curtime + 1.0f );
+		return;
+	}
+
+	RemoveEffects( EF_NODRAW );
+	Spawn();
+}
