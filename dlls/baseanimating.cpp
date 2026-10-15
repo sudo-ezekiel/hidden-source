@@ -725,7 +725,10 @@ void CBaseAnimating::ResetSequenceInfo ( )
 	m_nResetEventsParity = ( m_nResetEventsParity+1 ) & EF_PARITY_MASK;
 
 	// FIXME: why is this called here?  Nothing should have changed to make this nessesary
-	SetEventIndexForSequence( GetModelPtr()->pSeqdesc( GetSequence() ) );
+	if ( GetModelPtr() )
+	{
+		SetEventIndexForSequence( GetModelPtr()->pSeqdesc( GetSequence() ) );
+	}
 }
 
 //=========================================================
@@ -2228,7 +2231,17 @@ void CBaseAnimating::InitBoneControllers ( void ) // FIXME: rename
 	if (!pStudioHdr)
 		return;
 
-	for (i = 0; i < pStudioHdr->numbonecontrollers; i++)
+	int nBoneControllerCount = pStudioHdr->numbonecontrollers;	
+	if ( nBoneControllerCount > NUM_BONECTRLS )
+	{
+		nBoneControllerCount = NUM_BONECTRLS;
+
+#ifdef _DEBUG
+		Warning( "Model %s has too many bone controllers! (Max %d allowed)\n", pStudioHdr->name, NUM_BONECTRLS );
+#endif
+	}
+
+	for (i = 0; i < nBoneControllerCount; i++)
 	{
 		SetBoneController( i, 0.0 );
 	}
