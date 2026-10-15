@@ -66,6 +66,8 @@ class IMultiplayerPhysics
 {
 public:
 	virtual int GetMultiplayerPhysicsMode() = 0;
+	virtual float	GetMass() = 0;
+	virtual bool	IsAsleep() = 0;
 };
 
 #define PHYSICS_MULTIPLAYER_AUTODETECT	0	// use multiplayer physics mode as defined in model prop data
