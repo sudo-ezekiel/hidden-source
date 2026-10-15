@@ -19,7 +19,7 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
-#ifdef CSTRIKE_DLL
+#if defined( CSTRIKE_DLL ) || defined( SDK_DLL )
 	ConVar cl_righthand( "cl_righthand", "1", FCVAR_ARCHIVE, "Use right-handed view models." );
 #endif
 
@@ -162,7 +162,7 @@ bool C_BaseViewModel::Interpolate( float currentTime )
 
 inline bool C_BaseViewModel::ShouldFlipViewModel()
 {
-#ifdef CSTRIKE_DLL
+#if defined( CSTRIKE_DLL ) || defined( SDK_DLL )
 	// If cl_righthand is set, then we want them all right-handed.
 	CBaseCombatWeapon *pWeapon = m_hWeapon.Get();
 	if ( pWeapon )
@@ -242,6 +242,11 @@ int C_BaseViewModel::DrawModel( int flags )
 		materials->CullMode( MATERIAL_CULLMODE_CW );
 
 	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+
+	// Hidden: nothing when the local player observes this view model's owner (the cull mode is left as it is)
+	if ( pPlayer && pPlayer->GetObserverTarget() == GetOwner() )
+		return 0;
+
 	int ret;
 	// If the local player's overriding the viewmodel rendering, let him do it
 	if ( pPlayer && pPlayer->IsOverridingViewmodel() )

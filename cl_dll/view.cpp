@@ -35,7 +35,7 @@
 #include <vgui_controls/Controls.h>
 #include <vgui/ISurface.h>
 
-#if defined( HL2_CLIENT_DLL ) || defined( CSTRIKE_DLL )
+#if defined( HL2_CLIENT_DLL ) || defined( CSTRIKE_DLL ) || defined( SDK_DLL )	// Hidden: SDK_DLL too
 #define USE_MONITORS
 #endif
 

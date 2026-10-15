@@ -50,6 +50,12 @@ static char *s_SpectatorModes[] = { "#Spec_Mode0", "#Spec_Mode1", "#Spec_Mode2",
 
 using namespace vgui;
 
+ConVar cl_spec_mode(
+	"cl_spec_mode",
+	"1",
+	FCVAR_ARCHIVE | FCVAR_USERINFO,
+	"spectator mode" );
+
 //-----------------------------------------------------------------------------
 // Purpose: left and right buttons pointing buttons
 //-----------------------------------------------------------------------------
