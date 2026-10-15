@@ -66,6 +66,15 @@ public:
 class CVoiceStatus /*: public vgui::CDefaultInputSignal*/
 {
 public:
+	// Hidden: a player's speaker status, for the scoreboard's voice column
+	enum
+	{
+		VOICE_NEVERSPOKEN = 0,
+		VOICE_NOTTALKING,
+		VOICE_TALKING,
+		VOICE_BANNED,
+	};
+
 				CVoiceStatus();
 	virtual		~CVoiceStatus();
 
@@ -93,6 +102,12 @@ public:
 
 	// Call from the HUD_CreateEntities function so it can add sprites above player heads.
 	void	DrawHeadLabels();
+
+	// Hidden: the ammo request icon above IRIS players who asked for ammo.
+	void	DrawAmmoRequestLabels();	// REBUILD: name
+
+	// Hidden: VOICE_NEVERSPOKEN, VOICE_NOTTALKING, VOICE_TALKING or VOICE_BANNED.
+	int		GetSpeakerStatus( int iPlayer );	// REBUILD: name
 
 	// Called when the server registers a change to who this client can hear.
 	void	HandleVoiceMaskMsg(bf_read &msg);
@@ -166,6 +181,7 @@ public:
 private:
 
 	IMaterial			*m_pHeadLabelMaterial;	// For labels above players' heads.
+	IMaterial			*m_pAmmoRequestMaterial;	// Hidden: the ammo request icon. REBUILD: name
 
 	bool				m_bBanMgrInitialized;
 

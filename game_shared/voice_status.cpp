@@ -108,6 +108,7 @@ CVoiceStatus::CVoiceStatus()
 	m_bServerModEnable = -1;
 
 	m_pHeadLabelMaterial = NULL;
+	m_pAmmoRequestMaterial = NULL;
 }
 
 
@@ -116,6 +117,11 @@ CVoiceStatus::~CVoiceStatus()
 	if ( m_pHeadLabelMaterial )
 	{
 		m_pHeadLabelMaterial->DecrementReferenceCount();
+	}
+
+	if ( m_pAmmoRequestMaterial )
+	{
+		m_pAmmoRequestMaterial->DecrementReferenceCount();
 	}
 
 	g_pInternalVoiceStatus = NULL;			
@@ -147,6 +153,9 @@ int CVoiceStatus::Init(
 
 	m_pHeadLabelMaterial = materials->FindMaterial( "voice/icntlk_pl", TEXTURE_GROUP_VGUI );
 	m_pHeadLabelMaterial->IncrementReferenceCount();
+
+	m_pAmmoRequestMaterial = materials->FindMaterial( "vgui/hud/hdn_ammorequest", TEXTURE_GROUP_VGUI );
+	m_pAmmoRequestMaterial->IncrementReferenceCount();
 
 	m_bInSquelchMode = false;
 
@@ -209,6 +218,10 @@ void CVoiceStatus::DrawHeadLabels()
 		if( pPlayer->IsPlayerDead() )
 			continue;
 
+		// Hidden: never show where the Hidden is
+		if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+			continue;
+
 		// Place it 20 units above his head.
 		Vector vOrigin = pPlayer->WorldSpaceCenter();
 		vOrigin.z += g_flHeadOffset;
@@ -253,6 +266,106 @@ void CVoiceStatus::DrawHeadLabels()
 		meshBuilder.End();
 		pMesh->Draw();
 	}
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: draws the ammo request icon above IRIS players who asked
+//			for ammo (shown to IRIS only, see CViewRender::RenderPlayerSprites)
+//-----------------------------------------------------------------------------
+void CVoiceStatus::DrawAmmoRequestLabels()
+{
+	if( !m_pAmmoRequestMaterial )
+		return;
+
+	for(int i=0; i < VOICE_MAX_PLAYERS; i++)
+	{
+		IClientNetworkable *pClient = cl_entitylist->GetClientEntity( i+1 );
+		
+		// Don't show an icon if the player is not in our PVS.
+		if ( !pClient || pClient->IsDormant() )
+			continue;
+
+		C_BasePlayer *pPlayer = dynamic_cast<C_BasePlayer*>(pClient);
+		if( !pPlayer )
+			continue;
+
+		// Don't show an icon for dead or spectating players (ie: invisible entities).
+		if( pPlayer->IsPlayerDead() )
+			continue;
+
+		// Hidden: never show where the Hidden is
+		if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+			continue;
+
+		if ( !pPlayer->RequestedAmmo() )
+			continue;
+
+		// Place it 20 units above his head.
+		Vector vOrigin = pPlayer->WorldSpaceCenter();
+		vOrigin.z += g_flHeadOffset;
+
+		
+		// Align it so it never points up or down.
+		Vector vUp( 0, 0, 1 );
+		Vector vRight = CurrentViewRight();
+		if ( fabs( vRight.z ) > 0.95 )	// don't draw it edge-on
+			continue;
+
+		vRight.z = 0;
+		VectorNormalize( vRight );
+
+
+		float flSize = g_flHeadIconSize;
+
+		materials->Bind( m_pAmmoRequestMaterial );
+		IMesh *pMesh = materials->GetDynamicMesh();
+		CMeshBuilder meshBuilder;
+		meshBuilder.Begin( pMesh, MATERIAL_QUADS, 1 );
+
+		meshBuilder.Color3f( 1.0, 1.0, 1.0 );
+		meshBuilder.TexCoord2f( 0,0,0 );
+		meshBuilder.Position3fv( (vOrigin + (vRight * -flSize) + (vUp * flSize)).Base() );
+		meshBuilder.AdvanceVertex();
+
+		meshBuilder.Color3f( 1.0, 1.0, 1.0 );
+		meshBuilder.TexCoord2f( 0,1,0 );
+		meshBuilder.Position3fv( (vOrigin + (vRight * flSize) + (vUp * flSize)).Base() );
+		meshBuilder.AdvanceVertex();
+
+		meshBuilder.Color3f( 1.0, 1.0, 1.0 );
+		meshBuilder.TexCoord2f( 0,1,1 );
+		meshBuilder.Position3fv( (vOrigin + (vRight * flSize) + (vUp * -flSize)).Base() );
+		meshBuilder.AdvanceVertex();
+
+		meshBuilder.Color3f( 1.0, 1.0, 1.0 );
+		meshBuilder.TexCoord2f( 0,0,1 );
+		meshBuilder.Position3fv( (vOrigin + (vRight * -flSize) + (vUp * -flSize)).Base() );
+		meshBuilder.AdvanceVertex();
+		meshBuilder.End();
+		pMesh->Draw();
+	}
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: a player's speaker status, for the scoreboard's voice column
+//-----------------------------------------------------------------------------
+int CVoiceStatus::GetSpeakerStatus( int iPlayer )
+{
+	player_info_t pi;
+	if ( !engine->GetPlayerInfo( iPlayer, &pi ) )
+		return VOICE_NEVERSPOKEN;
+
+	bool bTalking = !!m_VoicePlayers[iPlayer];
+
+	if ( m_BanMgr.GetPlayerBan( pi.guid ) )
+		return VOICE_BANNED;
+
+	if ( bTalking )
+		return VOICE_TALKING;
+
+	return m_VoiceEnabledPlayers[iPlayer] ? VOICE_NOTTALKING : VOICE_NEVERSPOKEN;
 }
 
 
