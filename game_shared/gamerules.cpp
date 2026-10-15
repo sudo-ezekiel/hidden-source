@@ -180,7 +180,10 @@ bool CGameRules::IsSpawnPointValid( CBaseEntity *pSpot, CBasePlayer *pPlayer  )
 	{
 		// if ent is a client, don't spawn on 'em
 		if ( ent->IsPlayer() && ent != pPlayer )
+		{
+			DevMsg( 1, "%s is already spawned here\n", ((CBasePlayer *)ent)->GetPlayerName() );
 			return false;
+		}
 	}
 
 	return true;
@@ -190,6 +193,102 @@ bool CGameRules::IsSpawnPointValid( CBaseEntity *pSpot, CBasePlayer *pPlayer  )
 //=========================================================
 bool CGameRules::CanHavePlayerItem( CBasePlayer *pPlayer, CBaseCombatWeapon *pWeapon )
 {
+	// Hidden: the Hidden only carries his own weapons, and a marine carries the knife,
+	// the grenade, one primary and one secondary: the ones picked in the loadout menu.
+	// Primary 0 is the FN2000, 1 the P90, 2 the shotgun and 3 the FN303; secondary 0 is
+	// weapon_pistol and 1 weapon_pistol2.
+	const char *pszWeapon = pWeapon->GetName();
+
+	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+	{
+		if ( !stricmp( "weapon_p90", pszWeapon ) )
+			return false;
+		if ( !stricmp( "weapon_shotgun", pszWeapon ) )
+			return false;
+		if ( !stricmp( "weapon_pistol", pszWeapon ) )
+			return false;
+		if ( !stricmp( "weapon_pistol2", pszWeapon ) )
+			return false;
+		if ( !stricmp( "weapon_fn303", pszWeapon ) )
+			return false;
+		if ( !stricmp( "weapon_fn2000", pszWeapon ) )
+			return false;
+		if ( !stricmp( "weapon_sonic", pszWeapon ) )
+			return false;
+	}
+	else
+	{
+		if ( !stricmp( "weapon_knife", pszWeapon ) )
+			return false;
+		if ( !stricmp( "weapon_grenade", pszWeapon ) )
+			return false;
+
+		// REBUILD: the first weapon offered only sets the flag, whatever it is
+		if ( pPlayer->HasPrimary() )
+		{
+			switch ( pPlayer->GetPrimary() )
+			{
+			case 0:
+				if ( !stricmp( "weapon_p90", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_shotgun", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_fn303", pszWeapon ) )
+					return false;
+				break;
+			case 1:
+				if ( !stricmp( "weapon_fn2000", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_shotgun", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_fn303", pszWeapon ) )
+					return false;
+				break;
+			case 2:
+				if ( !stricmp( "weapon_fn2000", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_p90", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_fn303", pszWeapon ) )
+					return false;
+				break;
+			case 3:
+				if ( !stricmp( "weapon_fn2000", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_p90", pszWeapon ) )
+					return false;
+				if ( !stricmp( "weapon_shotgun", pszWeapon ) )
+					return false;
+				break;
+			}
+		}
+		else
+		{
+			pPlayer->SetPrimaryBool( true );
+			return true;
+		}
+
+		if ( pPlayer->HasSecondary() )
+		{
+			switch ( pPlayer->GetSecondary() )
+			{
+			case 0:
+				if ( !stricmp( "weapon_pistol2", pszWeapon ) )
+					return false;
+				break;
+			case 1:
+				if ( !stricmp( "weapon_pistol", pszWeapon ) )
+					return false;
+				break;
+			}
+		}
+		else
+		{
+			pPlayer->SetSecondaryBool( true );
+			return true;
+		}
+	}
+
 /*
 	if ( pWeapon->m_pszAmmo1 )
 	{
@@ -484,6 +583,14 @@ void CGameRules::RadiusDamage( const CTakeDamageInfo &info, const Vector &vecSrc
 
 		// Now hit all triggers along the way that respond to damage... 
 		pEntity->TraceAttackToTriggers( adjustedInfo, vecSrc, tr.endpos, dir );
+
+		// Hidden: the blast blurs the player's view
+		CBasePlayer *pPlayer = ToBasePlayer( pEntity );
+		if ( pPlayer )
+		{
+			DevMsg( 1, "Shockwave - gamerules\n" );
+			pPlayer->Shockwave( flAdjustedDamage / 10.0f, 5.0f );
+		}
 	}
 }
 

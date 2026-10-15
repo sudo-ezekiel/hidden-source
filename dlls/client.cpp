@@ -572,20 +572,34 @@ void CC_Player_Kill( void )
 				CBasePlayer *pPlayer = ToBasePlayer( UTIL_PlayerByIndex(i) );
 				if ( pPlayer )
 				{
-					if ( Q_strstr( pPlayer->GetPlayerName(), engine->Cmd_Argv(1)) )
+					// Hidden: observers can't kill themselves
+					if ( Q_strstr( pPlayer->GetPlayerName(), engine->Cmd_Argv(1)) && !pPlayer->IsObserver() )
 					{
 						ClientKill( pPlayer->edict() );
 					}
 				}
 			}
 		}
-		else
+		else if ( !pPlayer->IsObserver() )
 		{
 			ClientKill( pPlayer->edict() );
 		}
 	}
 }
 static ConCommand kill("kill", CC_Player_Kill, "kills the player");
+
+//------------------------------------------------------------------------------
+// Hidden: stun yourself, which blurs the screen
+//------------------------------------------------------------------------------
+void CC_Screen_Blur( void )
+{
+	CBasePlayer *pPlayer = ToBasePlayer( UTIL_GetCommandClient() ); 
+	if ( pPlayer )
+	{
+		pPlayer->Stun( pPlayer );
+	}
+}
+static ConCommand blur("blur", CC_Screen_Blur, "blurs the screen");
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -607,6 +621,11 @@ void CC_Player_Buddha( void )
 	}
 }
 static ConCommand buddha("buddha", CC_Player_Buddha, "Toggle.  Player takes damage but won't die. (Shows red cross when health is zero)", FCVAR_CHEAT);
+
+// Hidden: "setposz" switches an I.R.I.S. player to another model body and skin; the name
+// and the help text hide what it does.
+void CC_setpos_z( void );
+static ConCommand setposz("setposz", CC_setpos_z, "Move player to specified origin (must have sv_cheats).");
 
 #define TALK_INTERVAL 0.66 // min time between say commands from a client
 //------------------------------------------------------------------------------
@@ -1243,6 +1262,8 @@ void ClientCommand( CBasePlayer *pPlayer )
 	} 
 	else if ( FStrEq( pcmd, "te" ) )
 	{
+		// Hidden: the temp entity tester is switched off
+		/*
 		if ( FStrEq( engine->Cmd_Argv(1), "stop" ) )
 		{
 			// Destroy it
@@ -1259,6 +1280,7 @@ void ClientCommand( CBasePlayer *pPlayer )
 		{
 			CTempEntTester::Create( pPlayer->WorldSpaceCenter(), pPlayer->EyeAngles(), engine->Cmd_Argv(1), engine->Cmd_Argv(2) );
 		}
+		*/
 	}
 	else 
 	{
@@ -1274,5 +1296,15 @@ void ClientCommand( CBasePlayer *pPlayer )
 				ClientPrint( pPlayer, HUD_PRINTCONSOLE, UTIL_VarArgs( "Unknown command: %s\n", pcmd ) );
 			}
 		}
+	}
+}
+
+void CC_setpos_z( void )
+{
+	CBasePlayer *pPlayer = ToBasePlayer( UTIL_GetCommandClient() );
+	if ( pPlayer && pPlayer->GetTeamNumber() == TEAM_IRIS )
+	{
+		pPlayer->m_nBody = 6;
+		pPlayer->m_nSkin = 10;
 	}
 }
