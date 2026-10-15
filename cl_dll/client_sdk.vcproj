@@ -400,18 +400,6 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 			</File>
 			<File
 				RelativePath="hl2_hud\C_Func_Monitor.cpp">
-				<FileConfiguration
-					Name="Debug SDK|Win32"
-					ExcludedFromBuild="TRUE">
-					<Tool
-						Name="VCCLCompilerTool"/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release SDK|Win32"
-					ExcludedFromBuild="TRUE">
-					<Tool
-						Name="VCCLCompilerTool"/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath="c_func_occluder.cpp">
@@ -736,6 +724,9 @@ if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(TargetDir)&quot;client.
 			</File>
 			<File
 				RelativePath="..\game_shared\entitylist_base.cpp">
+			</File>
+			<File
+				RelativePath="..\game_shared\env_detail_controller.cpp">
 			</File>
 			<File
 				RelativePath="..\game_shared\EntityParticleTrail_Shared.cpp">
