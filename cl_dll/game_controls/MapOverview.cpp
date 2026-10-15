@@ -15,6 +15,7 @@
 #include <mathlib.h>
 #include <cl_dll/iviewport.h>
 #include <igameresources.h>
+#include "gamevars_shared.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -220,6 +221,17 @@ void CMapOverview::Paint()
 	BaseClass::Paint();
 }
 
+bool CMapOverview::CanPlayerBeSeen( int index )
+{
+	C_BasePlayer *pPlayer = UTIL_PlayerByIndex( index + 1 );
+
+	if ( !pPlayer )
+		return false;
+
+	// a player outside our PVS is only shown when spectators may see everyone
+	return !pPlayer->IsDormant() || mp_forcecamera.GetInt() == OBS_ALLOW_ALL;
+}
+
 void CMapOverview::SetPlayerPositions(int index, const Vector &position, const QAngle &angle)
 {
 	MapPlayer_t *p = &m_Players[index];
@@ -271,7 +283,10 @@ void CMapOverview::Update( void )
 		if ( position.x == 0.0f && position.y == 0.0f )
 			continue;
 
-		SetPlayerPositions( i-1, position, angles );
+		if ( CanPlayerBeSeen( i-1 ) )
+		{
+			SetPlayerPositions( i-1, position, angles );
+		}
 	}
 }
 
@@ -388,7 +403,7 @@ void CMapOverview::DrawMapPlayers()
 	{
 		MapPlayer_t *p = &m_Players[i];
 		
-		if ( (p->team <= TEAM_SPECTATOR) || (p->health <= 0) )
+		if ( !CanPlayerBeSeen( i ) || (p->team <= TEAM_SPECTATOR) || (p->health <= 0) )
 		{
 			// don't draw dead players / spectators
 			continue;
@@ -446,7 +461,7 @@ void CMapOverview::DrawMapPlayers()
 
 		pospanel.y += d+4;
 		
-		if ( m_bShowHealth )
+		if ( m_bShowHealth && CanPlayerHealthBeSeen( i ) )
 		{
 			// helath bar is 50x3 pixels
 			surface()->DrawSetColor( 0,0,0,255 );
@@ -459,7 +474,7 @@ void CMapOverview::DrawMapPlayers()
 			pospanel.y += 3;
 		}
 
-		if ( m_bShowNames )
+		if ( m_bShowNames && CanPlayerNameBeSeen( i ) )
 		{
 			wchar_t playerName[ 64 ];
 						

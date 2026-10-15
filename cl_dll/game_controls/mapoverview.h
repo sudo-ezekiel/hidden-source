@@ -74,7 +74,6 @@ public: // IViewPortPanel interface:
 public: // IGameEventListener
 
 	virtual void FireGameEvent( IGameEvent *event );
-	virtual bool IsServerSide() { return false; };
 
 public:	// VGUI overrides
 
@@ -105,6 +104,12 @@ public:	// IMapOverview Interfaces
 	virtual Vector2D WorldToMap( const Vector &worldpos );
 
 	virtual void SetPlayerPositions(int index, const Vector &position, const QAngle &angle);
+
+	// REBUILD: names from the 2006 SDK's CMapOverview; client.dll's take the player index
+	// (slots 156 to 158, called from Update and DrawMapPlayers)
+	virtual bool CanPlayerBeSeen( int index );
+	virtual bool CanPlayerHealthBeSeen( int index ) { return true; }
+	virtual bool CanPlayerNameBeSeen( int index ) { return true; }
 	
 private:
 	

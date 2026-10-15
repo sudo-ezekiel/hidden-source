@@ -61,6 +61,10 @@ public:
 
 	virtual int GetTopBarHeight() { return m_pTopBar->GetTall(); }
 	virtual int GetBottomBarHeight() { return m_pBottomBarBlank->GetTall(); }
+
+	// REBUILD: name and parameter name are ours; client.dll's slot 196 is an empty inline
+	// taking one int, and nothing calls it
+	virtual void UpdatePlayerLabel( int specmode ) {}
 	
 protected:
 
@@ -111,6 +115,7 @@ public:
 	virtual bool NeedsUpdate( void ) { return false; }
 	virtual bool HasInputElements( void ) { return true; }
 	virtual void ShowPanel( bool bShow );
+	virtual void OnThink();
 
 	// both vgui::Frame and IViewPortPanel define these, so explicitly define them here as passthroughs to vgui
 	virtual bool IsVisible() { return BaseClass::IsVisible(); }
