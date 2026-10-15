@@ -154,10 +154,14 @@ float CTutorialGameRules::FlPlayerFallDamage( CBasePlayer *pPlayer )
 	return BaseClass::FlPlayerFallDamage( pPlayer );
 }
 
+#endif
+
 bool CTutorialGameRules::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 {
 	return BaseClass::ShouldCollide( collisionGroup0, collisionGroup1 );
 }
+
+#ifndef CLIENT_DLL
 
 const char *CTutorialGameRules::GetDeadChatPrefix( bool bTeamOnly, CBasePlayer *pPlayer )
 {
@@ -174,9 +178,9 @@ const char *CTutorialGameRules::GetChatPrefix( bool bTeamOnly, CBasePlayer *pPla
 	return BaseClass::GetChatPrefix( bTeamOnly, pPlayer );
 }
 
+#endif
+
 int CTutorialGameRules::PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget )
 {
 	return BaseClass::PlayerRelationship( pPlayer, pTarget );
 }
-
-#endif
