@@ -49,6 +49,8 @@ def main():
     mk = open(os.path.join(work, "out", "client.mk")).read()
     inc = re.search(r"^INCLUDES=(.*)$", mk, re.M).group(1)
     cfl = re.search(r"^CFLAGS=(.*)$", mk, re.M).group(1).replace("-O3", "-O0")
+    # a CLASSDUMP=1 makefile carries -fdump-class-hierarchy, which cannot write its dump here
+    cfl = cfl.replace("-fdump-class-hierarchy", "")
     extra = "-fno-operator-names -fno-access-control -I/src/rebuild/client_shims -I/case -include /src/rebuild/client_shims/client_shim.h"
     probes = os.path.join(out, "probes")
     os.makedirs(probes, exist_ok=True)

@@ -26,7 +26,9 @@ if echo "$CHANGED" | grep -qiE '\.(h|hpp|inl)$'; then
     rm -rf "$WORK/out/client_obj"
 fi
 # -fno-operator-names: MSVC has no alternative tokens, and weapon_selection.h names a parameter "or".
-EXTRA="-fno-operator-names -I/src/rebuild/client_shims -I/case -include /src/rebuild/client_shims/client_shim.h"
+# -malign-double: MSVC aligns doubles in structures to 8 bytes, GCC to 4 by default (CSimplePhysics
+# holds a double, which moves CRopePhysics and C_RopeKeyframe's members in client.dll).
+EXTRA="-fno-operator-names -malign-double -I/src/rebuild/client_shims -I/case -include /src/rebuild/client_shims/client_shim.h"
 STAMP="$WORK/out/classdump.on"
 if [ -n "$CLASSDUMP" ]; then
     EXTRA="$EXTRA -fdump-class-hierarchy"

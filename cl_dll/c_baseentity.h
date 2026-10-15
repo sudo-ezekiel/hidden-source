@@ -30,6 +30,25 @@
 #include "interpolatedvar.h"
 #include "collisionproperty.h"
 
+// REBUILD: every entity class in client.dll has a size that is a multiple of 8 (the sizes its
+// client class factories pass to operator new), and members of entity type (C_FireSmoke's
+// C_FireSprite array, C_Plasma's) sit on 8-byte boundaries, so MSVC aligns C_BaseEntity to 8.
+// The GCC compile check gives C_BaseEntity the same alignment. GCC also reuses a base class's tail
+// padding for the derived class's members and MSVC does not, so a base class whose members end 4
+// bytes short of a multiple of 8 gets the 4 bytes as an explicit REBUILD_MSVC_TAIL_PAD member
+// (REBUILD_MSVC_TAIL_PAD_BYTES when the members end on an odd boundary).
+// In an MSVC build both macros are empty. Which member gives MSVC the 8-byte alignment is not
+// known yet; confirm it when the original compiler is available.
+#ifdef __GNUC__
+#define REBUILD_MSVC_ALIGN8				__attribute__(( aligned( 8 ) ))
+#define REBUILD_MSVC_TAIL_PAD( name )	int name;
+#define REBUILD_MSVC_TAIL_PAD_BYTES( name, count )	char name[count];
+#else
+#define REBUILD_MSVC_ALIGN8
+#define REBUILD_MSVC_TAIL_PAD( name )
+#define REBUILD_MSVC_TAIL_PAD_BYTES( name, count )
+#endif
+
 class C_Team;
 class IPhysicsObject;
 class IClientVehicle;
@@ -207,7 +226,7 @@ struct thinkfunc_t
 //-----------------------------------------------------------------------------
 // Purpose: Base client side entity object
 //-----------------------------------------------------------------------------
-class C_BaseEntity : public IClientEntity
+class REBUILD_MSVC_ALIGN8 C_BaseEntity : public IClientEntity
 {
 // Construction
 	DECLARE_CLASS_NOBASE( C_BaseEntity );
@@ -785,6 +804,12 @@ public:
 	virtual bool					ShouldPredict( void ) { return false; };
 	// interface function pointers
 	void							(C_BaseEntity::*m_pfnThink)(void);
+#ifdef __GNUC__
+	// REBUILD: MSVC 7.1 makes C_BaseEntity's member function pointers 16 bytes (BASEPTR names the
+	// class before it is defined, so MSVC uses its general representation); GCC makes them 8. The
+	// padding keeps the GCC compile check's member offsets equal to client.dll's.
+	int								m_pfnThinkMSVCPad[2];
+#endif
 	virtual void					Think( void )
 	{	
 		if ( m_pfnThink )
@@ -854,6 +879,9 @@ public:
 	virtual void			EndTouch( C_BaseEntity *pOther );
 
 	void (C_BaseEntity ::*m_pfnTouch)( C_BaseEntity *pOther );
+#ifdef __GNUC__
+	int						m_pfnTouchMSVCPad[2];	// REBUILD: see m_pfnThinkMSVCPad
+#endif
 
 	void					PhysicsStep( void );
 
@@ -1518,6 +1546,8 @@ private:
 	int								m_fDataObjectTypes;
 
 	AimEntsListHandle_t				m_AimEntsListHandle;
+
+	REBUILD_MSVC_TAIL_PAD( m_MSVCTailPad )	// 0x47c; client.dll's C_BaseEntity is 0x480 bytes
 };
 
 EXTERN_RECV_TABLE(DT_BaseEntity);
