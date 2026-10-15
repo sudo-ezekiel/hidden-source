@@ -92,6 +92,9 @@ public:
 							CBaseCombatWeapon();
 	virtual 				~CBaseCombatWeapon();
 
+	// HIDDEN: an empty hook placed before IsPredicted in the vtable; the Hidden weapons override it.
+	virtual void			SetSafe( void ) {}
+
 	// A derived weapon class should return true here so that weapon sounds, etc, can
 	//  apply the proper filter
 	virtual bool			IsPredicted( void ) const { return false; }
@@ -272,6 +275,11 @@ public:
 	virtual CHudTexture const	*GetSpriteZoomedCrosshair( void ) const;
 	virtual CHudTexture const	*GetSpriteZoomedAutoaim( void ) const;
 
+	// Valve's mid-2005 SDK moved the activity table into the shared section.
+	virtual Activity		ActivityOverride( Activity baseAct, bool *pRequired );
+	virtual	acttable_t*		ActivityList( void ) { return NULL; }
+	virtual	int				ActivityListCount( void ) { return 0; }
+
 public:
 // Server Only Methods
 #if !defined( CLIENT_DLL )
@@ -284,7 +292,7 @@ public:
 	bool					IsConstrained() { return m_pConstraint != NULL; }
 	bool					IsInBadPosition ( void );				// Is weapon in bad position to pickup?
 	bool					RepositionWeapon ( void );				// Attempts to reposition the weapon in a location where it can be
-	void					Materialize( void );					// make a weapon visible and tangible
+	virtual void			Materialize( void );					// make a weapon visible and tangible
 	void					AttemptToMaterialize( void );			// see if the game rules will let the weapon become visible and tangible
 	virtual void			CheckRespawn( void );					// see if this weapon should respawn after being picked up
 	CBaseEntity				*Respawn ( void );						// copy a weapon
@@ -302,10 +310,6 @@ public:
 	virtual bool			IsRemoveable() { return m_bRemoveable; }
 	void					SetRemoveable( bool bRemoveable ) { m_bRemoveable = bRemoveable; }
 	
-
-	virtual Activity		ActivityOverride( Activity baseAct, bool *pRequired );
-	virtual	acttable_t*		ActivityList( void ) { return NULL; }
-	virtual	int				ActivityListCount( void ) { return 0; }
 
 	// Returns bits for	weapon conditions
 	virtual bool			WeaponLOSCondition( const Vector &ownerPos, const Vector &targetPos, bool bSetConditions );	

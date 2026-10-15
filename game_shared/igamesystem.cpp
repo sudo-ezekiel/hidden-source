@@ -185,6 +185,11 @@ void IGameSystem::OnRestoreAllSystems()
 	InvokeMethod( &IGameSystem::OnRestore );
 }
 
+void IGameSystem::SafeRemoveIfDesiredAllSystems()
+{
+	InvokeMethodReverseOrder( &IGameSystem::SafeRemoveIfDesired );
+}
+
 #ifdef CLIENT_DLL
 
 void IGameSystem::PreRenderAllSystems()
@@ -210,6 +215,8 @@ void IGameSystem::FrameUpdatePreEntityThinkAllSystems()
 
 void IGameSystem::FrameUpdatePostEntityThinkAllSystems()
 {
+	SafeRemoveIfDesiredAllSystems();
+
 	InvokeMethod( &IGameSystem::FrameUpdatePostEntityThink );
 }
 

@@ -833,9 +833,9 @@ bool CMultiplayRules::IsMultiplayer( void )
 		}
 	}
 
-	void CMultiplayRules::ChangeLevel( void )
+	// Valve's mid-2005 SDK split the map cycle lookup out of ChangeLevel.
+	void CMultiplayRules::GetNextLevelName( char *pszNextMap, int bufsize )
 	{
-		char szNextMap[32];
 		char szFirstMapInList[32];
 		Q_strncpy( szFirstMapInList, "hldm1" ,sizeof(szFirstMapInList));  // the absolute default level is hldm1
 
@@ -843,7 +843,7 @@ bool CMultiplayRules::IsMultiplayer( void )
 
 		const char *mapcfile = mapcyclefile.GetString();
 		Assert( mapcfile != NULL );
-		Q_strncpy( szNextMap, STRING(gpGlobals->mapname) ,sizeof(szNextMap));
+		Q_strncpy( pszNextMap, STRING(gpGlobals->mapname) ,bufsize);
 		Q_strncpy( szFirstMapInList, STRING(gpGlobals->mapname) ,sizeof(szFirstMapInList));
 
 		int length;
@@ -852,9 +852,9 @@ bool CMultiplayRules::IsMultiplayer( void )
 		if ( pFileList && length )
 		{
 			// the first map name in the file becomes the default
-			sscanf( pFileList, " %31s", szNextMap );
-			if ( engine->IsMapValid( szNextMap ) )
-				Q_strncpy( szFirstMapInList, szNextMap ,sizeof(szFirstMapInList));
+			sscanf( pFileList, " %31s", pszNextMap );
+			if ( engine->IsMapValid( pszNextMap ) )
+				Q_strncpy( szFirstMapInList, pszNextMap ,sizeof(szFirstMapInList));
 
 			// keep pulling mapnames out of the list until the current mapname
 			// if the current mapname isn't found,  load the first map in the list
@@ -876,7 +876,7 @@ bool CMultiplayRules::IsMultiplayer( void )
 					// check that it is a valid map file
 					if ( engine->IsMapValid( cBuf ) )
 					{
-						Q_strncpy( szNextMap, cBuf ,sizeof(szNextMap));
+						Q_strncpy( pszNextMap, cBuf, bufsize);
 						break;
 					}
 				}
@@ -892,8 +892,14 @@ bool CMultiplayRules::IsMultiplayer( void )
 			UTIL_FreeFile( (byte *)aFileList );
 		}
 
-		if ( !engine->IsMapValid(szNextMap) )
-			Q_strncpy( szNextMap, szFirstMapInList ,sizeof(szNextMap));
+		if ( !engine->IsMapValid(pszNextMap) )
+			Q_strncpy( pszNextMap, szFirstMapInList, bufsize);
+	}
+
+	void CMultiplayRules::ChangeLevel( void )
+	{
+		char szNextMap[32];
+		GetNextLevelName( szNextMap, sizeof(szNextMap) );
 
 		g_fGameOver = true;
 

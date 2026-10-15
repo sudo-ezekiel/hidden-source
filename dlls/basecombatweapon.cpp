@@ -181,30 +181,6 @@ CBaseEntity* CBaseCombatWeapon::Respawn( void )
 }
 
 //-----------------------------------------------------------------------------
-// Purpose:
-// Input  :
-// Output :
-//-----------------------------------------------------------------------------
-Activity CBaseCombatWeapon::ActivityOverride( Activity baseAct, bool *pRequired )
-{
-	acttable_t *pTable = ActivityList();
-	int actCount = ActivityListCount();
-
-	for ( int i = 0; i < actCount; i++, pTable++ )
-	{
-		if ( baseAct == pTable->baseAct )
-		{
-			if (pRequired)
-			{
-				*pRequired = pTable->required;
-			}
-			return (Activity)pTable->weaponAct;
-		}
-	}
-	return baseAct;
-}
-
-//-----------------------------------------------------------------------------
 // Purpose: Check the weapon LOS for an owner at an arbitrary position
 //			If bSetConditions is true, LOS related conditions will also be set
 // Input  :
