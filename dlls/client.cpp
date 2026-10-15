@@ -81,9 +81,6 @@ char * CheckChatText( char *text )
 	return p;
 }
 
-// REBUILD: util.cpp has this in the original but not yet in the rebuild (physics lane)
-void UTIL_SayText2Filter( IRecipientFilter& filter, CBasePlayer *pEntity, bool bChat, const char *msg_name, const char *param1 = NULL, const char *param2 = NULL, const char *param3 = NULL, const char *param4 = NULL );
-
 //// HOST_SAY
 // String comes in as
 // say blah blah blah
