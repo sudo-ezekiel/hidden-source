@@ -160,11 +160,23 @@ server.dll", "Comparing server.dll"):
     sh rebuild/msvc/compare_server.sh ~/.cache/hsrebuild-msvc-server
     sh rebuild/msvc/compare_server.sh ~/.cache/hsrebuild-msvc-server ~/.cache/subject51764/hsrebuild/builds/dll_2006-08-18_4b1.dll
 
-| Reference | Mapped | Same | Changed | Stable subset: same / changed / unmapped |
-|---|---|---|---|---|
-| May 2006, by its PDB | 30759 of 30779 | 30000 | 759 | 14585 / 38 / 0 |
-| 2006-08-18 4b1 (the build of the .so above) | 30158 of 30701 | 30007 | 151 | 14493 / 37 / 93 |
-| 2006-08-08 4.1 | 30156 of 30698 | 30004 | 152 | 14493 / 37 / 93 |
+The compare is strict by default, as the GCC one is (STRICT-COMPARE.md section 6); `--loose`
+gives the original scoring. Main f12fee2:
+
+| Reference | Mode | Mapped | Same | Changed | Stable subset: same / changed / unmapped |
+|---|---|---|---|---|---|
+| May 2006, by its PDB | strict | 30760 of 30779 | 29989 | 771 | 14579 / 44 / 0 |
+| | --loose | 30759 of 30779 | 30000 | 759 | 14585 / 38 / 0 |
+| 2006-08-18 4b1 (the build of the .so above) | strict | 30187 of 30701 | 30026 | 161 | 14490 / 40 / 93 |
+| | --loose | 30158 of 30701 | 30007 | 151 | 14493 / 37 / 93 |
+| 2006-08-08 4.1 | strict | 30185 of 30698 | 30023 | 162 | 14490 / 40 / 93 |
+| | --loose | 30156 of 30698 | 30004 | 152 | 14493 / 37 / 93 |
+
+Against the 2006-08-18 DLL, 10 functions are same only in the loose mode (STRICT-COMPARE.md
+section 7): pointers into extents that hold two functions, atexit destructors of statics that
+have no start of their own in Hidden's DLL, and `$E` functions paired by a number that differs.
+All 10 are same in the strict GCC compare; none is a source constant. The strict mode maps 29
+more functions, all same. The causes below are from the loose compare.
 
 The May DLL is the only one with names and extents from Hidden's own PDB, but it was built from
 older source (CBasePlayer is 12 bytes shorter, and Hidden's game code differs in many places), so
@@ -197,7 +209,10 @@ The 151 functions that differ from the 2006-08-18 DLL, by cause:
   forms that MSVC tells apart. They need a closer look one by one.
 - **Static initialiser order (13).** The `_$E` initialisers of sdk_gamerules.obj and
   weapon_fn303.obj pair in sequence, and the sequences differ: Hidden's globals (ConVars and the
-  like) are defined in another order in those two files.
+  like) are defined in another order in those two files. The strict GCC compare doubts this: the
+  static initialisers of sdk_gamerules.cpp and weapon_fn303.cpp are same there, so the order of
+  the definitions matches and MSVC's count or numbering of `$E` functions differs instead
+  (STRICT-COMPARE.md section 7).
 - **Register choice and scheduling (about 15).** Same instructions, other registers or order:
   CheckBack, CHLTVDirector::LevelInitPostEntity, ParseEntryExitAnims, SampleStep,
   LoadDecalsFromScript, LoadSchedulesFromBuffer, the CBasePlayer and CSDKGameRules constructors,

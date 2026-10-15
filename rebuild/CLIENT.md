@@ -174,7 +174,8 @@ every class that has derived classes: where they differ, GCC places the derived 
 
     JOBS=6 sh rebuild/msvc/build_client.sh ~/.cache/hsrebuild-msvc-<lane> [file.cpp ...]
     sh rebuild/msvc/compare_client.sh ~/.cache/hsrebuild-msvc-<lane>
-    NAME=<part of our name, or a reference address> sh rebuild/msvc/compare_client.sh ~/.cache/hsrebuild-msvc-<lane>
+    NAME=<part of our name, or a reference address; several, comma separated> sh rebuild/msvc/compare_client.sh ~/.cache/hsrebuild-msvc-<lane>
+    sh rebuild/msvc/compare_client.sh --loose ~/.cache/hsrebuild-msvc-<lane>    # or LOOSE=1: the original scoring
 
 The build (`msvc/MSVC.md`, "Building client.dll") compiles vgui_controls and the 415 client files
 with cl 13.10.3077 under Wine and links client.dll with /MAP, in about half a minute. The compare
@@ -196,10 +197,19 @@ has no symbols, so its functions are first mapped to ours:
   at the same positions); link order (between two mapped functions in the same order on both
   sides, functions with the same body, or in order when the counts agree and the bodies are 60%
   alike); the same string literals; the same body. The method is in the row.
-- Normalisation: branches inside the function become offsets, branches out of it the callee's name
-  (ours; on client.dll's side the name of the function it is mapped to, so a call to an unmapped
-  function is never "same"), image addresses ADDR, import slots IMP:<name>. Jump and index tables
-  after the code are compared as lists of in-function offsets. Trailing int3 and nop are dropped.
+- Normalisation, strict (the default; STRICT-COMPARE.md section 6): the PE base relocations say
+  which operands are addresses. Branches inside the function become offsets, branches out of it
+  the callee's name (ours; on client.dll's side the name of the function it is mapped to, so a call
+  to an unmapped function is never "same"); every relocated operand becomes a token for what it
+  points at (a mapped function, a vftable by class, an import slot, a type descriptor, writable
+  data by our symbol through a data pairing, .rdata by its content: floats, strings, bytes), and
+  every other number is kept. The strict tokens also re-pair functions the loose mapping could not
+  tell apart (method `strict`, and `table` for a function only a table of pointers names). Jump and
+  index tables after the code are compared as lists of in-function offsets. Trailing int3 and nop
+  are dropped.
+- Normalisation, --loose: the same, except that every image address other than an import slot
+  (IMP:<name>) is ADDR and the mapping is not refined. It reproduces the scoring from before the
+  strict mode.
 
 Rows: object (lib:object from the map), status (same, changed, unmapped, or only-ref and only-ours
 for a function in a vftable of a class the other build lacks, of which there are none now),
@@ -207,22 +217,27 @@ similarity, ref size, our size, our name, demangled name, ref address, our addre
 names.tsv name. A call graph mapping makes the callee's name agree in the caller by construction;
 a wrong pairing then shows up as a changed callee.
 
-Result (main 9178d3b plus this lane's fixes):
+Result (main f12fee2):
 
-| | functions | bytes |
-|---|---|---|
-| client.dll functions | 24320 | 2,148,634 |
-| mapped | 23623 (97.1%) | 2,105,370 |
-| same | 23263 | 1,986,372 |
-| changed | 360 | 118,998 |
-| unmapped, client.dll | 697 | 43,264 |
-| unmapped, ours | 573 | 18,362 |
+| | strict: functions | bytes | --loose: functions | bytes |
+|---|---|---|---|---|
+| client.dll functions | 24320 | 2,148,634 | 24320 | 2,148,634 |
+| mapped | 23838 (98.0%) | 2,110,342 | 23623 (97.1%) | 2,105,370 |
+| same | 23502 | 1,995,335 | 23275 | 1,991,494 |
+| changed | 336 | 115,007 | 348 | 113,876 |
+| unmapped, client.dll | 482 | 38,292 | 697 | 43,264 |
+| unmapped, ours | 358 | 13,398 | 573 | 18,362 |
 
-By origin of our function: client objects 19704 same, 269 changed; vgui_controls 2965 same, 37
-changed; libc.lib 461 same, 53 changed; nvtc.lib 19 same, 1 changed; import thunks 114 same.
-Mapped by vftable 5418, call graph 4510, order 12795, string 788, body 112. Most unmapped
-functions are 32 bytes or less (467 of 697), copies of small inline functions that nothing tells
-apart.
+By origin of our function, strict: client objects 19941 same, 243 changed; vgui_controls 2965
+same, 38 changed; libc.lib 462 same, 54 changed; nvtc.lib 19 same, 1 changed; import thunks 115
+same. Mapped by vftable 5418, call graph 4510, order 12726, string 788, body 113, strict 282,
+table 1. Most unmapped functions are 32 bytes or less (303 of 482), copies of small inline
+functions that nothing tells apart.
+
+Strict against loose: 9 functions are same only in the loose mode, 5 of them string literals that
+differ in our source (STRICT-COMPARE.md section 7); 20 loose "changed" rows were two functions
+paired the wrong way round and are same once the strict tokens re-pair them; 218 functions the
+loose mapping left unmapped are mapped and same.
 
 What is left is mostly source: Hidden's code that differs from ours (CViewRender::RenderView,
 CClientScoreBoardDialog, CSpectatorGUI, CHudCrosshair::Paint, the weapons' WeaponIdle),
