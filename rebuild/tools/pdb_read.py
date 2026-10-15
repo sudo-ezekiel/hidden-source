@@ -684,6 +684,33 @@ class PDB:
 
     # --- signatures -----------------------------------------------------------------------------------
 
+    def roles(self, proc):
+        """{child index: "this", "param N" or "local"} for the variables of a proc. The PDB does not mark
+        parameters: they come first, in order, and an unnamed parameter has no record, so a record is
+        taken as the next parameter while its type is that parameter's type."""
+        t = self.types
+        args = []
+        if proc.ti >= t.lo and t.get(proc.ti)["leaf"] in (LF_PROCEDURE, LF_MFUNCTION):
+            r = t.get(proc.ti)
+            args = [t.decl(a) for a in t.get(r["args"])["types"] if a]
+        out, pos, done = {}, 0, False
+        for i, (depth, kind, f) in enumerate(proc.children):
+            if kind not in ("bprel", "register", "regrel"):
+                continue
+            if not done and depth == 0 and f["name"] == "this" and pos == 0 and not out:
+                out[i] = "this"
+                continue
+            if not done and depth == 0:
+                d = t.decl(f["type"])
+                k = next((j for j in range(pos, len(args)) if args[j] == d), None)
+                if k is not None:
+                    out[i] = "param %d" % (k + 1)
+                    pos = k + 1
+                    continue
+            done = True
+            out[i] = "local"
+        return out
+
     def signature(self, proc):
         t = self.types
         if proc.ti < t.lo:
@@ -758,19 +785,11 @@ def cmd_locals(pdb, args):
                 continue
             print("# %s\n# %08x size %d, %s, %s lines %d-%d" % (pdb.signature(p), pdb.va(p.seg, p.off), p.size,
                                                                m.short, p.file, p.first, p.last))
-            nargs = 0
-            if p.ti >= t.lo and t.get(p.ti)["leaf"] in (LF_PROCEDURE, LF_MFUNCTION):
-                r = t.get(p.ti)
-                nargs = len([a for a in t.get(r["args"])["types"] if a])
-                if r["leaf"] == LF_MFUNCTION and r["this"]:
-                    nargs += 1
+            roles = pdb.roles(p)
             print("depth\trole\tlocation\ttype\tname")
-            seen = 0
-            for depth, kind, f in p.children:
+            for i, (depth, kind, f) in enumerate(p.children):
                 if kind in ("bprel", "register", "regrel"):
-                    role = "param" if seen < nargs and depth == 0 else "local"
-                    seen += 1
-                    print("%d\t%s\t%s\t%s\t%s" % (depth, role, location(kind, f), t.decl(f["type"]), f["name"]))
+                    print("%d\t%s\t%s\t%s\t%s" % (depth, roles[i], location(kind, f), t.decl(f["type"]), f["name"]))
                 elif kind == "block":
                     print("%d\tblock\t%08x\tsize %d\t%s" % (depth, f["va"], f["size"], f["name"]))
                 elif kind == "static":
