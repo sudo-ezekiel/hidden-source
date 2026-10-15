@@ -75,7 +75,7 @@ void CSDKPlayer::FireBullet(
 
 	trace_t tr; // main enter bullet trace
 
-	UTIL_TraceLine( vecSrc, vecEnd, MASK_SOLID|CONTENTS_DEBRIS|CONTENTS_HITBOX, this, COLLISION_GROUP_NONE, &tr );
+	UTIL_TraceLine( vecSrc, vecEnd, MASK_SHOT, this, COLLISION_GROUP_NONE, &tr );
 
 	// Hidden: one in five rifle bullets (ammo types 2 and 3, AMMO_BULLETS and AMMO_556) draws a tracer
 	if ( ( iBulletType == 2 || iBulletType == 3 ) && random->RandomInt( 1, 5 ) == 2 )
