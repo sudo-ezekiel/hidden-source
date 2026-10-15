@@ -2077,7 +2077,7 @@ static void DrawScreenEffectMaterial( IMaterial *pMaterial )	// REBUILD: name; i
 //			vision, the stun blur, the spectator and helmet cams, the Hidden's
 //			aura vision and his view shader
 //-----------------------------------------------------------------------------
-static void DrawPlayerScreenEffects( void )	// REBUILD: name; inlined into RenderView in client.dll
+static void DrawPlayerScreenEffects( CViewRender *pViewRender )	// REBUILD: name; inlined into RenderView in client.dll
 {
 	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
 	if ( !pPlayer )
@@ -2133,9 +2133,7 @@ static void DrawPlayerScreenEffects( void )	// REBUILD: name; inlined into Rende
 			DrawScreenEffectMaterial( pMaterial );
 		}
 
-		// REBUILD: client.dll then calls a CViewRender motion blur (241ac8e0, "bluralpha : %f\n")
-		// with 0.1 / ( flBlur / 7 ). It needs a 256x256 render target kept in a CViewRender member
-		// that client.dll has at +4 and sets in LevelInit; both are left to the CViewRender layout work.
+		pViewRender->PerformMotionBlur( 0.1f / ( flBlur / 7.0f ) );
 	}
 
 	if ( ( !pPlayer->IsAlive() && pPlayer->GetObserverMode() == OBS_MODE_FIXED ) || pPlayer->GetObserverMode() == OBS_MODE_IN_EYE )
@@ -2245,7 +2243,7 @@ void CViewRender::RenderView( const CViewSetup &view, bool drawViewModel )
 	g_pClientMode->PostRenderWorld();
 
 	// Hidden: the local player's screen effects
-	DrawPlayerScreenEffects();
+	DrawPlayerScreenEffects( this );
 
 	// Draw fade over entire screen if needed
 	byte color[4];
@@ -3093,6 +3091,104 @@ static void CheapWaterEnd_f( void )
 		view->GetWaterLODParams( start, end );
 		Warning( "r_cheapwaterend: %f\n", end );
 	}
+}
+
+
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: the stun motion blur. Every 0.05 seconds the frame is blended
+//			into the motion blur render target with the given alpha, then the
+//			render target is drawn over the frame.
+//-----------------------------------------------------------------------------
+void CViewRender::PerformMotionBlur( float flAlpha )
+{
+	static float s_flNextBlurTime = 0.0f;	// REBUILD: name
+
+	bool bFound = false;
+	IMaterial *pMaterial = materials->FindMaterial( "frontbuffer", TEXTURE_GROUP_OTHER, true );
+
+	m_pMotionBlurTexture = GetMotionBlurTexture();
+	ITexture *pSaveRenderTarget = materials->GetRenderTarget();
+
+	int x, y, w, h;
+	materials->GetViewport( x, y, w, h );
+
+	materials->MatrixMode( MATERIAL_PROJECTION );
+	materials->PushMatrix();
+	materials->LoadIdentity();
+
+	materials->MatrixMode( MATERIAL_VIEW );
+	materials->PushMatrix();
+	materials->LoadIdentity();
+
+	materials->MatrixMode( MATERIAL_MODEL );
+	materials->LoadIdentity();
+
+	// start over after a level change or a pause
+	if ( gpGlobals->curtime - s_flNextBlurTime < -0.5 || gpGlobals->curtime - s_flNextBlurTime > 0.5 )
+	{
+		s_flNextBlurTime = 0.0f;
+	}
+
+	DevMsg( 1, "bluralpha : %f\n", flAlpha );
+
+	if ( gpGlobals->curtime >= s_flNextBlurTime )
+	{
+		ITexture *pFrameBuffer = GetFullFrameFrameBufferTexture( 0 );
+		materials->CopyRenderTargetToTexture( pFrameBuffer );
+		materials->SetFrameBufferCopyTexture( pFrameBuffer );
+
+		IMaterialVar *pAlpha = pMaterial->FindVar( "$alpha", &bFound, false );
+		if ( bFound )
+		{
+			// the first frame of a blur replaces the render target
+			if ( s_flNextBlurTime == 0.0f )
+			{
+				pAlpha->SetFloatValue( 1.0f );
+			}
+			else
+			{
+				pAlpha->SetFloatValue( flAlpha );
+			}
+		}
+
+		materials->SetRenderTarget( m_pMotionBlurTexture );
+		materials->DrawScreenSpaceQuad( pMaterial );
+
+		s_flNextBlurTime = gpGlobals->curtime + 0.05;
+	}
+
+	IMaterialVar *pAlpha = pMaterial->FindVar( "$alpha", &bFound, false );
+	if ( bFound )
+	{
+		pAlpha->SetFloatValue( 1.0f );
+	}
+
+	ITexture *pSaveTexture = NULL;
+	IMaterialVar *pBaseTexture = pMaterial->FindVar( "$basetexture", &bFound, false );
+	if ( bFound )
+	{
+		pSaveTexture = pBaseTexture->GetTextureValue();
+		pBaseTexture->SetTextureValue( m_pMotionBlurTexture );
+	}
+
+	materials->SetRenderTarget( pSaveRenderTarget );
+	materials->DrawScreenSpaceQuad( pMaterial );
+
+	if ( bFound )
+	{
+		pBaseTexture->SetTextureValue( pSaveTexture );
+	}
+
+	materials->DepthRange( 0.0f, 1.0f );
+
+	materials->MatrixMode( MATERIAL_PROJECTION );
+	materials->PopMatrix();
+
+	materials->MatrixMode( MATERIAL_VIEW );
+	materials->PopMatrix();
+
+	materials->MatrixMode( MATERIAL_MODEL );
+	materials->PopMatrix();
 }
 
 

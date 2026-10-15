@@ -8,81 +8,49 @@
 
 #include "materialsystem/imesh.h"
 #include "materialsystem/ITexture.h"
+#include "materialsystem/MaterialSystemUtil.h"
 #include "vstdlib/strtools.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
-//=============================================================================
-// 
-//=============================================================================
-static ITexture *s_pPowerOfTwoFrameBufferTexture = NULL;
+// REBUILD: client.dll keeps its render targets in CTextureReferences (Valve's later rendertexture.cpp),
+// with no restore functions, and creates the two small HDR buffers itself.
 
-static void PowerOfTwoFrameBufferTextureRestoreFunc( int nChangeFlags )
-{
-	s_pPowerOfTwoFrameBufferTexture = NULL;
-}
-
+//=============================================================================
+// Power of Two Frame Buffer Texture
+//=============================================================================
+static CTextureReference s_pPowerOfTwoFrameBufferTexture;
 ITexture *GetPowerOfTwoFrameBufferTexture( void )
 {
 	if( !s_pPowerOfTwoFrameBufferTexture )
 	{
-		s_pPowerOfTwoFrameBufferTexture = materials->FindTexture( "_rt_PowerOfTwoFB", TEXTURE_GROUP_RENDER_TARGET );
+		s_pPowerOfTwoFrameBufferTexture.Init( materials->FindTexture( "_rt_PowerOfTwoFB", TEXTURE_GROUP_RENDER_TARGET ) );
 		Assert( !IsErrorTexture( s_pPowerOfTwoFrameBufferTexture ) );
-
-		static bool bAddedRestoreFunc = false;
-		if( !bAddedRestoreFunc )
-		{
-			materials->AddRestoreFunc( PowerOfTwoFrameBufferTextureRestoreFunc );
-			bAddedRestoreFunc = true;
-		}
 	}
 	
 	return s_pPowerOfTwoFrameBufferTexture;
 }
 
 //=============================================================================
-// 
+// Camera Texture
 //=============================================================================
-static ITexture *s_pCameraTexture = NULL;
-
-static void CameraTextureRestoreFunc( int nChangeFlags )
-{
-	s_pCameraTexture = NULL;
-}
-
+static CTextureReference s_pCameraTexture;
 ITexture *GetCameraTexture( void )
 {
 	if( !s_pCameraTexture )
 	{
-		s_pCameraTexture = materials->FindTexture( "_rt_Camera", TEXTURE_GROUP_RENDER_TARGET );
+		s_pCameraTexture.Init( materials->FindTexture( "_rt_Camera", TEXTURE_GROUP_RENDER_TARGET ) );
 		Assert( !IsErrorTexture( s_pCameraTexture ) );
-
-		static bool bAddedRestoreFunc = false;
-		if( !bAddedRestoreFunc )
-		{
-			materials->AddRestoreFunc( CameraTextureRestoreFunc );
-			bAddedRestoreFunc = true;
-		}
 	}
 	
 	return s_pCameraTexture;
 }
 
 //=============================================================================
-// 
+// Full Frame Buffer Textures
 //=============================================================================
-static ITexture *s_pFullFrameFrameBufferTexture[MAX_FB_TEXTURES] = { NULL, NULL, NULL, NULL };
-
-static void FullFrameFrameBufferTextureRestoreFunc( int nChangeFlags )
-{
-	int i;
-	for( i = 0; i < MAX_FB_TEXTURES; i++ )
-	{
-		s_pFullFrameFrameBufferTexture[i] = NULL;
-	}
-}
-
+static CTextureReference s_pFullFrameFrameBufferTexture[MAX_FB_TEXTURES];
 ITexture *GetFullFrameFrameBufferTexture( int textureIndex )
 {
 	if( !s_pFullFrameFrameBufferTexture[textureIndex] )
@@ -96,44 +64,23 @@ ITexture *GetFullFrameFrameBufferTexture( int textureIndex )
 		{
 			Q_strcpy( name, "_rt_FullFrameFB" );
 		}
-		s_pFullFrameFrameBufferTexture[textureIndex] = materials->FindTexture( name, TEXTURE_GROUP_RENDER_TARGET );
+		s_pFullFrameFrameBufferTexture[textureIndex].Init( materials->FindTexture( name, TEXTURE_GROUP_RENDER_TARGET ) );
 		Assert( !IsErrorTexture( s_pFullFrameFrameBufferTexture[textureIndex] ) );
-
-		static bool bAddedRestoreFunc = false;
-		if( !bAddedRestoreFunc )
-		{
-			materials->AddRestoreFunc( FullFrameFrameBufferTextureRestoreFunc );
-			bAddedRestoreFunc = true;
-		}
 	}
 	
 	return s_pFullFrameFrameBufferTexture[textureIndex];
 }
 
-
 //=============================================================================
 // Water reflection
 //=============================================================================
-static ITexture *s_pWaterReflectionTexture = NULL;
-
-static void WaterReflectionTextureRestoreFunc( int nChangeFlags )
-{
-	s_pWaterReflectionTexture = NULL;
-}
-
+static CTextureReference s_pWaterReflectionTexture;
 ITexture *GetWaterReflectionTexture( void )
 {
 	if( !s_pWaterReflectionTexture )
 	{
-		s_pWaterReflectionTexture = materials->FindTexture( "_rt_WaterReflection", TEXTURE_GROUP_RENDER_TARGET );
+		s_pWaterReflectionTexture.Init( materials->FindTexture( "_rt_WaterReflection", TEXTURE_GROUP_RENDER_TARGET ) );
 		Assert( !IsErrorTexture( s_pWaterReflectionTexture ) );
-
-		static bool bAddedRestoreFunc = false;
-		if( !bAddedRestoreFunc )
-		{
-			materials->AddRestoreFunc( WaterReflectionTextureRestoreFunc );
-			bAddedRestoreFunc = true;
-		}
 	}
 	
 	return s_pWaterReflectionTexture;
@@ -142,85 +89,56 @@ ITexture *GetWaterReflectionTexture( void )
 //=============================================================================
 // Water refraction
 //=============================================================================
-static ITexture *s_pWaterRefractionTexture = NULL;
-
-static void WaterRefractionTextureRestoreFunc( int nChangeFlags )
-{
-	s_pWaterRefractionTexture = NULL;
-}
-
+static CTextureReference s_pWaterRefractionTexture;
 ITexture *GetWaterRefractionTexture( void )
 {
 	if( !s_pWaterRefractionTexture )
 	{
-		s_pWaterRefractionTexture = materials->FindTexture( "_rt_WaterRefraction", TEXTURE_GROUP_RENDER_TARGET );
+		s_pWaterRefractionTexture.Init( materials->FindTexture( "_rt_WaterRefraction", TEXTURE_GROUP_RENDER_TARGET ) );
 		Assert( !IsErrorTexture( s_pWaterRefractionTexture ) );
-
-		static bool bAddedRestoreFunc = false;
-		if( !bAddedRestoreFunc )
-		{
-			materials->AddRestoreFunc( WaterRefractionTextureRestoreFunc );
-			bAddedRestoreFunc = true;
-		}
 	}
 	
 	return s_pWaterRefractionTexture;
 }
 
-
 //=============================================================================
-// 
+// Small Buffer HDR0
 //=============================================================================
-static ITexture *s_pSmallBufferHDR0 = NULL;
-
-static void SmallBufferHDR0RestoreFunc( int nChangeFlags )
-{
-	s_pSmallBufferHDR0 = NULL;
-}
-
+static CTextureReference s_pSmallBufferHDR0;
 ITexture *GetSmallBufferHDR0( void )
 {
 	if( !s_pSmallBufferHDR0 )
 	{
-		s_pSmallBufferHDR0 = materials->FindTexture( "_rt_SmallHDR0", TEXTURE_GROUP_RENDER_TARGET );
-		Assert( !IsErrorTexture( s_pSmallBufferHDR0 ) );
-
-		static bool bAddedRestoreFunc = false;
-		if( !bAddedRestoreFunc )
-		{
-			materials->AddRestoreFunc( SmallBufferHDR0RestoreFunc );
-			bAddedRestoreFunc = true;
-		}
+		s_pSmallBufferHDR0.InitRenderTarget( 256, 256, RT_SIZE_HDR, IMAGE_FORMAT_ARGB8888, MATERIAL_RT_DEPTH_NONE );
 	}
 	
 	return s_pSmallBufferHDR0;
 }
 
 //=============================================================================
-// 
+// Small Buffer HDR1
 //=============================================================================
-static ITexture *s_pSmallBufferHDR1 = NULL;
-
-static void SmallBufferHDR1RestoreFunc( int nChangeFlags )
-{
-	s_pSmallBufferHDR0 = NULL;
-}
-
+static CTextureReference s_pSmallBufferHDR1;
 ITexture *GetSmallBufferHDR1( void )
 {
 	if( !s_pSmallBufferHDR1 )
 	{
-		s_pSmallBufferHDR1 = materials->FindTexture( "_rt_SmallHDR1", TEXTURE_GROUP_RENDER_TARGET );
-		Assert( !IsErrorTexture( s_pSmallBufferHDR1 ) );
-
-		static bool bAddedRestoreFunc = false;
-		if( !bAddedRestoreFunc )
-		{
-			materials->AddRestoreFunc( SmallBufferHDR1RestoreFunc );
-			bAddedRestoreFunc = true;
-		}
+		s_pSmallBufferHDR1.InitRenderTarget( 256, 256, RT_SIZE_HDR, IMAGE_FORMAT_ARGB8888, MATERIAL_RT_DEPTH_NONE );
 	}
 	
 	return s_pSmallBufferHDR1;
 }
 
+//=============================================================================
+// Hidden: the stun motion blur
+//=============================================================================
+static CTextureReference s_pMotionBlurTexture;
+ITexture *GetMotionBlurTexture( void )	// REBUILD: name; client.dll's 24173520
+{
+	if( !s_pMotionBlurTexture )
+	{
+		s_pMotionBlurTexture.InitRenderTarget( 256, 256, RT_SIZE_FULL_FRAME_BUFFER, IMAGE_FORMAT_ARGB8888, MATERIAL_RT_DEPTH_NONE );
+	}
+	
+	return s_pMotionBlurTexture;
+}

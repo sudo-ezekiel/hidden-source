@@ -16,5 +16,6 @@ ITexture *GetWaterRefractionTexture( void );
 ITexture *GetCameraTexture( void );
 ITexture *GetSmallBufferHDR0( void );
 ITexture *GetSmallBufferHDR1( void );
+ITexture *GetMotionBlurTexture( void );	// Hidden
 
 #endif // RENDERTARGETS_H
