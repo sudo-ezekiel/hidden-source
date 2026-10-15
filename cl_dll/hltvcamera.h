@@ -28,15 +28,15 @@ public:
 	void SetMode(int iMode);
 	void SetChaseCamParams( float flOffset, float flDistance, float flTheta, float flPhi  );
 	void SpecNextPlayer( bool bInverse );
+	void SpecNamedPlayer( const char *szPlayerName );
 
 	int  GetMode();	// returns current camera mode
-	int	 GetPrimaryTraget();  // return primary target
+	C_BaseEntity *GetPrimaryTarget();  // return primary target
+	C_BaseEntity *GetCameraMan();  // return camera entity if any
 			
 protected:
 
 	void CalcChaseCamView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
-	void CalcChaseCamView1( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
-	void CalcChaseCamView2( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
 	void CalcFixedView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
 	void CalcInEyeCamView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
 	void CalcRoamingView(Vector& eyeOrigin, QAngle& eyeAngles, float& fov);

@@ -171,6 +171,9 @@ void ClientModeShared::VGui_Shutdown()
 void ClientModeShared::Shutdown()
 {
 	HLTVCamera()->Shutdown();
+
+	// Hidden: stop listening for the events Init asked for
+	gameeventmanager->RemoveListener( this );
 }
 
 //-----------------------------------------------------------------------------
@@ -387,15 +390,10 @@ int	ClientModeShared::KeyInput( int down, int keynum, const char *pszCurrentBind
 	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
 
 	// if ingame spectator mode, intercept key event here
-	if( pPlayer && pPlayer->GetObserverMode() > OBS_MODE_DEATHCAM ) 
+	// Hidden: any observer mode, and no +duck spectator menu here (as client.dll has it)
+	if( pPlayer && pPlayer->GetObserverMode() > OBS_MODE_NONE ) 
 	{
-		// we are in spectator mode, open spectator menu
-		if ( down && pszCurrentBinding && Q_strcmp( pszCurrentBinding, "+duck" ) == 0 )
-		{
-			m_pViewport->ShowPanel( PANEL_SPECMENU, true );
-			return 0; // we handled it, don't handle twice or send to server
-		}
-		else if ( down && pszCurrentBinding && Q_strcmp( pszCurrentBinding, "+attack" ) == 0 )
+		if ( down && pszCurrentBinding && Q_strcmp( pszCurrentBinding, "+attack" ) == 0 )
 		{
 			engine->ClientCmd( "spec_next" );
 			return 0;
@@ -569,7 +567,9 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 {
 	CBaseHudChat *hudChat = (CBaseHudChat *)GET_HUDELEMENT( CHudChat );
 
-	if ( Q_strcmp( "player_connect", event->GetName() ) == 0 )
+	const char *eventname = event->GetName();	// as the 2006 SDK has it
+
+	if ( Q_strcmp( "player_connect", eventname ) == 0 )
 	{
 		if ( !hudChat )
 			return;
@@ -577,7 +577,7 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		hudChat->Printf( "%s has joined the game\n", event->GetString("name") );
 	}
 
-	else if ( Q_strcmp( "player_disconnect", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "player_disconnect", eventname ) == 0 )
 	{
 		C_BasePlayer *pPlayer = USERID2PLAYER( event->GetInt("userid") );
 
@@ -589,7 +589,7 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 			event->GetString("reason") );
 	}
 
-	else if ( Q_strcmp( "player_team", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "player_team", eventname ) == 0 )
 	{
 		C_BasePlayer *pPlayer = USERID2PLAYER( event->GetInt("userid") );
 
@@ -610,7 +610,7 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		}
 	}
 	
-	else if ( Q_strcmp( "player_changename", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "player_changename", eventname ) == 0 )
 	{
 		if ( !hudChat )
 			return;
@@ -618,12 +618,12 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		hudChat->Printf( "%s changed name to %s\n", event->GetString("oldname"), event->GetString("newname") );
 	}
 
-	else if ( Q_strcmp( "server_cvar", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "server_cvar", eventname ) == 0 )
 	{
 		hudChat->Printf( "Server cvar \"%s\" changed to %s\n", event->GetString("cvarname"), event->GetString("cvarvalue") );
 	}
 
-	else if ( Q_strcmp( "game_round_restart", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "game_round_restart", eventname ) == 0 )
 	{
 		// recreate all client side physics props
 		C_PhysPropClientside::RecreateAll();
@@ -642,14 +642,14 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 			pLocalPlayer->ClearDamageList();
 	}
 
-	else if ( Q_strcmp( "game_round_start", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "game_round_start", eventname ) == 0 )
 	{
 		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
 		if ( pLocalPlayer && pLocalPlayer->GetTeamNumber() == TEAM_IRIS )
 			pLocalPlayer->EmitSound( "IRIS.RoundStart" );
 	}
 
-	else if ( Q_strcmp( "game_round_end", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "game_round_end", eventname ) == 0 )
 	{
 		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
 		if ( pLocalPlayer )
@@ -662,7 +662,7 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		}
 	}
 
-	else if ( Q_strcmp( "iris_radio", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "iris_radio", eventname ) == 0 )
 	{
 		// Living IRIS hear the radio calls
 		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
@@ -698,7 +698,7 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		}
 	}
 
-	else if ( Q_strcmp( "player_hurt", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "player_hurt", eventname ) == 0 )
 	{
 		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
 		if ( !pLocalPlayer )
@@ -710,18 +710,19 @@ void ClientModeShared::FireGameEvent( IGameEvent *event )
 		// Keep the damage the local player dealt or took for the damage list
 		if ( pVictim == pLocalPlayer || pAttacker == pLocalPlayer )
 		{
-			PlayerDamageRecord_t damage = { event->GetInt("attacker"), event->GetInt("userid"), event->GetFloat("damage"), 0 };
+			float flDamage = event->GetFloat("damage");
+			PlayerDamageRecord_t damage = { event->GetInt("attacker"), event->GetInt("userid"), flDamage, 0 };
 			pLocalPlayer->AddDamage( damage );
 		}
 	}
 
-	else if ( Q_strcmp( "player_death", event->GetName() ) == 0 )
+	else if ( Q_strcmp( "player_death", eventname ) == 0 )
 	{
 		C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
 		if ( !pLocalPlayer )
 			return;
 
-		if ( USERID2PLAYER( event->GetInt("userid") ) == pLocalPlayer )
+		if ( pLocalPlayer == USERID2PLAYER( event->GetInt("userid") ) )
 			pLocalPlayer->PrintDamageList();
 	}
 

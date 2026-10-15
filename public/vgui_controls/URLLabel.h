@@ -30,7 +30,6 @@ public:
     void SetURL(const char *pszURL);
 
 protected:
-	virtual void Paint();
 	virtual void OnMousePressed(MouseCode code);
 	virtual void ApplySettings( KeyValues *inResourceData );
 	virtual void GetSettings( KeyValues *outResourceData );

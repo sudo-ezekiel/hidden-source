@@ -12,6 +12,7 @@
 #include <vgui/IInput.h>
 #include <vgui/IScheme.h>
 #include <vgui/ISurface.h>
+#include <vgui/ISystem.h>
 #include <vgui/IVGui.h>
 #include <vgui/MouseCode.h>
 #include <vgui/KeyCode.h>
@@ -617,6 +618,14 @@ void Button::FireActionSignal()
 	// message-based action signal
 	if (_actionMessage)
 	{
+		// see if it's a url (client.dll has this from Valve's later Button.cpp)
+		if (!stricmp(_actionMessage->GetName(), "command")
+			&& !strnicmp(_actionMessage->GetString("command", ""), "url ", strlen("url "))
+			&& strstr(_actionMessage->GetString("command", ""), "://"))
+		{
+			// it's a command to launch a url, run it
+			system()->ShellExecute("open", _actionMessage->GetString("command", "      ") + 4);
+		}
 		PostActionSignal(_actionMessage->MakeCopy());
 	}
 }

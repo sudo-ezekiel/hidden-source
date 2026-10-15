@@ -23,6 +23,8 @@ public:
 	virtual void		GetVideoModes( struct vmode_s **liststart, int *count ) = 0;
 	virtual void		SetFriendsID( uint friendsID, const char *friendsName ) = 0;
 	virtual void		GetDesktopResolution( int &width, int &height ) = 0;
+	// Hidden: from Valve's later SDK, as client.dll calls it (still VENGINE_GAMEUIFUNCS_VERSION004)
+	virtual int			GetEngineKeyCodeForBind( const char *bind ) = 0;
 };
 
 #define VENGINE_GAMEUIFUNCS_VERSION "VENGINE_GAMEUIFUNCS_VERSION004"

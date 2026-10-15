@@ -62,7 +62,10 @@ PRECACHE_WEAPON_REGISTER( weapon_knife );
 int CWeaponCrowbar::DrawModel( int flags )
 {
 	C_BasePlayer *pPlayer = ToBasePlayer( GetOwner() );
-	if ( pPlayer && pPlayer->IsAlive() )
+	if ( !pPlayer )
+		return BaseClass::DrawModel( flags );
+
+	if ( pPlayer->IsAlive() )
 		return 1;
 
 	return BaseClass::DrawModel( flags );

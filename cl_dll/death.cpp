@@ -143,13 +143,13 @@ void CHudDeathNotice::SetColorForNoticePlayer( int iTeamNumber )
 //-----------------------------------------------------------------------------
 void CHudDeathNotice::Paint()
 {
-	if ( !m_iconD_skull )
-		return;
-
 	int yStart = GetClientModeSDKNormal()->GetDeathMessageStartHeight();
 
+	// Hidden: no skull check, and the text starts out white
+	Color clrText( 255, 255, 255, 255 );	// REBUILD: name
+
 	surface()->DrawSetTextFont( m_hTextFont );
-	surface()->DrawSetTextColor( GameResources()->GetTeamColor( 0 ) );
+	surface()->DrawSetTextColor( clrText );
 
 
 	int iCount = m_DeathNotices.Count();
@@ -322,7 +322,7 @@ void CHudDeathNotice::FireGameEvent( IGameEvent * event )
 	deathMsg.iconDeath = gHUD.GetIcon( fullkilledwith );
 
 	// Hidden: a physics kill keeps its icon even as a suicide
-	if ( !deathMsg.iconDeath || ( deathMsg.iSuicide && strcmp( "d_physics", fullkilledwith ) ) )
+	if ( !deathMsg.iconDeath || ( deathMsg.iSuicide && Q_strcmp( "d_physics", fullkilledwith ) ) )
 	{
 		// Can't find it, so use the default skull & crossbones icon
 		deathMsg.iconDeath = m_iconD_skull;

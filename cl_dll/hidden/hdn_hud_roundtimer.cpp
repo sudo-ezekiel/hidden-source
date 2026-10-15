@@ -41,7 +41,7 @@ DECLARE_HUDELEMENT( CHudRoundTimer );
 //-----------------------------------------------------------------------------
 CHudRoundTimer::CHudRoundTimer( const char *pElementName ) : CHudElement( pElementName ), BaseClass( NULL, "HudRoundTimer" )
 {
-	SetPaintEnabled( false );
+	SetPaintBackgroundEnabled( false );
 
 	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT );
 }
@@ -75,10 +75,9 @@ void CHudRoundTimer::Reset( void )
 //-----------------------------------------------------------------------------
 void CHudRoundTimer::OnThink( void )
 {
-	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
-	m_pPlayer = pPlayer;
+	m_pPlayer = C_BasePlayer::GetLocalPlayer();
 
-	if ( pPlayer && pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+	if ( m_pPlayer && m_pPlayer->GetTeamNumber() == TEAM_HIDDEN )
 	{
 		SetFgColor( Color( 228, 207, 154, 200 ) );
 	}

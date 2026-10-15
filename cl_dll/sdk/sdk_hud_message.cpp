@@ -57,9 +57,12 @@ DECLARE_HUD_MESSAGE( CHudGameMessage, GameMessage );
 void CHudGameMessage::VidInit( void )
 {
 	// Store off a reference to our icon
-	m_pIcon = gHUD.GetIcon( "message_icon" );
+	m_pIcon = gHUD.GetIcon( "dmg_cold" );	// Hidden: client.dll uses the cold damage icon
 
 	m_pText[0] = '\0';
+
+	// Hidden: start out faded
+	m_flStartTime = gpGlobals->curtime - 100.0f;
 }
 
 void CHudGameMessage::Init( void )
@@ -91,8 +94,14 @@ void CHudGameMessage::Paint( void )
 	float flAlpha = SimpleSplineRemapVal( dt, 0.0f, m_flDuration, 255, 0 );
 	flAlpha = clamp( flAlpha, 0.0f, 255.0f );
 
+	// Hidden: the background fades out with the message, at half its alpha
+	Color bgColor = GetBgColor();	// REBUILD: name
+	bgColor[3] = flAlpha * 0.5f;
+	SetBgColor( bgColor );
+
 	// Draw our icon
-	m_pIcon->DrawSelf( 0, 0, 32, 32, Color(255,255,255,flAlpha) );
+	if ( m_pIcon )
+		m_pIcon->DrawSelf( 0, 0, 32, 32, Color(255,255,255,flAlpha) );
 
 	// Get our scheme and font information
 	vgui::HScheme scheme = vgui::scheme()->GetScheme( "ClientScheme" );

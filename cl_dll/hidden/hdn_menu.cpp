@@ -14,6 +14,10 @@ HDNMenu::HDNMenu( Panel *pParent ) : Frame( NULL, "team" )
 	m_pPlayer = C_BasePlayer::GetLocalPlayer();
 }
 
+HDNMenu::~HDNMenu()
+{
+}
+
 //-----------------------------------------------------------------------------
 // Purpose: Sets the frame up and takes the parent's size; the menus load
 //			their .res file first
@@ -65,16 +69,14 @@ void HDNMenu::LayoutPanels( void )
 
 	for ( i = 1; i < 7; i++ )
 	{
-		ImagePanel *pImage = m_Images[i];
-
-		pImage->SetWide( pImage->GetWide() * m_flScaleX );
-		pImage->SetTall( pImage->GetTall() * m_flScaleY );
+		m_Images[i]->SetWide( m_Images[i]->GetWide() * m_flScaleX );
+		m_Images[i]->SetTall( m_Images[i]->GetTall() * m_flScaleY );
 
 		int x, y;
-		pImage->GetPos( x, y );
-		pImage->SetPos( x * m_flScaleX, y * m_flScaleY );
+		m_Images[i]->GetPos( x, y );
+		m_Images[i]->SetPos( x * m_flScaleX, y * m_flScaleY );
 
-		pImage->SetVisible( true );
+		m_Images[i]->SetVisible( true );
 	}
 }
 
@@ -99,6 +101,11 @@ void HDNMenu::SetImagePos( ImagePanel *pImage, int x, int y )
 	pImage->SetVisible( true );
 }
 
+void HDNMenu::OnCommand( const char *command )
+{
+	BaseClass::OnCommand( command );
+}
+
 void HDNMenu::SendCommand( const char *command )
 {
 	engine->ClientCmd( command );
@@ -110,14 +117,34 @@ void HDNMenu::SendCommand( const char *command )
 int HDNMenu::GetCommandValue( const char *command )
 {
 	char token[64];
+	int iValue = -1;	// REBUILD: name
 
 	const char *p = nexttoken( token, command, ' ' );
 	nexttoken( token, p, ' ' );
 
 	if ( token[0] )
-		return atol( token );
+		iValue = atoi( token );
 
-	return -1;
+	return iValue;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: The derived menus fill the lists, then chain here to count them
+//			(out of line: client.dll calls these from the derived menus)
+//-----------------------------------------------------------------------------
+void HDNMenu::InitImages( void )
+{
+	m_iImageCount = m_Images.Count();
+}
+
+void HDNMenu::InitInfoImages( void )
+{
+	m_iInfoCount = m_InfoImages.Count();
+}
+
+void HDNMenu::InitButtons( void )
+{
+	m_iButtonCount = m_Buttons.Count();
 }
 
 //-----------------------------------------------------------------------------

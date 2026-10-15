@@ -98,7 +98,7 @@ void CHudLocation::Reset( void )
 //-----------------------------------------------------------------------------
 void CHudLocation::FireGameEvent( IGameEvent *event )
 {
-	if ( !Q_strcmp( event->GetName(), "player_location" ) )
+	if ( !Q_strcmp( "player_location", event->GetName() ) )
 	{
 		C_BasePlayer *pPlayer = USERID2PLAYER( event->GetInt( "userid" ) );
 
@@ -139,7 +139,10 @@ void CHudLocation::Paint( void )
 	m_pLabel->SetFgColor( Color( 184, 224, 232, 255 ) );
 	SetBgColor( Color( 0, 0, 0, 0 ) );
 	m_pLabel->SetText( m_szLocation );
-	m_pLabel->SetVisible( pPlayer->GetTeamNumber() != TEAM_HIDDEN );
+	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
+		m_pLabel->SetVisible( false );
+	else
+		m_pLabel->SetVisible( true );
 	m_pLabel->SizeToContents();
 	m_pLabel->SetSize( GetWide(), GetTall() );
 }

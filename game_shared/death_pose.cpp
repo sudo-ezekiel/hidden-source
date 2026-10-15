@@ -16,7 +16,7 @@ void GetRagdollCurSequenceWithDeathPose( C_BaseAnimating *entity, matrix3x4_t *c
 
 	Vector vPrevOrigin = entity->GetAbsOrigin();
 
-	entity->ForceAllInterpolate();
+	// Hidden: client.dll (June 2006) does not call ForceAllInterpolate() here
 	entity->Interpolate( flTime );
 	
 	if ( activity != ACT_INVALID )

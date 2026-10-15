@@ -2289,6 +2289,11 @@ int C_BaseAnimating::DrawModel( int flags )
 
 	int drawn = 0;
 
+	// Hidden: not the entity the local player observes from a fixed camera
+	C_BasePlayer *pPlayer = C_BasePlayer::GetLocalPlayer();
+	if ( pPlayer && pPlayer->IsObserver() && pPlayer->GetObserverMode() == OBS_MODE_FIXED && pPlayer->GetObserverTarget() == this )
+		return 0;
+
 	if ( r_drawothermodels.GetInt() )
 	{
 		engineCache->EnterCriticalSection( );
@@ -2427,6 +2432,17 @@ extern ConVar muzzleflash_light;
 
 void C_BaseAnimating::ProcessMuzzleFlashEvent()
 {
+	// Hidden: the model's "muzzle" attachment, when it has one
+	studiohdr_t *pStudioHdr = NULL;
+	if ( GetModel() )
+		pStudioHdr = modelinfo->GetStudiomodel( GetModel() );
+
+	int iAttachment;	// REBUILD: name
+	if ( !pStudioHdr )
+		iAttachment = -1;
+	else
+		iAttachment = Studio_FindAttachment( pStudioHdr, "muzzle" ) + 1;
+
 	// If we have an attachment, then stick a light on it.
 	if ( muzzleflash_light.GetBool() )
 	{
@@ -2435,19 +2451,28 @@ void C_BaseAnimating::ProcessMuzzleFlashEvent()
 		{
 			Vector vAttachment;
 			QAngle dummyAngles;
-			GetAttachment( 1, vAttachment, dummyAngles );
+			if ( iAttachment < 0 || !GetAttachment( iAttachment, vAttachment, dummyAngles ) )
+			{
+				GetAttachment( 1, vAttachment, dummyAngles );
+			}
 
-			// Make an elight
-			dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + index );
+			// Make a dlight (Hidden: not an elight, and it lasts 0.1 seconds)
+			dlight_t *el = effects->CL_AllocDlight( LIGHT_INDEX_MUZZLEFLASH + index );
 			el->origin = vAttachment;
 			el->radius = random->RandomInt( 32, 64 ); 
-			el->decay = el->radius / 0.05f;
-			el->die = gpGlobals->curtime + 0.05f;
+			el->decay = el->radius / 0.1f;
+			el->die = gpGlobals->curtime + 0.1f;
 			el->color.r = 255;
 			el->color.g = 192;
 			el->color.b = 64;
 			el->color.exponent = 5;
 		}
+	}
+
+	// Hidden: a muzzle flash sprite on the "muzzle" attachment
+	if ( iAttachment >= 0 )
+	{
+		tempents->MuzzleFlash( MUZZLEFLASH_SMG1, entindex(), iAttachment, false );
 	}
 }
 
@@ -2877,6 +2902,7 @@ void C_BaseAnimating::FireEvent( const Vector& origin, const QAngle& angles, int
 
 	// Eject brass
 	case CL_EVENT_EJECTBRASS1:
+		DevMsg( 1, "CL_EVENT_EJECTBRASS1 : %i\n", CL_EVENT_EJECTBRASS1 );	// Hidden
 		if ( m_Attachments.Count() > 0 )
 		{
 			if ( MainViewOrigin().DistToSqr( GetAbsOrigin() ) < (256 * 256) )
@@ -2884,8 +2910,12 @@ void C_BaseAnimating::FireEvent( const Vector& origin, const QAngle& angles, int
 				Vector attachOrigin;
 				QAngle attachAngles; 
 				
-				if( GetAttachment( 2, attachOrigin, attachAngles ) )
+				// Hidden: the "eject" attachment rather than attachment 2
+				int iAttachment = LookupAttachment( "eject" );	// REBUILD: name
+				DevMsg( "brass eject attachment : %i\n", iAttachment );
+				if( GetAttachment( iAttachment, attachOrigin, attachAngles ) )
 				{
+					DevMsg( "brass eject options : %i\n", atoi( options ) );
 					tempents->EjectBrass( attachOrigin, attachAngles, GetAbsAngles(), atoi( options ) );
 				}
 			}
@@ -2977,6 +3007,7 @@ void C_BaseAnimating::FireEvent( const Vector& origin, const QAngle& angles, int
 	case AE_NPC_MUZZLEFLASH:
 		{
 			// Send out the effect for an NPC
+			DevMsg( 1, "muzzle flash!\n" );	// Hidden
 			DispatchMuzzleEffect( options, false );
 			break;
 		}

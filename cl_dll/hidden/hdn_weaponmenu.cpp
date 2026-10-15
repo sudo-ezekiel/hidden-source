@@ -19,6 +19,7 @@ private:
 
 public:
 	HDNWeaponMenu( vgui::Panel *pParent );
+	virtual ~HDNWeaponMenu() {}
 
 	vgui::VPANEL GetVPanel( void ) { return BaseClass::GetVPanel(); }
 	virtual bool IsVisible() { return BaseClass::IsVisible(); }
@@ -142,20 +143,20 @@ void HDNWeaponMenu::SetPrimary( int iPrimary )
 
 void HDNWeaponMenu::SetSecondary( int iSecondary )
 {
-	if ( iSecondary == 0 )
+	switch ( iSecondary )
 	{
+	case 0:
 		strcpy( m_szSecondary, "secondary 0" );
 		SetImagePos( m_Images[3], 28, 224 );
-	}
-	else if ( iSecondary == 1 )
-	{
+		break;
+	case 1:
 		strcpy( m_szSecondary, "secondary 1" );
 		SetImagePos( m_Images[3], 27, 246 );
-	}
-	else
-	{
+		break;
+	default:
 		strcpy( m_szSecondary, "secondary 9" );
 		m_Images[3]->SetVisible( false );
+		break;
 	}
 }
 
@@ -205,31 +206,29 @@ void HDNWeaponMenu::SendLoadout( void )
 //-----------------------------------------------------------------------------
 void HDNWeaponMenu::OnThink()
 {
-	bool bSupport;
-
 	if ( m_pPlayer->GetNewClass() == 1 )
 	{
-		int iPrimary = m_pPlayer->GetPrimary();
-		if ( iPrimary == 0 || iPrimary == 2 )
+		switch ( m_pPlayer->GetPrimary() )
 		{
+		case 0:
+		case 2:
 			strcpy( m_szPrimary, "primary 9" );
 			m_Images[2]->SetVisible( false );
+			break;
 		}
 
 		m_Buttons[0]->SetEnabled( false );
 		m_Buttons[2]->SetEnabled( false );
 		m_Images[5]->SetVisible( true );
-		bSupport = true;
+		m_Images[6]->SetVisible( true );
 	}
 	else
 	{
 		m_Buttons[0]->SetEnabled( true );
 		m_Buttons[2]->SetEnabled( true );
 		m_Images[5]->SetVisible( false );
-		bSupport = false;
+		m_Images[6]->SetVisible( false );
 	}
-
-	m_Images[6]->SetVisible( bSupport );
 
 	BaseClass::OnThink();
 }
@@ -239,7 +238,7 @@ void HDNWeaponMenu::OnCommand( const char *command )
 	if ( !strncmp( command, "primary", 7 ) )
 	{
 		int iValue = GetCommandValue( command );
-		if ( iValue >= 0 && iValue < 4 )
+		if ( iValue > -1 && iValue < 4 )
 		{
 			SetPrimary( iValue );
 		}
@@ -247,7 +246,7 @@ void HDNWeaponMenu::OnCommand( const char *command )
 	else if ( !strncmp( command, "secondary", 9 ) )
 	{
 		int iValue = GetCommandValue( command );
-		if ( iValue >= 0 && iValue < 2 )
+		if ( iValue > -1 && iValue < 2 )
 		{
 			SetSecondary( iValue );
 		}
@@ -255,7 +254,7 @@ void HDNWeaponMenu::OnCommand( const char *command )
 	else if ( !strncmp( command, "equip", 5 ) )
 	{
 		int iValue = GetCommandValue( command );
-		if ( iValue >= 0 && iValue < 5 )
+		if ( iValue > -1 && iValue < 5 )
 		{
 			SetEquipment( iValue );
 		}

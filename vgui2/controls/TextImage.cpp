@@ -388,6 +388,13 @@ void TextImage::GetTextSize(int &wide, int &tall)
 	int textLen = wcslen(text);
 	for (int i = 0; i < textLen; i++)
 	{
+		// handle stupid special characters, these should be removed
+		// (client.dll has this from Valve's later TextImage.cpp)
+		if ( text[i] == '&' && text[i+1] != 0 )
+		{
+			i++;
+		}
+
 		int a, b, c;
 		surface()->GetCharABCwide(font, text[i], a, b, c);
 		wide += (a + b + c);

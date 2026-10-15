@@ -29,12 +29,9 @@ int ScreenTransform( const Vector& point, Vector& screen );
 
 extern ConVar r_updaterefracttexture;
 
+// REBUILD: client.dll's UpdateRefractTexture has no r_updaterefracttexture check (the ConVar is still defined)
 inline void UpdateRefractTexture( void )
 {
-	if ( !r_updaterefracttexture.GetBool() )
-	{
-		return;
-	}
 	ITexture *pTexture = GetPowerOfTwoFrameBufferTexture();
 	materials->CopyRenderTargetToTexture( pTexture );
 	materials->SetFrameBufferCopyTexture( pTexture );

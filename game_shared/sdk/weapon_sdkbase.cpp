@@ -580,13 +580,12 @@ void CWeaponSDKBase::InitBeam( void )
 
 	BeamInfo_t beamInfo;
 
-	CBaseEntity *pEntity = this;
+	CBaseEntity *pEntity = NULL;
 
 	if ( IsCarriedByLocalPlayer() )
 	{
 		CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
 
-		pEntity = NULL;
 		if ( pOwner != NULL )
 		{
 			if ( !pOwner->LAMIsOn() )
@@ -594,6 +593,10 @@ void CWeaponSDKBase::InitBeam( void )
 
 			pEntity = pOwner->GetViewModel();
 		}
+	}
+	else
+	{
+		pEntity = this;
 	}
 
 	beamInfo.m_pStartEnt = pEntity;
@@ -604,29 +607,16 @@ void CWeaponSDKBase::InitBeam( void )
 
 	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
 
-	if ( !pPlayer->LAMIsOn() )
-	{
-		beamInfo.m_pszModelName = "sprites/glow_test02";
-	}
-	else
+	if ( pPlayer->LAMIsOn() )
 	{
 		beamInfo.m_pszModelName = ( IsCarriedByLocalPlayer() ) ? "effects/laser1_noz.vmt" : "effects/laser1.vmt";
 	}
-
-	if ( !pPlayer->LAMIsOn() )
-	{
-		// A white glow along the weapon
-		beamInfo.m_pszHaloName = "sprites/light_glow03.vmt";
-		beamInfo.m_flHaloScale = 30.0f;
-		beamInfo.m_flLife = 0.0f;
-		beamInfo.m_flWidth = 2.5f;
-		beamInfo.m_flEndWidth = 25.0f;
-		beamInfo.m_nStartAttachment = pEntity->GetBaseAnimating()->LookupAttachment( "beamstart" );
-		beamInfo.m_nEndAttachment = pEntity->GetBaseAnimating()->LookupAttachment( "beamend" );
-		beamInfo.m_flRed = 255.0;
-		beamInfo.m_flBlue = 255.0;
-	}
 	else
+	{
+		beamInfo.m_pszModelName = "sprites/glow_test02";
+	}
+
+	if ( pPlayer->LAMIsOn() )
 	{
 		// The green laser beam
 		beamInfo.m_flHaloScale = 0.0f;
@@ -647,6 +637,19 @@ void CWeaponSDKBase::InitBeam( void )
 		beamInfo.m_nEndAttachment = pEntity->GetBaseAnimating()->LookupAttachment( "beamend" );
 		beamInfo.m_flRed = 0.0;
 		beamInfo.m_flBlue = 0.0;
+	}
+	else
+	{
+		// A white glow along the weapon
+		beamInfo.m_flWidth = 2.5f;
+		beamInfo.m_flEndWidth = 25.0f;
+		beamInfo.m_nStartAttachment = pEntity->GetBaseAnimating()->LookupAttachment( "beamstart" );
+		beamInfo.m_nEndAttachment = pEntity->GetBaseAnimating()->LookupAttachment( "beamend" );
+		beamInfo.m_pszHaloName = "sprites/light_glow03.vmt";
+		beamInfo.m_flHaloScale = 30.0f;
+		beamInfo.m_flLife = 0.0f;
+		beamInfo.m_flRed = 255.0;
+		beamInfo.m_flBlue = 255.0;
 	}
 
 	beamInfo.m_flFadeLength = 0.0f;
@@ -670,7 +673,10 @@ bool CWeaponSDKBase::IsTranslucent( void )
 {
 	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
 
-	return pPlayer->LAMIsOn();
+	if ( pPlayer->LAMIsOn() )
+		return true;
+
+	return false;
 }
 
 //-----------------------------------------------------------------------------

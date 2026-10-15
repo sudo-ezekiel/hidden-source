@@ -50,6 +50,12 @@ static char *s_SpectatorModes[] = { "#Spec_Mode0", "#Spec_Mode1", "#Spec_Mode2",
 
 using namespace vgui;
 
+ConVar cl_spec_mode(
+	"cl_spec_mode",
+	"1",
+	FCVAR_ARCHIVE | FCVAR_USERINFO,
+	"spectator mode" );
+
 //-----------------------------------------------------------------------------
 // Purpose: left and right buttons pointing buttons
 //-----------------------------------------------------------------------------
@@ -71,7 +77,7 @@ private:
 //-----------------------------------------------------------------------------
 CSpectatorMenu::CSpectatorMenu( IViewPort *pViewPort ) : Frame( NULL, PANEL_SPECMENU )
 {
-	m_iDuckKey = KEY_NONE;
+	m_iDuckKey = -1;
 		
 	m_pViewPort = pViewPort;
 
@@ -156,10 +162,19 @@ void CSpectatorMenu::OnTextChanged(KeyValues *data)
 	else if ( box == m_pPlayerList )
 	{
 		KeyValues *kv = box->GetActiveItemUserData();
-		if ( kv )
+		if ( kv && GameResources() )
 		{
-			// const char *player = kv->GetString("player");
-			// TODO find player by name and follow him
+			const char *player = kv->GetString("player");
+
+			int currentPlayerNum = GetSpectatorTargetPlayer();
+			const char *currentPlayerName = GameResources()->GetPlayerName( currentPlayerNum );
+
+			if ( !FStrEq( currentPlayerName, player ) )
+			{
+				char command[128];
+				Q_snprintf( command, sizeof(command), "spec_player \"%s\"", player );
+				engine->ClientCmd( command );
+			}
 		}
 	}
 }
@@ -182,7 +197,12 @@ void CSpectatorMenu::OnCommand( const char *command )
 //-----------------------------------------------------------------------------
 void CSpectatorMenu::OnKeyCodePressed(KeyCode code)
 {
-	if( m_iDuckKey!=KEY_NONE && m_iDuckKey == code )
+	// we can't compare the keycode to a known code, because translation from bound keys
+	// to vgui key codes is not 1:1. Get the engine version of the key for the binding
+	// and the actual pressed key, and compare those..
+	int iLastTrappedKey = engine->GetLastPressedEngineKey();	// the enginekey version of the code param
+
+	if( iLastTrappedKey == m_iDuckKey )
 	{
 		// hide if DUCK is pressed again
 		m_pViewPort->ShowPanel( this, false );
@@ -205,6 +225,22 @@ void CSpectatorMenu::ShowPanel(bool bShow)
 		SetVisible( false );
 		SetMouseInputEnabled( false );
 		SetKeyBoardInputEnabled( false );
+	}
+
+	// Hidden: the player and view controls only when watching an HLTV demo
+	if ( engine->IsHLTV() && engine->IsPlayingDemo() )
+	{
+		m_pLeftButton->SetVisible( true );
+		m_pRightButton->SetVisible( true );
+		m_pPlayerList->SetVisible( true );
+		m_pViewOptions->SetVisible( true );
+	}
+	else
+	{
+		m_pLeftButton->SetVisible( false );
+		m_pRightButton->SetVisible( false );
+		m_pPlayerList->SetVisible( false );
+		m_pViewOptions->SetVisible( false );
 	}
 }
 
@@ -329,6 +365,34 @@ void CSpectatorGUI::ApplySchemeSettings(IScheme *pScheme)
 
 	SetBorder( NULL );
 
+	// Hidden: the timer and location labels in white, the camera location in green, all in SpecNumbers
+	Label *pLabel = dynamic_cast<Label *>( FindChildByName( "timerlabel" ) );
+	if ( pLabel )
+	{
+		pLabel->SetFgColor( Color( 255, 255, 255, 255 ) );
+		pLabel->SetFont( pScheme->GetFont( "SpecNumbers" ) );
+	}
+
+	pLabel = dynamic_cast<Label *>( FindChildByName( "timerclock" ) );
+	if ( pLabel )
+	{
+		pLabel->SetFgColor( Color( 255, 255, 255, 255 ) );
+		pLabel->SetFont( pScheme->GetFont( "SpecNumbers" ) );
+	}
+
+	pLabel = dynamic_cast<Label *>( FindChildByName( "location" ) );
+	if ( pLabel )
+	{
+		pLabel->SetFgColor( Color( 255, 255, 255, 255 ) );
+		pLabel->SetFont( pScheme->GetFont( "SpecNumbers" ) );
+	}
+
+	pLabel = dynamic_cast<Label *>( FindChildByName( "cameralocation" ) );
+	if ( pLabel )
+	{
+		pLabel->SetFgColor( Color( 0, 255, 0, 150 ) );
+		pLabel->SetFont( pScheme->GetFont( "SpecNumbers" ) );
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -351,6 +415,8 @@ void CSpectatorGUI::PerformLayout()
 //-----------------------------------------------------------------------------
 void CSpectatorGUI::OnThink()
 {
+	UpdateTimer();
+
 	BaseClass::OnThink();
 
 	if ( IsVisible() )
@@ -456,8 +522,8 @@ void CSpectatorGUI::Update()
 		if ( my < btall )
 		{
 			// reduce to bar 
-			m_pTopBar->SetSize( wide - (mx + mwide), btall );
-			m_pTopBar->SetPos( (mx + mwide), 0 );
+			m_pTopBar->SetSize( wide - (mwide + mx), btall );
+			m_pTopBar->SetPos( (mwide + mx), 0 );
 		}
 		else
 		{
@@ -507,9 +573,9 @@ void CSpectatorGUI::Update()
 
 		if ( pTarget->IsPlayer() )
 		{
-			pszLocation = ToBasePlayer( pTarget )->GetPlayerName();
+			pszLocation = static_cast< C_BasePlayer * >( pTarget )->GetPlayerName();
 		}
-		else if ( strcmp( pTarget->GetClassname(), "info_spectator" ) )
+		else if ( strcmp( pTarget->GetClassName(), "info_spectator" ) )
 		{
 			pszLocation = static_cast< C_HDNSpectator * >( pTarget )->GetLocation();
 		}
@@ -536,15 +602,16 @@ void CSpectatorMenu::Update( void )
 
 	Reset();
 
-	if( m_iDuckKey == KEY_NONE )
+	if( m_iDuckKey < 0 )
 	{
-		m_iDuckKey = gameuifuncs->GetVGUI2KeyCodeForBind( "duck" );
+		m_iDuckKey = gameuifuncs->GetEngineKeyCodeForBind( "duck" );
 	}
 	
 	if ( !gr )
 		return;
 
-	for ( int iPlayerIndex = 1 ; iPlayerIndex <= gpGlobals->maxClients; iPlayerIndex++ )
+	int iPlayerIndex;
+	for ( iPlayerIndex = 1 ; iPlayerIndex <= gpGlobals->maxClients; iPlayerIndex++ )
 	{
 
 		// does this slot in the array have a name?
@@ -582,6 +649,20 @@ void CSpectatorMenu::Update( void )
 		KeyValues *kv = new KeyValues("UserData", "player", gr->GetPlayerName( iPlayerIndex ) );
 		itemID = PlayerAddItem( itemID, playerText, kv ); // -1 means a new slot
 		kv->deleteThis();
+	}
+
+	// make sure the player combo box is up to date
+	int playernum = GetSpectatorTargetPlayer();
+	const char *selectedPlayerName = gr->GetPlayerName( playernum );
+	for ( iPlayerIndex=0; iPlayerIndex<m_pPlayerList->GetItemCount(); ++iPlayerIndex )
+	{
+		KeyValues *kv = m_pPlayerList->GetItemUserData( iPlayerIndex );
+		if ( kv && FStrEq( kv->GetString( "player" ), selectedPlayerName ) )
+		{
+			m_pPlayerList->ActivateItemByRow( iPlayerIndex );
+			m_pPlayerList->SetText( selectedPlayerName );
+			break;
+		}
 	}
 }
 
@@ -656,7 +737,7 @@ static void ForwardSpecCmdToServer()
 	{
 		// forward the command with parameter
 		char command[128];
-		Q_snprintf( command, sizeof(command), "%s %s", engine->Cmd_Argv(0), engine->Cmd_Argv(1) );
+		Q_snprintf( command, sizeof(command), "%s \"%s\"", engine->Cmd_Argv(0), engine->Cmd_Argv(1) );
 		engine->ServerCmd( command );
 	}
 }
@@ -668,7 +749,7 @@ CON_COMMAND( spec_next, "Spectate next player" )
 	if ( !pPlayer || !pPlayer->IsObserver() )
 		return;
 
-	if ( engine->IsHLTV() )
+	if ( engine->IsHLTV() && engine->IsPlayingDemo() )
 	{
 		// handle the command clientside
 		HLTVCamera()->SpecNextPlayer( false );
@@ -686,7 +767,7 @@ CON_COMMAND( spec_prev, "Spectate previous player" )
 	if ( !pPlayer || !pPlayer->IsObserver() )
 		return;
 
-	if ( engine->IsHLTV() )
+	if ( engine->IsHLTV() && engine->IsPlayingDemo() )
 	{
 		// handle the command clientside
 		HLTVCamera()->SpecNextPlayer( true );
@@ -709,7 +790,7 @@ CON_COMMAND( spec_mode, "Set spectator mode" )
 	if ( engine->Cmd_Argc() == 2 )
 		mode = Q_atoi( engine->Cmd_Argv(1) );
 
-	if ( engine->IsHLTV() )
+	if ( engine->IsHLTV() && engine->IsPlayingDemo() )
 	{
 		// handle the command clientside
 		HLTVCamera()->SetMode( mode );
@@ -727,7 +808,17 @@ CON_COMMAND( spec_player, "Spectate player by name" )
 	if ( !pPlayer || !pPlayer->IsObserver() )
 		return;
 
-	Assert( !"spec_player not implemented yet" );
+	if ( engine->Cmd_Argc() != 2 )
+		return;
+
+	if ( engine->IsHLTV() && engine->IsPlayingDemo() )
+	{
+		HLTVCamera()->SpecNamedPlayer( engine->Cmd_Argv(1) );
+	}
+	else
+	{
+		ForwardSpecCmdToServer();
+	}
 }
 
 

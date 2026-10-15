@@ -68,16 +68,25 @@ void CHudCrosshair::Paint( void )
 	if ( !pPlayer )
 		return;
 
-	// draw a crosshair only if alive or spectating in eye
+	// Hidden: no crosshair for IRIS
+	if ( pPlayer->GetTeamNumber() == TEAM_IRIS )
+		return;
+
+	// Hidden: draw a crosshair only if alive and not observing (cl_observercrosshair is not read)
 	bool shouldDraw = false;
 	if ( pPlayer->IsAlive() )
+	{
 		shouldDraw = true;
 
-	if ( pPlayer->GetObserverMode() == OBS_MODE_IN_EYE )
-		shouldDraw = true;
+		if ( pPlayer->GetObserverMode() == OBS_MODE_FIXED )
+			return;
 
-	if ( pPlayer->GetObserverMode() == OBS_MODE_ROAMING && cl_observercrosshair.GetBool() )
-		shouldDraw = true;
+		if ( pPlayer->GetObserverMode() == OBS_MODE_DEATHCAM )
+			return;
+
+		if ( pPlayer->GetObserverMode() == OBS_MODE_IN_EYE )
+			return;
+	}
 
 	if ( !shouldDraw )
 		return;

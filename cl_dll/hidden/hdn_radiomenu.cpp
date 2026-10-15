@@ -76,19 +76,7 @@ void HDNRadioMenu::ShowPanel( bool bShow )
 
 		m_iTeam = m_pPlayer->GetTeamNumber();
 
-		if ( m_pPlayer->GetTeamNumber() != TEAM_IRIS )
-		{
-			m_pImage->SetImage( "hud/hdn_hdnradio" );
-			m_pMessages[0]->SetText( "&1 Behind You" );
-			m_pMessages[1]->SetText( "&2 I'm Here" );
-			m_pMessages[2]->SetText( "&3 I See You" );
-			m_pMessages[3]->SetText( "&4 Look Up" );
-			m_pMessages[4]->SetText( "&5 Turn Around" );
-			m_pMessages[5]->SetText( "&6 Over Here" );
-			m_pMessages[6]->SetText( "&7 Fresh Meat" );
-			m_pMessages[7]->SetText( "&8 You're Next" );
-		}
-		else
+		if ( m_pPlayer->GetTeamNumber() == TEAM_IRIS )
 		{
 			m_pImage->SetImage( "hud/hdn_irisradio" );
 			m_pMessages[0]->SetText( "&1 Agent Down" );
@@ -99,6 +87,18 @@ void HDNRadioMenu::ShowPanel( bool bShow )
 			m_pMessages[5]->SetText( "&6 One Ugly Mother" );
 			m_pMessages[6]->SetText( "&7 If It Bleeds" );
 			m_pMessages[7]->SetText( "&8 Bring It" );
+		}
+		else
+		{
+			m_pImage->SetImage( "hud/hdn_hdnradio" );
+			m_pMessages[0]->SetText( "&1 Behind You" );
+			m_pMessages[1]->SetText( "&2 I'm Here" );
+			m_pMessages[2]->SetText( "&3 I See You" );
+			m_pMessages[3]->SetText( "&4 Look Up" );
+			m_pMessages[4]->SetText( "&5 Turn Around" );
+			m_pMessages[5]->SetText( "&6 Over Here" );
+			m_pMessages[6]->SetText( "&7 Fresh Meat" );
+			m_pMessages[7]->SetText( "&8 You're Next" );
 		}
 	}
 	else

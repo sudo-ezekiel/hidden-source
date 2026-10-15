@@ -199,6 +199,8 @@ void IGameSystem::PreRenderAllSystems()
 
 void IGameSystem::UpdateAllSystems( float frametime )
 {
+	SafeRemoveIfDesiredAllSystems();
+
 	int i;
 	for ( i = 0; i < s_GameSystems.Count(); ++i )
 	{

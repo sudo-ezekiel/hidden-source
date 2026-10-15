@@ -61,9 +61,10 @@ void CHudHAmmo::Paint( void )
 	if ( !pPlayer )
 		return;
 
-	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN && m_pIcon )
+	if ( pPlayer->GetTeamNumber() == TEAM_HIDDEN )
 	{
 		Color clr = gHUD.m_clrNormal;
-		m_pIcon->DrawSelf( 0, 0, GetWide(), GetTall(), clr );
+		if ( m_pIcon )
+			m_pIcon->DrawSelf( 0, 0, GetWide(), GetTall(), clr );
 	}
 }

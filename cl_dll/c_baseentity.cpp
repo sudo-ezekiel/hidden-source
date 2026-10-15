@@ -32,6 +32,7 @@
 #include "c_ai_basenpc.h"
 #include "apparent_velocity_helper.h"
 #include "c_baseanimatingoverlay.h"
+#include "hltvcamera.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -2351,14 +2352,8 @@ void C_BaseEntity::CreateLightEffects( void )
 		dl->radius = random->RandomFloat(400,431);
 		dl->die = gpGlobals->curtime + 0.001;
 	}
-	if (IsEffectActive(EF_DIMLIGHT))
-	{			
-		dl = effects->CL_AllocDlight ( index );
-		dl->origin = GetAbsOrigin();
-		dl->color.r = dl->color.g = dl->color.b = 100;
-		dl->radius = random->RandomFloat(200,231);
-		dl->die = gpGlobals->curtime + 0.001;
-	}
+
+	// Hidden: no EF_DIMLIGHT light here
 }
 
 void C_BaseEntity::MoveToLastReceivedPosition( bool force )
@@ -2372,7 +2367,8 @@ void C_BaseEntity::MoveToLastReceivedPosition( bool force )
 
 void C_BaseEntity::UpdatePosition()
 {  
-	if ( !IsVisible() && (C_BasePlayer::GetLocalPlayer() != this) )
+	// Hidden: or the HLTV cameraman, as in Valve's later SDK
+	if ( !IsVisible() && (C_BasePlayer::GetLocalPlayer() != this) && (HLTVCamera()->GetCameraMan() != this) )
 	{
 		// never interpolate invisible entities except the local player
 		return;
@@ -2884,6 +2880,10 @@ void C_BaseEntity::AddStudioDecal( const Ray_t& ray, int hitbox, int decalIndex,
 
 	// Exit out after doing the trace so any other effects that want to happen can happen.
 	if ( !r_drawmodeldecals.GetBool() )
+		return;
+
+	// Hidden: no decals on the Hidden
+	if ( IsPlayer() && ToBasePlayer( this )->GetTeamNumber() == TEAM_HIDDEN )
 		return;
 
 	// Found the point, now lets apply the decals

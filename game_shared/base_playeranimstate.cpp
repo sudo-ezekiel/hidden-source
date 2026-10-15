@@ -935,7 +935,7 @@ float CBasePlayerAnimState::GetOuterXYSpeed() const
 				(float)pLayer->flWeight );
 		}
 
-		for ( int i=0; i < NUM_AIMSEQUENCE_LAYERS; i++ )
+		for ( int i=0; i < m_pOuter->GetNumAnimOverlays()-1; i++ )	// as client.dll has it (the 2006 SDK bound)
 		{
 			C_AnimationLayer *pLayer = m_pOuter->GetAnimOverlay( AIMSEQUENCE_LAYER + i );
 			AnimStatePrintf( iLine++, "%s, weight: %.2f, cycle: %.2f, aim (%d)", 

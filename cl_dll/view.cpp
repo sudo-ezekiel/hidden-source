@@ -35,7 +35,7 @@
 #include <vgui_controls/Controls.h>
 #include <vgui/ISurface.h>
 
-#if defined( HL2_CLIENT_DLL ) || defined( CSTRIKE_DLL )
+#if defined( HL2_CLIENT_DLL ) || defined( CSTRIKE_DLL ) || defined( SDK_DLL )	// Hidden: SDK_DLL too
 #define USE_MONITORS
 #endif
 
@@ -69,8 +69,9 @@ static VMatrix g_matCamInverse;
 extern ConVar cl_forwardspeed;
 
 #ifndef CSTRIKE_DLL
-static CViewRender g_ViewRender;
-IViewRender *view = ( IViewRender * )&g_ViewRender;
+// Hidden: the 2006 SDK hookup; CHLClient::Init points view here if no mod creates its own
+CViewRender g_DefaultViewRender;
+IViewRender *view = NULL;
 #endif
 
 

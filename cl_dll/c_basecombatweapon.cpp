@@ -153,6 +153,10 @@ bool C_BaseCombatWeapon::IsCarrierAlive() const
 //-----------------------------------------------------------------------------
 ShadowType_t C_BaseCombatWeapon::ShadowCastType()
 {
+	// Hidden: the knife and the grenade cast a shadow only with a skin other than the first
+	if ( !strcmp( GetClassname(), "weapon_knife" ) || !strcmp( GetClassname(), "weapon_grenade" ) )
+		return m_nSkin ? SHADOWS_RENDER_TO_TEXTURE : SHADOWS_NONE;
+
 	if (!IsBeingCarried())
 		return SHADOWS_RENDER_TO_TEXTURE;
 
@@ -416,13 +420,6 @@ int C_BaseCombatWeapon::DrawModel( int flags )
 		if ( localplayer->GetObserverMode() == OBS_MODE_IN_EYE &&
 			 localplayer->GetObserverTarget() == GetOwner() ) 
 			return false;
-
-		if ( engine->IsHLTV()  )
-		{
-			if ( HLTVCamera()->GetMode() == OBS_MODE_IN_EYE &&
-				 HLTVCamera()->GetPrimaryTraget() == GetOwner()->entindex() )
-				return 0;
-		}
 	}
 
 	return BaseClass::DrawModel( flags );

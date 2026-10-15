@@ -394,6 +394,9 @@ public:
 	// allow other modules to know about engine versioning (one use is a proxy for network compatability)
 	virtual unsigned int	GetEngineBuildNumber() = 0; // engines build
 	virtual const char *	GetProductVersionString() = 0; // mods version number (steam.inf)
+
+	// Hidden: from Valve's later SDK, as client.dll calls it (the interface is still VEngineClient012)
+	virtual int		GetLastPressedEngineKey( void ) = 0;
 };
 
 //-----------------------------------------------------------------------------

@@ -20,6 +20,10 @@
 #define TYPE_SPECTATORS		2	// a section for a spectator group
 #define TYPE_BLANK			3
 
+namespace vgui
+{
+	class ImagePanel;
+}
 
 //-----------------------------------------------------------------------------
 // Purpose: Game ScoreBoard
@@ -31,8 +35,9 @@ private:
 
 protected:
 // column widths at 640
-	enum { NAME_WIDTH = 160, SCORE_WIDTH = 60, DEATH_WIDTH = 60, PING_WIDTH = 80, VOICE_WIDTH = 0, FRIENDS_WIDTH = 0 };
-	// total = 340
+	// Hidden: IRIS rows have a status column ("KiA") taken from the name column
+	enum { NAME_WIDTH = 205, STATUS_WIDTH = 60, SCORE_WIDTH = 70, DEATH_WIDTH = 65, PING_WIDTH = 75, VOICE_WIDTH = 0, FRIENDS_WIDTH = 0 };	// REBUILD: STATUS_WIDTH name
+	// total = 415
 
 public:
 	CClientScoreBoardDialog( IViewPort *pViewPort );
@@ -76,6 +81,7 @@ protected:
 	int m_iNumTeams;
 
 	vgui::SectionedListPanel *m_pPlayerList;
+	vgui::ImagePanel *m_pSelectionBG;	// Hidden: the "SelectionBG" image behind the list. REBUILD: name
 	int				m_iSectionId; // the current section we are entering into
 
 	int s_VoiceImage[5];

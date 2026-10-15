@@ -110,7 +110,7 @@ public:
 
 	virtual const char *GetName( void ) { return PANEL_SPECMENU; }
 	virtual void SetData(KeyValues *data) {};
-	virtual void Reset( void ) { m_pPlayerList->DeleteAllItems(); }
+	virtual void Reset( void ) { m_pPlayerList->RemoveAll(); }
 	virtual void Update( void );
 	virtual bool NeedsUpdate( void ) { return false; }
 	virtual bool HasInputElements( void ) { return true; }
@@ -143,7 +143,7 @@ private:
 	vgui::Button *m_pRightButton;
 
 	IViewPort *m_pViewPort;
-	vgui::KeyCode m_iDuckKey;
+	int m_iDuckKey;
 };
 
 #endif // SPECTATORGUI_H

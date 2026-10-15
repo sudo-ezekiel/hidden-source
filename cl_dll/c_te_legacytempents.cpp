@@ -347,8 +347,15 @@ bool C_LocalTempEntity::Frame( float frametime, int framenumber )
 
 		if ( flags & FTENT_COLLIDEALL )
 		{
+			// If the FTENT_COLLISIONGROUP flag is set, use the entity's collision group
+			int collisionGroup = COLLISION_GROUP_NONE;
+			if ( flags & FTENT_COLLISIONGROUP )
+			{
+				collisionGroup = GetCollisionGroup();
+			}
+
 			trace_t pm;		
-			UTIL_TraceLine( m_vecPrevLocalOrigin, GetLocalOrigin(), MASK_SOLID, NULL, COLLISION_GROUP_NONE, &pm );
+			UTIL_TraceLine( m_vecPrevLocalOrigin, GetLocalOrigin(), MASK_SOLID, NULL, collisionGroup, &pm );
 
 			// Make sure it didn't bump into itself... (?!?)
 			if  ( 
@@ -1798,7 +1805,7 @@ void CTempEnts::PlaySound ( C_LocalTempEntity *pTemp, float damp )
 		}
 		break;
 
-#ifdef CSTRIKE_DLL
+#if defined( CSTRIKE_DLL ) || defined ( SDK_DLL )
 
 		case TE_PISTOL_SHELL:
 		{
@@ -2479,7 +2486,8 @@ void CTempEnts::MuzzleFlash_Combine_NPC( int entityIndex, int attachmentIndex )
 
 	if ( muzzleflash_light.GetBool() )
 	{
-		dlight_t *el = effects->CL_AllocElight( LIGHT_INDEX_MUZZLEFLASH + entityIndex );
+		// Hidden: a dynamic light where the SDK has an entity light
+		dlight_t *el = effects->CL_AllocDlight( LIGHT_INDEX_MUZZLEFLASH + entityIndex );
 
 		el->origin	= origin;
 
@@ -2513,7 +2521,7 @@ void CTempEnts::MuzzleFlash_AR2_NPC( const Vector &origin, const QAngle &angles,
 void CTempEnts::MuzzleFlash_SMG1_NPC( int entityIndex, int attachmentIndex )
 {
 	//Draw the cloud of fire
-	FX_MuzzleEffectAttached( 1.0f, entityIndex, attachmentIndex, NULL, true );
+	FX_MuzzleEffectAttached( 1.25f, entityIndex, attachmentIndex, NULL, true );
 }
 
 //-----------------------------------------------------------------------------

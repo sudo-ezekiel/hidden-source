@@ -97,9 +97,22 @@ void URLLabel::ApplySettings(KeyValues *inResourceData)
 	const char *pszURL = inResourceData->GetString("URLText", NULL);
 	if (pszURL)
 	{
-        SetURL(pszURL);
+		if (pszURL[0] == '#')
+		{
+			// it's a localized url, look it up
+			const wchar_t *ws = localize()->Find(pszURL + 1);
+			if (ws)
+			{
+				char localizedUrl[512];
+				localize()->ConvertUnicodeToANSI(ws, localizedUrl, sizeof(localizedUrl));
+				SetURL(localizedUrl);
+			}
+		}
+		else
+		{
+	        SetURL(pszURL);
+		}
 	}
-	m_bUnderline = inResourceData->GetInt( "Underline", 0 ) != 0;
 }
 
 //-----------------------------------------------------------------------------
@@ -113,52 +126,7 @@ void URLLabel::GetSettings( KeyValues *outResourceData )
 	{
 		outResourceData->SetString("URLText", m_pszURL);
 	}
-	outResourceData->SetInt( "Underline", m_bUnderline );
 }
-
-//-----------------------------------------------------------------------------
-// Purpose: draw an underline under the label
-//-----------------------------------------------------------------------------
-void URLLabel::Paint()
-{
-	BaseClass::Paint();
-
-	if ( m_bUnderline )
-	{
-		HFont font = GetFont();
-
-		int px, py;
-		GetPos(px, py);
-
-		surface()->DrawSetTextFont(font);
-		surface()->DrawSetTextColor(GetFgColor());
-		
-		TextImage *tx = GetTextImage();
-		int maxWide;
-		int fontTall = surface()->GetFontTall( font );
-		int x = 0, y = fontTall - surface()->GetFontAscent( font, L'_' ) + 2;
-		tx->GetSize( maxWide, x);
-		x = 0;
-		int charWide = surface()->GetCharacterWidth(font, '_');
-
-		while ( x < maxWide )
-		{
-			if ( x + charWide < maxWide )
-			{
-				surface()->DrawSetTextPos(x , y );
-				surface()->DrawUnicodeChar('_');
-				x += charWide;
-			}
-			else // need to draw only part of this character, so it doesn't hang out the end of the string
-			{
-				surface()->DrawSetTextPos( maxWide - charWide , y );
-				surface()->DrawUnicodeChar('_');
-				x += charWide;				
-			}
-		}
-	}
-}
-
 
 //-----------------------------------------------------------------------------
 // Purpose: Returns a description of the label string
@@ -166,7 +134,7 @@ void URLLabel::Paint()
 const char *URLLabel::GetDescription( void )
 {
 	static char buf[1024];
-	_snprintf(buf, sizeof(buf), "%s, string URLText bool Underline", BaseClass::GetDescription());
+	_snprintf(buf, sizeof(buf), "%s, string URLText", BaseClass::GetDescription());
 	return buf;
 }
 
@@ -175,6 +143,9 @@ const char *URLLabel::GetDescription( void )
 //-----------------------------------------------------------------------------
 void URLLabel::ApplySchemeSettings(IScheme *pScheme)
 {
+	// set our font to be underlined by default
+	// the Label::ApplySchemeSettings() will override it if override set in scheme file
+	SetFont( pScheme->GetFont( "DefaultUnderline", IsProportional() ) );
     BaseClass::ApplySchemeSettings(pScheme);
     SetCursor(dc_hand);
 }

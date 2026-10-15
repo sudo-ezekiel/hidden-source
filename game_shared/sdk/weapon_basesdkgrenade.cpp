@@ -267,7 +267,10 @@ void CBaseSDKGrenade::ItemPostFrame()
 	int CBaseSDKGrenade::DrawModel( int flags )
 	{
 		C_BasePlayer *pPlayer = ToBasePlayer( GetOwner() );
-		if ( pPlayer && pPlayer->IsAlive() )
+		if ( !pPlayer )
+			return BaseClass::DrawModel( flags );
+
+		if ( pPlayer->IsAlive() )
 			return 1;
 
 		return BaseClass::DrawModel( flags );

@@ -471,6 +471,8 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 		fvol = fWalking ? 0.2 : 0.5;
 		m_flStepSoundTime = fWalking ? 400 : 300;		
 
+#ifndef CLIENT_DLL
+		// Hidden: ripples and splashes (the August server.dll has them, the June client.dll does not)
 		if ( GetFlags() & FL_DUCKING )
 		{
 			CEffectData data;
@@ -491,6 +493,7 @@ void CBasePlayer::UpdateStepSound( surfacedata_t *psurface, const Vector &vecOri
 			data.m_flScale = random->RandomFloat( 8, 10 );
 			DispatchEffect( "watersplash", data );
 		}
+#endif
 	}
 	else
 	{

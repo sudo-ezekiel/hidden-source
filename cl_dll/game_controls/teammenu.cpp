@@ -70,8 +70,9 @@ const char *GetStringTeamColor( int i )
 CTeamMenu::CTeamMenu(IViewPort *pViewPort) : Frame(NULL, PANEL_TEAM )
 {
 	m_pViewPort = pViewPort;
-	m_iJumpKey = KEY_NONE; // this is looked up in Activate()
-	m_iScoreBoardKey = KEY_NONE; // this is looked up in Activate()
+	// Hidden: engine key codes, -1 until looked up, as in the 2006 SDK
+	m_iJumpKey = -1; // this is looked up in Activate()
+	m_iScoreBoardKey = -1; // this is looked up in Activate()
 
 	// initialize dialog
 	SetTitle("", true);
@@ -140,14 +141,14 @@ void CTeamMenu::ShowPanel(bool bShow)
 
 		// get key bindings if shown
 
-		if( m_iJumpKey == KEY_NONE ) // you need to lookup the jump key AFTER the engine has loaded
+		if( m_iJumpKey < 0 ) // you need to lookup the jump key AFTER the engine has loaded
 		{
-			m_iJumpKey = gameuifuncs->GetVGUI2KeyCodeForBind( "jump" );
+			m_iJumpKey = gameuifuncs->GetEngineKeyCodeForBind( "jump" );
 		}
 
-		if ( m_iScoreBoardKey == KEY_NONE ) 
+		if ( m_iScoreBoardKey < 0 ) 
 		{
-			m_iScoreBoardKey = gameuifuncs->GetVGUI2KeyCodeForBind( "showscores" );
+			m_iScoreBoardKey = gameuifuncs->GetEngineKeyCodeForBind( "showscores" );
 		}
 	}
 	else
@@ -313,11 +314,13 @@ void CTeamMenu::SetLabelText(const char *textEntryName, const char *text)
 
 void CTeamMenu::OnKeyCodePressed(KeyCode code)
 {
-	if( m_iJumpKey!=KEY_NONE && m_iJumpKey == code )
+	int lastPressedEngineKey = engine->GetLastPressedEngineKey();
+
+	if( m_iJumpKey >= 0 && m_iJumpKey == lastPressedEngineKey )
 	{
 		AutoAssign();
 	}
-	else if ( m_iScoreBoardKey!=KEY_NONE && m_iScoreBoardKey == code )
+	else if ( m_iScoreBoardKey >= 0 && m_iScoreBoardKey == lastPressedEngineKey )
 	{
 		gViewPortInterface->ShowPanel( PANEL_SCOREBOARD, true );
 	}

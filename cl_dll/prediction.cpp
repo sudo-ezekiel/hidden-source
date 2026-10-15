@@ -1697,7 +1697,7 @@ void CPrediction::GetLocalViewAngles( QAngle& ang )
 	}
 	else 
 	{
-		ang = player->pl.v_angle;
+		ang = player->pl.v_angle.Get();	// REBUILD: client.dll copies the member without a temporary
 	}
 }
 

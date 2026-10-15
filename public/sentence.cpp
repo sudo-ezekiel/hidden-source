@@ -308,6 +308,7 @@ static CCLanguage g_CCLanguageLookup[] =
 	{ CC_JAPANESE,	"japanese",		250,	150,	0 },
 	{ CC_RUSSIAN,	"russian",		0,		250,	150 },
 	{ CC_THAI,		"thai",		0 ,		150,	250 },
+	{ CC_PORTUGUESE,"portuguese",	0,		0,		150 },
 };
 
 void CSentence::ColorForLanguage( int language, unsigned char& r, unsigned char& g, unsigned char& b )

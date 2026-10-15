@@ -87,7 +87,7 @@ CHudRadar::CHudRadar( const char *pElementName ) : CHudElement( pElementName ), 
 
 	m_iNumPlayers = 0;
 	m_iWide = GetWide();
-	m_flNextUpdate = gpGlobals->curtime + 0.1;
+	m_flNextUpdate = gpGlobals->curtime + 0.1f;
 
 	SetHiddenBits( HIDEHUD_HEALTH | HIDEHUD_PLAYERDEAD | HIDEHUD_NEEDSUIT );
 
@@ -150,13 +150,14 @@ void CHudRadar::FireGameEvent( IGameEvent *event )
 	{
 		RadarAlarm_t alarm;
 		alarm.m_vecOrigin = Vector( event->GetFloat( "posx" ), event->GetFloat( "posy" ), event->GetFloat( "posz" ) );
-		alarm.m_flEndTime = gpGlobals->curtime + 5.0f;
+		float flEndTime = gpGlobals->curtime + 5.0f;	// REBUILD: client.dll keeps the end time in a register
+		alarm.m_flEndTime = flEndTime;
 
 		for ( int i = 0; i < m_Alarms.Count(); i++ )
 		{
 			if ( m_Alarms[i].m_vecOrigin == alarm.m_vecOrigin )
 			{
-				m_Alarms[i].m_flEndTime = alarm.m_flEndTime;
+				m_Alarms[i].m_flEndTime = flEndTime;
 				return;
 			}
 		}
@@ -188,10 +189,10 @@ void CHudRadar::UpdatePlayers( C_BasePlayer *pLocalPlayer )
 
 	IGameResources *gr = GameResources();
 
-	if ( m_flNextUpdate >= gpGlobals->curtime )
+	if ( !( m_flNextUpdate < gpGlobals->curtime ) )
 		return;
 
-	m_flNextUpdate = gpGlobals->curtime + 0.1;
+	m_flNextUpdate = gpGlobals->curtime + 0.1f;
 
 	if ( pLocalPlayer->GetTeamNumber() != TEAM_IRIS )
 		return;
@@ -210,14 +211,22 @@ void CHudRadar::UpdatePlayers( C_BasePlayer *pLocalPlayer )
 		if ( gr->GetTeam( i ) == TEAM_HIDDEN || !gr->IsAlive( i ) )
 			continue;
 
-		RadarPlayer_t &player = m_Players[m_iNumPlayers];
-		player.m_vecOrigin = pPlayer->GetLocalOrigin();
-		player.m_bLocal = ( pPlayer == pLocalPlayer );
-		player.m_bSupport = ( pPlayer->GetNewClass() == 1 );
-		player.m_iUserID = pPlayer->GetUserID();
+		m_Players[m_iNumPlayers].m_vecOrigin = pPlayer->GetLocalOrigin();
 
-		if ( player.m_flRadioTime < gpGlobals->curtime )
-			player.m_flRadioTime = 0;
+		if ( pLocalPlayer == pPlayer )
+			m_Players[m_iNumPlayers].m_bLocal = true;
+		else
+			m_Players[m_iNumPlayers].m_bLocal = false;
+
+		if ( pPlayer->GetNewClass() == 1 )
+			m_Players[m_iNumPlayers].m_bSupport = true;
+		else
+			m_Players[m_iNumPlayers].m_bSupport = false;
+
+		m_Players[m_iNumPlayers].m_iUserID = pPlayer->GetUserID();
+
+		if ( m_Players[m_iNumPlayers].m_flRadioTime < gpGlobals->curtime )
+			m_Players[m_iNumPlayers].m_flRadioTime = 0;
 
 		m_iNumPlayers++;
 	}
@@ -243,8 +252,10 @@ void CHudRadar::Paint( void )
 
 	if ( m_iWide != GetWide() )
 	{
-		m_iCenterX = (float)GetWide() * 0.5f;
-		m_iCenterY = GetTall() * 0.8f;
+		float wide = GetWide();
+		float tall = GetTall();
+		m_iCenterX = wide * 0.5f;
+		m_iCenterY = tall * 0.8f;
 		m_iWide = GetWide();
 	}
 
@@ -259,29 +270,29 @@ void CHudRadar::Paint( void )
 	int i;
 	for ( i = 0; i < m_iNumPlayers; i++ )
 	{
-		RadarPlayer_t &player = m_Players[i];
-		if ( player.m_bLocal )
+		if ( m_Players[i].m_bLocal )
 			continue;
 
-		Vector vecDelta = m_vecOrigin - player.m_vecOrigin;
-		Vector vecRadar( vecDelta.x * RADAR_SCALE * -1, vecDelta.y * RADAR_SCALE, vecDelta.z * RADAR_SCALE );
-		if ( vecRadar.Length() >= RADAR_RANGE )
-			continue;
-
-		int x = vecRadar.x * flCos - vecRadar.y * flSin;
-		int y = vecRadar.x * flSin + vecRadar.y * flCos;
-
-		Color clr = gHUD.m_clrNormal;
-
-		CHudTexture *pIcon;
-		if ( player.m_bSupport )
-			pIcon = ( gpGlobals->curtime <= player.m_flRadioTime ) ? m_pSupportRadioIcon : m_pSupportIcon;
-		else
-			pIcon = ( gpGlobals->curtime <= player.m_flRadioTime ) ? m_pAssaultRadioIcon : m_pAssaultIcon;
-
-		if ( pIcon )
+		Vector vecRadar = m_vecOrigin - m_Players[i].m_vecOrigin;
+		vecRadar *= RADAR_SCALE;
+		vecRadar.x *= -1;
+		if ( vecRadar.Length() < RADAR_RANGE )
 		{
-			pIcon->DrawSelf( x - RADAR_ICON_SIZE / 2 + m_iCenterX, y - RADAR_ICON_SIZE / 2 + m_iCenterY, RADAR_ICON_SIZE, RADAR_ICON_SIZE, clr );
+			int x = (int)( vecRadar.x * flCos - vecRadar.y * flSin ) - RADAR_ICON_SIZE / 2 + m_iCenterX;
+			int y = (int)( vecRadar.y * flCos + vecRadar.x * flSin ) - RADAR_ICON_SIZE / 2 + m_iCenterY;
+
+			Color clr = gHUD.m_clrNormal;
+
+			CHudTexture *pIcon;
+			if ( m_Players[i].m_flRadioTime < gpGlobals->curtime )
+				pIcon = m_Players[i].m_bSupport ? m_pSupportIcon : m_pAssaultIcon;
+			else
+				pIcon = m_Players[i].m_bSupport ? m_pSupportRadioIcon : m_pAssaultRadioIcon;
+
+			if ( pIcon )
+			{
+				pIcon->DrawSelf( x, y, RADAR_ICON_SIZE, RADAR_ICON_SIZE, clr );
+			}
 		}
 	}
 
@@ -289,22 +300,23 @@ void CHudRadar::Paint( void )
 	{
 		RadarAlarm_t &alarm = m_Alarms[i];
 
-		if ( gpGlobals->curtime > alarm.m_flEndTime )
+		if ( alarm.m_flEndTime < gpGlobals->curtime )
 		{
 			m_Alarms.Remove( i );
 			continue;
 		}
 
-		Vector vecDelta = m_vecOrigin - alarm.m_vecOrigin;
-		Vector vecRadar( vecDelta.x * RADAR_SCALE * -1, vecDelta.y * RADAR_SCALE, vecDelta.z * RADAR_SCALE );
-		if ( vecRadar.Length() >= RADAR_RANGE || !m_pSonicIcon )
-			continue;
+		Vector vecRadar = m_vecOrigin - alarm.m_vecOrigin;
+		vecRadar *= RADAR_SCALE;
+		vecRadar.x *= -1;
+		if ( vecRadar.Length() < RADAR_RANGE && m_pSonicIcon )
+		{
+			Color clr( 255, 255, 255, 255 );
 
-		Color clr( 255, 255, 255, 255 );
+			int x = vecRadar.x * flCos - vecRadar.y * flSin;
+			int y = vecRadar.y * flCos + vecRadar.x * flSin;
 
-		int x = vecRadar.x * flCos - vecRadar.y * flSin;
-		int y = vecRadar.x * flSin + vecRadar.y * flCos;
-
-		m_pSonicIcon->DrawSelf( x - RADAR_ICON_SIZE / 2 + m_iCenterX, y - RADAR_ICON_SIZE / 2 + m_iCenterY, RADAR_ICON_SIZE, RADAR_ICON_SIZE, clr );
+			m_pSonicIcon->DrawSelf( x - RADAR_ICON_SIZE / 2 + m_iCenterX, y - RADAR_ICON_SIZE / 2 + m_iCenterY, RADAR_ICON_SIZE, RADAR_ICON_SIZE, clr );
+		}
 	}
 }

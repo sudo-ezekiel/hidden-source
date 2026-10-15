@@ -660,6 +660,9 @@ if defined HIDDEN_DIR if exist &quot;$(TargetDir)&quot;client.pdb copy &quot;$(T
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath="..\game_shared\death_pose.cpp">
+			</File>
+			<File
 				RelativePath="..\game_shared\decals.cpp">
 			</File>
 			<File

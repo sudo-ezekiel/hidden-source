@@ -124,6 +124,10 @@ int CLaserDot::DrawModel( int flags )
 	float	scale;
 	Vector	endPos;
 
+	// Hidden: no dot without an owner
+	if ( !GetOwnerEntity() )
+		return false;
+
 	C_SDKPlayer *pOwner = ToSDKPlayer( GetOwnerEntity() );
 
 	if ( !m_bIsOn )

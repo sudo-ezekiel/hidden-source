@@ -117,6 +117,8 @@ static CGlobalVarsBase dummyvars( true );
 CGlobalVarsBase *gpGlobals = &dummyvars;
 
 class CHudChat;
+class CViewRender;
+extern CViewRender g_DefaultViewRender;	// Hidden: the 2006 SDK hookup, view.cpp
 
 static C_BaseEntityClassList *s_pClassLists = NULL;
 C_BaseEntityClassList::C_BaseEntityClassList()
@@ -477,6 +479,11 @@ int CHLClient::Init( CreateInterfaceFn appSystemFactory, CreateInterfaceFn physi
 		return false;
 
 	g_pClientMode->Enable();
+
+	if ( !view )
+	{
+		view = ( IViewRender * )&g_DefaultViewRender;
+	}
 
 	view->Init();
 	vieweffects->Init();
