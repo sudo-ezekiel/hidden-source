@@ -132,6 +132,7 @@ public:
 // Functions to verify the single/multiplayer status of a game
 	virtual bool IsMultiplayer( void ) = 0;// is this a multiplayer game? (either coop or deathmatch)
 
+	virtual const unsigned char *GetEncryptionKey() { return NULL; }
 #ifdef CLIENT_DLL
 
 #else
@@ -296,6 +297,15 @@ public:
 	virtual void CreateStandardEntities();
 	
 	virtual const char *GetChatPrefix( bool bTeamOnly, CBasePlayer *pPlayer );
+
+	// HIDDEN: prefix for chat from dead players (REBUILD: name from the symbol, parameters as GetChatPrefix)
+	virtual const char *GetDeadChatPrefix( bool bTeamOnly, CBasePlayer *pPlayer ) { return NULL; }
+
+	// Location name shown in chat
+	virtual const char *GetChatLocation( bool bTeamOnly, CBasePlayer *pPlayer ) { return NULL; }
+
+	// VGUI format string for chat, if desired
+	virtual const char *GetChatFormat( bool bTeamOnly, CBasePlayer *pPlayer ) { return NULL; }
 
 #endif
 };

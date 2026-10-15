@@ -49,6 +49,9 @@ public:
 	// Called during game restore, after the local player has connected and entities have been fully restored
 	virtual void OnRestore() = 0;
 
+	// Called every frame; checks if a system should be removed (from Valve's mid-2005 SDK)
+	virtual void SafeRemoveIfDesired() = 0;
+
 #ifdef CLIENT_DLL
 	// Called before rendering
 	virtual void PreRender ( ) = 0;
@@ -86,6 +89,7 @@ public:
 
 	static void OnSaveAllSystems();
 	static void OnRestoreAllSystems();
+	static void SafeRemoveIfDesiredAllSystems();
 
 #ifdef CLIENT_DLL
 	static void PreRenderAllSystems( );
@@ -116,6 +120,7 @@ public:
 
 	virtual void OnSave() {}
 	virtual void OnRestore() {}
+	virtual void SafeRemoveIfDesired() {}
 
 #ifdef CLIENT_DLL
 	// Called before rendering

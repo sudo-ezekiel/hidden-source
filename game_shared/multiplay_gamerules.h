@@ -128,6 +128,7 @@ public:
 	virtual void EndMultiplayerGame( void ) { GoToIntermission(); }
 
 protected:
+	virtual void GetNextLevelName( char *szNextMap, int bufsize );
 	virtual void ChangeLevel( void );
 	virtual void GoToIntermission( void );
 	float m_flIntermissionEndTime;
