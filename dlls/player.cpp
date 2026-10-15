@@ -474,12 +474,12 @@ CBasePlayer::CBasePlayer( )
 
 	// Hidden
 	m_bSafety = false;
-	Q_memset( m_CurrentLocation.GetForModify(), 0, sizeof( m_CurrentLocation ) );
+	memset( m_CurrentLocation.GetForModify(), 0, sizeof( m_CurrentLocation ) );
 	m_iNewClass = 2;
 	m_bSpawn = false;
-	m_iNewPrimary = -1;
 	m_iCharacterSkin = -1;
 	m_iCharacterBody = -1;
+	m_iNewPrimary = -1;
 	m_iPrimary = -1;
 	m_iNewSecondary = -1;
 	m_iSecondary = -1;
@@ -1359,9 +1359,11 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 	IGameEvent * event = gameeventmanager->CreateEvent( "player_hurt" );
 	if ( event )
 	{
+		float flDamage = info.GetDamage();
 		event->SetInt("userid", GetUserID() );
 		event->SetInt("health", max(0, m_iHealth) );
-		event->SetFloat("damage", info.GetDamage() );
+		event->SetFloat("damage", flDamage );
+
 		event->SetInt("priority", 5 );	// HLTV event priority, not transmitted
 
 		if ( attacker->IsPlayer() )
@@ -1374,7 +1376,7 @@ int CBasePlayer::OnTakeDamage_Alive( const CTakeDamageInfo &info )
 			if ( player->GetActiveWeapon() )
 			{
 				weaponName = player->GetActiveWeapon()->GetDeathNoticeName();
-				if ( Q_strncmp( weaponName, "weapon_", 7 ) == 0 )
+				if ( strncmp( weaponName, "weapon_", 7 ) == 0 )
 				{
 					weaponName += 7;
 				}
@@ -5424,22 +5426,9 @@ bool CBasePlayer::BumpWeapon( CBaseCombatWeapon *pWeapon )
 		{
 			pWeapon->Holster();
 		}
-		else
-		{
-#ifdef HL2_DLL
-			// Always switch to a newly-picked up weapon
-			if ( !PlayerHasMegaPhysCannon() )
-			{
-				// If it uses clips, load it full. (this is the first time you've picked up this type of weapon)
-				if ( pWeapon->UsesClipsForAmmo1() )
-				{
-					pWeapon->m_iClip1 = pWeapon->GetMaxClip1();
-				}
 
-				Weapon_Switch( pWeapon );
-			}
-#endif
-		}
+		// Hidden: always switch to a newly picked up weapon
+		Weapon_Switch( pWeapon );
 		return true;
 	}
 }
@@ -5538,6 +5527,38 @@ void CBasePlayer::UpdateClientData( void )
 {
 	CSingleUserRecipientFilter user( this );
 	user.MakeReliable();
+
+	// Hidden: the "Damage" message from CHL2_Player::UpdateClientData, sent here for every player
+	if (m_DmgTake || m_DmgSave || m_bitsHUDDamage != m_bitsDamageType)
+	{
+		// Comes from inside me if not set
+		Vector damageOrigin = GetLocalOrigin();
+		// send "damage" message
+		// causes screen to flash, and pain compass to show direction of damage
+		damageOrigin = m_DmgOrigin;
+
+		// only send down damage type that have hud art
+		int visibleDamageBits = m_bitsDamageType & DMG_SHOWNHUD;
+
+		m_DmgTake = clamp( m_DmgTake, 0, 255 );
+		m_DmgSave = clamp( m_DmgSave, 0, 255 );
+
+		UserMessageBegin( user, "Damage" );
+			WRITE_BYTE( m_DmgSave );
+			WRITE_BYTE( m_DmgTake );
+			WRITE_LONG( visibleDamageBits );
+			WRITE_FLOAT( damageOrigin.x );
+			WRITE_FLOAT( damageOrigin.y );
+			WRITE_FLOAT( damageOrigin.z );
+		MessageEnd();
+
+		m_DmgTake = 0;
+		m_DmgSave = 0;
+		m_bitsHUDDamage = m_bitsDamageType;
+
+		// Clear off non-time-based damage indicators
+		m_bitsDamageType &= DMG_TIMEBASED;
+	}
 
 	if (m_fInitHUD)
 	{
