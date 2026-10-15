@@ -54,6 +54,7 @@ public:
 
 	virtual void OnSave() {}
 	virtual void OnRestore() {}
+	virtual void SafeRemoveIfDesired() {}
 
 // Methods of IClientLeafSystem
 public:
