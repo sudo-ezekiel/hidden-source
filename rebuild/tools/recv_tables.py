@@ -392,6 +392,12 @@ def client_only(text):
     return "\n".join(out)
 
 
+def recvinfo_member(arg):
+    """The member expression a RECVINFO-style macro takes the offset of, or None."""
+    m = re.match(r"RECVINFO(?:_NAME|_DT|_ARRAY|_ARRAY3|_UTLVECTOR|_INTERNALARRAY|_DTNAME)?\s*\(\s*([^,()]+?)\s*[,)]", arg)
+    return m.group(1).replace(" ", "") if m else None
+
+
 def recvinfo_name(arg):
     m = re.match(r"RECVINFO_NAME\s*\(\s*[^,]+?\s*,\s*([\w\[\]]+)\s*\)", arg)
     if m:
@@ -439,13 +445,13 @@ def source_tables(repo, build_files=None):
                                 nm = args[1]
                             else:
                                 continue
-                        props.append({"index": len(props), "name": nm,
+                        props.append({"index": len(props), "name": nm, "member": recvinfo_member(args[0]),
                                       "type": {"": "?", "EHandle": "Int", "Bool": "Int", "Time": "Float",
                                                "QAngles": "Vector", "IntWithMinusOneFlag": "Int",
                                                "PredictableId": "DataTable", "Array3": "Array"}.get(kind, kind)})
                     t = m.group(2)
                     if t not in tables:
-                        tables[t] = {"props": props, "file": os.path.relpath(path, repo)}
+                        tables[t] = {"props": props, "file": os.path.relpath(path, repo), "class": m.group(1)}
     # arrays: keep the array prop, drop its "[0]" element prop (the binaries fold it the same way)
     for t in tables.values():
         arrays = {p["name"] for p in t["props"] if p["type"] in ("Array", "Array3", "InternalArray")}
