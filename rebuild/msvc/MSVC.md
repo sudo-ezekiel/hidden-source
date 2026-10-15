@@ -228,14 +228,16 @@ Switches, from the configuration, checked against the reference:
   imports. Only the import library objects differ in origin (Hidden: Linker600 8447 and
   Implib710 2067 and 2179; ours: Implib710 2179, 3077 and 4035).
 
-Link order. The IDE links in project order, but Hidden's project was not ours: the PDB's module
-list (modules.txt, which runs from the last object linked to the first) has the Hidden filter in
-alphabetical order, sdk_bot_temp.obj in the SDK filter, and func_monitor, grenade_tripmine and
-weapon_physcannon in the Hidden filter. `server_link_order.txt` is that list, first to last, and
-build_server.sh passes it to `vcproj_to_msvc.py --link-order`; an object the PDB lacks goes after
-the listed object of its filter whose name precedes it. Measured as the share of mapped functions
-in the same relative order: 99.11% against the May DLL and 99.09% against the 2006-08-18 DLL, from
-97.88% and 97.29% in project order. The DLL is 4,366,336 bytes, the size of both August DLLs;
+Link order. The IDE links in project order. The PDB's module list (modules.txt, which runs from
+the last object linked to the first) has the Hidden filter in alphabetical order, sdk_bot_temp.obj
+in the SDK filter, and func_monitor, grenade_tripmine and weapon_physcannon in the Hidden filter;
+dlls/hl_sdk.vcproj is in that order now, so project order is Hidden's. `server_link_order.txt` is
+the PDB's list, first to last, and build_server.sh also passes it to `vcproj_to_msvc.py
+--link-order`; an object the PDB lacks goes after the listed object of its filter whose name
+precedes it. With the vcproj as it is, both give the same 441 objects in the same order. Measured
+as the share of mapped functions in the same relative order: 99.17% against the May DLL and 99.17%
+against the 2006-08-18 DLL, from 98.00% and 97.43% in the project order before the Hidden
+filter was sorted. The DLL is 4,366,336 bytes, the size of both August DLLs;
 .text 0x2dc13a against 0x2dc1ba in the 2006-08-18 DLL, .rdata 0x0a57ad against 0x0a57dd, .data
 the same.
 
