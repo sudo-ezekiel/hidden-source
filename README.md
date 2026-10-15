@@ -25,26 +25,35 @@ It is a private copy for the Hidden: Source team. Please do not publish it.
 
 ## How close it is
 
-**Server.** Built with GCC 3.4, the compiler of Hidden's Linux server, 18364 of 18413 functions
-compile to the same instructions as Hidden's `server_i486.so` of 18 August 2006 (beta 4b1). The 49
-that still differ are listed, with every form tried, in `rebuild/SERVER-STATUS.md`; nearly all come
-down to register and ordering choices of the compiler.
+**Linux server.** Built with GCC 3.4, the compiler of Hidden's Linux server, 18366 of 18413 functions
+compile to the same instructions, with the same constants, as Hidden's `server_i486.so` of 18 August 2006
+(beta 4b1). The 47 that still differ are listed, with every form tried, in `rebuild/SERVER-STATUS.md`. Hidden's
+exact compiler build (Debian gcc-3.4 3.4.5-2) gives the same result for every function, so they are not a
+compiler-version effect.
 
-**Client.** Built with Hidden's own compiler (Visual C++ .NET 2003, cl 13.10.3077, run under Wine),
-our client.dll is paired with Hidden's client.dll of 14 June 2006 (beta 4b): 23623 of its 24320
-functions are paired, 23263 of those are the same and 360 differ. `rebuild/CLIENT.md` section 5 has
-the breakdown.
+**Windows server.** Built with Hidden's own compiler (Visual C++ .NET 2003, cl 13.10.3077, run under Wine),
+our server.dll has the same size, imports and object counts as Hidden's server.dll of the same day. 30158 of
+its 30701 functions are paired with ours: 30007 are the same and 151 differ (38 of them in Microsoft's C
+runtime library). `rebuild/msvc/MSVC.md` and `rebuild/SERVER-STATUS.md` have the breakdown.
+
+**Client.** Built the same way, our client.dll is paired with Hidden's client.dll of 14 June 2006
+(beta 4b): 23623 of its 24320 functions are paired, 23275 of those are the same and 348 differ.
+`rebuild/CLIENT.md` section 5 has the breakdown.
 
 Both references are the official 2006 files: the server from `hidden-beta4b1-server.zip` and the
 client from `hsb4b-full.zip`, as published on hidden-source.com (checked by CRC-32 against archived
 copies). Later community changes, such as the GHSI "Enhanced Edition" fixes, are not in this source.
 
 "The same" means identical instructions with addresses masked: the two builds place code and data at
-different addresses, so calls and pointers may differ in their target address and in nothing else.
+different addresses, so calls and pointers may differ in their target address and in nothing else. The
+Linux comparison also checks the constants, strings and floats behind those addresses
+(`rebuild/STRICT-COMPARE.md`); the Windows comparisons do not check those yet.
 
 **Names.** Function, class and global variable names in the server are Hidden's own: the Linux server
-kept its symbol table. Local variables, parameters and some members had no names in the binaries;
-where we picked one, a `// REBUILD:` comment says so.
+kept its symbol table. Hidden's own debug file for its May 2006 server (server.pdb, from a 2006 server
+patch kept by the Wayback Machine) gave the real names of members, parameters and local variables, the
+source file of every function and its original line order; `rebuild/PDB.md` says what it holds and how to
+read it. Code written after May has no such record: where we picked a name, a `// REBUILD:` comment says so.
 
 **Original files.** `game_shared/hidden/hdn_lasersight.cpp` and `hdn_lasersight.h` are the team's
 own files, published on hidden-source.com (dated 2005-10-22) and copied unchanged. Everything else
@@ -82,7 +91,8 @@ files and switches and is tested.
 ## Building on Linux
 
 **Server (GCC 3.4 in Docker).** Make the `hsrebuild-gcc34` image first: `rebuild/docker/README.md`
-lists the Debian 4.0 packages and how each was checked. Then:
+lists the Debian 4.0 packages and how each was checked, and how to add Hidden's exact
+compiler build as a second image (`GCC_IMAGE=hsrebuild-gcc345`). Then:
 
 ```bash
 JOBS=6 sh rebuild/build.sh ~/.cache/hsrebuild-work
@@ -94,7 +104,7 @@ The result is `~/.cache/hsrebuild-work/out/server_i486.so`. To compare it with H
 sh rebuild/compare.sh /path/to/hidden/bin/server_i486.so ~/.cache/hsrebuild-work
 ```
 
-**Client (Visual C++ .NET 2003 under Wine).** `rebuild/msvc/MSVC.md` lists the two Microsoft
+**Client and Windows server (Visual C++ .NET 2003 under Wine).** `rebuild/msvc/MSVC.md` lists the two Microsoft
 downloads (Visual C++ Toolkit 2003 1.01 and a Platform SDK image) with their SHA1 hashes.
 `rebuild/msvc/unpack.sh` unpacks them without running an installer. Then:
 
@@ -104,6 +114,16 @@ JOBS=6 sh rebuild/msvc/build_client.sh ~/.cache/hsrebuild-msvc
 
 ```bash
 sh rebuild/msvc/compare_client.sh ~/.cache/hsrebuild-msvc
+```
+
+server.dll builds and compares the same way, against Hidden's server.dll:
+
+```bash
+JOBS=6 sh rebuild/msvc/build_server.sh ~/.cache/hsrebuild-msvc-server
+```
+
+```bash
+sh rebuild/msvc/compare_server.sh ~/.cache/hsrebuild-msvc-server /path/to/hidden/bin/server.dll
 ```
 
 The build reads three environment variables: `MSVC71` (the unpacked tree), `WINEPREFIX`, and
@@ -120,6 +140,8 @@ LFS. This repository holds only the code.
 ## Notes in `rebuild/`
 
 - `SERVER-STATUS.md`: the server, and the functions that still differ.
+- `PDB.md`: Hidden's May 2006 server PDB and the reader for it.
+- `STRICT-COMPARE.md`: what the Linux comparison checks.
 - `CLIENT.md`: the client, its checks and the comparison with Hidden's client.dll.
 - `msvc/MSVC.md`: the 2003 compiler, where it comes from and how it runs under Wine.
 - `tools/`: the comparison and analysis scripts the notes refer to.
