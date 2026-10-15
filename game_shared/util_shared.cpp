@@ -142,9 +142,13 @@ bool PassServerEntityFilter( const IHandleEntity *pTouch, const IHandleEntity *p
 	if ( pEntPass->GetOwnerEntity() == pEntTouch )
 		return false;	
 
-	// Hidden: marine clip brushes only stop player movement. REBUILD: Hidden tests both groups
-	// without a branch, hence the '&'.
-	return !( ( pEntTouch->GetCollisionGroup() == COLLISION_GROUP_MARINECLIP ) & ( pEntPass->GetCollisionGroup() != COLLISION_GROUP_PLAYER_MOVEMENT ) );
+	// Hidden: marine clip brushes only stop player movement. REBUILD: Hidden's server.dll
+	// branches on each test; Hidden's GCC build tests both without a branch, which no form
+	// tried here reproduces (see SERVER-STATUS.md).
+	if ( pEntTouch->GetCollisionGroup() == COLLISION_GROUP_MARINECLIP && pEntPass->GetCollisionGroup() != COLLISION_GROUP_PLAYER_MOVEMENT )
+		return false;
+
+	return true;
 }
 
 

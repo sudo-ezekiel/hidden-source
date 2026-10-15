@@ -70,7 +70,8 @@ PRECACHE_REGISTER_FN( EditNav_Precache );
 inline float round( float val, float unit )
 {
 	val = val + ((val < 0.0f) ? -unit*0.5f : unit*0.5f);
-	return (float)( unit * ( ((int)val) / (int)unit ) );
+	// REBUILD: Hidden's round returns the number of units; every caller multiplies by the unit
+	return (float)( ((int)val) / (int)unit );
 }
 
 
@@ -194,20 +195,20 @@ bool CNavMesh::GetActiveNavArea( void )
 
 			if ((yaw < 45.0f || yaw > 315.0f) || (yaw > 135.0f && yaw < 225.0f))
 			{
-				m_splitEdge = round( result.endpos.y, GenerationStepSize );
+				m_splitEdge = GenerationStepSize * round( result.endpos.y, GenerationStepSize );
 				m_splitAlongX = true;
 			}
 			else
 			{
-				m_splitEdge = round( result.endpos.x, GenerationStepSize );
+				m_splitEdge = GenerationStepSize * round( result.endpos.x, GenerationStepSize );
 				m_splitAlongX = false;
 			}
 		}
 
 		if ( nav_snap_to_grid.GetBool() && !m_climbableSurface && !m_isCreatingLadder )
 		{
-			m_editCursorPos.x = round( result.endpos.x, GenerationStepSize );
-			m_editCursorPos.y = round( result.endpos.y, GenerationStepSize );
+			m_editCursorPos.x = GenerationStepSize * round( result.endpos.x, GenerationStepSize );
+			m_editCursorPos.y = GenerationStepSize * round( result.endpos.y, GenerationStepSize );
 		}
 
 		return true;
@@ -647,14 +648,14 @@ bool MakeSniperSpots( CNavArea *area )
 
 	if ( area->GetSizeX() > GenerationStepSize )
 	{
-		splitEdge = round( area->GetExtent().lo.x, GenerationStepSize );
+		splitEdge = GenerationStepSize * round( area->GetExtent().lo.x, GenerationStepSize );
 		if ( splitEdge < area->GetExtent().lo.x + minSplitSize )
 			splitEdge += GenerationStepSize;
 		splitAlongX = false;
 	}
 	else if ( area->GetSizeY() > GenerationStepSize )
 	{
-		splitEdge = round( area->GetExtent().lo.y, GenerationStepSize );
+		splitEdge = GenerationStepSize * round( area->GetExtent().lo.y, GenerationStepSize );
 		if ( splitEdge < area->GetExtent().lo.y + minSplitSize )
 			splitEdge += GenerationStepSize;
 		splitAlongX = true;
