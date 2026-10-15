@@ -744,9 +744,21 @@ bool Label::RequestInfo(KeyValues *outputData)
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
-void Label::OnSetText(const wchar_t *text)
+void Label::OnSetText(KeyValues *params)
 {
-	SetText(text);
+	// Hidden: the SetText message as in Valve's later SDK, taking ANSI or Unicode text
+	KeyValues *pkvText = params->FindKey("text", false);
+	if (!pkvText)
+		return;
+
+	if (pkvText->GetDataType() == KeyValues::TYPE_STRING)
+	{
+		SetText(pkvText->GetString());
+	}
+	else if (pkvText->GetDataType() == KeyValues::TYPE_WSTRING)
+	{
+		SetText(pkvText->GetWString());
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -986,7 +998,16 @@ void Label::GetSettings( KeyValues *outResourceData )
 	// label settings
 	char buf[256];
 	_textImage->GetUnlocalizedText( buf, 255 );
-	outResourceData->SetString( "labelText", buf );
+	// Hidden: "#var_" strings as in Valve's later SDK
+	if (!strnicmp(buf, "#var_", 5))
+	{
+		// strip off the variable prepender on save
+		outResourceData->SetString( "labelText", buf + 5 );
+	}
+	else
+	{
+		outResourceData->SetString( "labelText", buf );
+	}
 
 	const char *alignmentString = "";
 	switch ( _contentAlignment )
@@ -1032,7 +1053,22 @@ void Label::ApplySettings( KeyValues *inResourceData )
 	const char *labelText =	inResourceData->GetString( "labelText", NULL );
 	if ( labelText )
 	{
-		SetText(labelText);
+		// Hidden: "%variable%" label text as in Valve's later SDK
+		if (labelText[0] == '%' && labelText[strlen(labelText) - 1] == '%')
+		{
+			// it's a variable, set it to be a special variable localized string
+			wchar_t unicodeVar[256];
+			localize()->ConvertANSIToUnicode(labelText, unicodeVar, sizeof(unicodeVar));
+
+			char var[256];
+			_snprintf(var, sizeof(var), "#var_%s", labelText);
+			localize()->AddString(var + 1, unicodeVar, "");
+			SetText(var);
+		}
+		else
+		{
+			SetText(labelText);
+		}
 	}
 
 	// text alignment

@@ -149,14 +149,14 @@ void WizardPanel::ApplySchemeSettings(IScheme *pScheme)
 //-----------------------------------------------------------------------------
 void WizardPanel::Run(WizardSubPanel *startPanel)
 {
-	// make sure we're set up and Run the first panel
-	Activate();
-
 	// skip over sub panels if they don't want to be displayed
 	startPanel = FindNextValidSubPanel(startPanel);
 
 	// show it
 	ActivateNextSubPanel(startPanel);
+
+	// make sure we're set up and Run the first panel
+	Activate();
 }
 
 //-----------------------------------------------------------------------------
@@ -300,6 +300,13 @@ void WizardPanel::ActivateNextSubPanel(WizardSubPanel *subPanel)
 	_currentSubPanel->OnDisplay();
 	_currentSubPanel->InvalidateLayout(false);
 
+	SETUP_PANEL( _currentSubPanel );
+	int wide, tall;
+	if ( _currentSubPanel->GetDesiredSize(wide, tall) )
+	{
+		SetSize(wide, tall);
+	}
+
 	if (!prevPanel)
 	{
 		// no previous panel, so disable the back button
@@ -364,6 +371,13 @@ void WizardPanel::ActivatePrevSubPanel()
 	_currentSubPanel->OnDisplayAsPrev();
 	_currentSubPanel->OnDisplay();
 	_currentSubPanel->InvalidateLayout(false);
+
+	SETUP_PANEL( _currentSubPanel );
+	int wide, tall;
+	if ( _currentSubPanel->GetDesiredSize(wide, tall) )
+	{
+		SetSize(wide, tall);
+	}
 
 	// show the previous panel, but don't Activate it (since it should show just what it was previously)
 	_currentSubPanel->SetVisible(true);
@@ -601,7 +615,7 @@ void WizardPanel::OnFinishButton()
 	if (_currentSubPanel && _currentSubPanel->OnFinishButton())
 	{
 		// hide ourselves away
-		SetVisible(false);
+		BaseClass::OnClose();
 
 		// automatically delete ourselves if marked to do so
 		if (IsAutoDeleteSet())

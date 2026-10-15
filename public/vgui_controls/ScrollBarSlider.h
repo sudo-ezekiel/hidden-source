@@ -69,8 +69,9 @@ protected:
 	virtual void ApplySchemeSettings(IScheme *pScheme);
 
 private:
-	virtual void RecomputeNobPosFromValue();
+	// Hidden: these two are in the other order in client.dll's vtable
 	virtual void RecomputeValueFromNobPos();
+	virtual void RecomputeNobPosFromValue();
 	virtual void SendScrollBarSliderMovedMessage();
 
 	bool _vertical;

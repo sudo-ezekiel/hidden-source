@@ -154,7 +154,7 @@ protected:
 	virtual wchar_t CalculateHotkey(const wchar_t *text);
 	virtual void ComputeAlignment(int &tx0, int &ty0, int &tx1, int &ty1);
 	virtual void Paint();
-	MESSAGE_FUNC_WCHARPTR( OnSetText, "SetText", text );
+	MESSAGE_FUNC_PARAMS( OnSetText, "SetText", params );
 	virtual void DrawDashedLine(int x0, int y0, int x1, int y1, int dashLen, int gapLen);
 	virtual void OnRequestFocus(VPANEL subFocus, VPANEL defaultPanel);
 	MESSAGE_FUNC( OnHotkeyPressed, "Hotkey" );
