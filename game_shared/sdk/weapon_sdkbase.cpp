@@ -110,19 +110,6 @@ LINK_ENTITY_TO_CLASS( weapon_sdk_base, CWeaponSDKBase );
 // CWeaponCSBase implementation. 
 // ----------------------------------------------------------------------------- //
 
-#ifdef CLIENT_DLL
-inline void CWeaponSDKBase::KillBeam( void )
-{
-	if ( m_pBeam )
-	{
-		m_pBeam->brightness = 0.0f;
-		m_pBeam->flags &= ~FBEAM_FOREVER;
-		m_pBeam->die = gpGlobals->curtime - 0.1;
-		m_pBeam = NULL;
-	}
-}
-#endif
-
 CWeaponSDKBase::CWeaponSDKBase()
 {
 	SetPredictionEligible( true );
@@ -321,7 +308,14 @@ void CWeaponSDKBase::ItemPostFrame( void )
 bool CWeaponSDKBase::Holster( CBaseCombatWeapon *pSwitchingTo )
 {
 #ifdef CLIENT_DLL
-	KillBeam();
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
 #else
 	if ( m_hLaserDot != NULL )
 	{
@@ -342,7 +336,14 @@ void CWeaponSDKBase::SetSafe( void )
 	SetWeaponIdleTime( gpGlobals->curtime + 5.0f );
 
 #ifdef CLIENT_DLL
-	KillBeam();
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
 #else
 	if ( m_hLaserDot != NULL )
 	{
@@ -395,7 +396,14 @@ void CWeaponSDKBase::Drop( const Vector &vecVelocity )
 	SetOwnerEntity( NULL );
 	SetOwner( NULL );
 #else
-	KillBeam();
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
 #endif
 }
 
@@ -675,7 +683,14 @@ void CWeaponSDKBase::DrawEffects( void )
 	// Dropped: kill the beam
 	if ( GetOwner() == NULL )
 	{
-		KillBeam();
+		if ( m_pBeam )
+		{
+			//Tell it to die right away and let the beam code free it.
+			m_pBeam->brightness = 0.0f;
+			m_pBeam->flags &= ~FBEAM_FOREVER;
+			m_pBeam->die = gpGlobals->curtime - 0.1;
+			m_pBeam = NULL;
+		}
 		return;
 	}
 
@@ -686,7 +701,14 @@ void CWeaponSDKBase::DrawEffects( void )
 	C_BasePlayer *pLocalPlayer = C_BasePlayer::GetLocalPlayer();
 	if ( pLocalPlayer && pLocalPlayer->GetObserverMode() == OBS_MODE_IN_EYE && pLocalPlayer->GetObserverTarget() == pPlayer )
 	{
-		KillBeam();
+		if ( m_pBeam )
+		{
+			//Tell it to die right away and let the beam code free it.
+			m_pBeam->brightness = 0.0f;
+			m_pBeam->flags &= ~FBEAM_FOREVER;
+			m_pBeam->die = gpGlobals->curtime - 0.1;
+			m_pBeam = NULL;
+		}
 		return;
 	}
 
@@ -789,7 +811,14 @@ void CWeaponSDKBase::NotifyShouldTransmit( ShouldTransmitState_t state )
 //-----------------------------------------------------------------------------
 void CWeaponSDKBase::Release( void )
 {
-	KillBeam();
+	if ( m_pBeam )
+	{
+		//Tell it to die right away and let the beam code free it.
+		m_pBeam->brightness = 0.0f;
+		m_pBeam->flags &= ~FBEAM_FOREVER;
+		m_pBeam->die = gpGlobals->curtime - 0.1;
+		m_pBeam = NULL;
+	}
 
 	BaseClass::Release();
 }

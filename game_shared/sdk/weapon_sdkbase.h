@@ -133,9 +133,6 @@ public:
 
 	void			InitBeam( void );
 	void			GetWeaponAttachment( int attachmentId, Vector &outVector, Vector *dir = NULL );
-
-	// Tell the beam to die right away and let the beam code free it
-	void			KillBeam( void );
 #endif
 
 protected:
