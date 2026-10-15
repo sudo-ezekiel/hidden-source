@@ -160,7 +160,7 @@ library objects differ in origin only (client.dll: 4 from Linker600 8447 and Imp
 The repo is mirrored into `<work>/src`. `vcproj_to_msvc.py` writes a makefile per project:
 vgui_controls.vcproj "Release|Win32" (58 files, plus /GL) into a static library through
 `link /lib` (the Toolkit has no lib.exe), then client_sdk.vcproj "Release SDK|Win32" with the
-switches above and the per-file settings (415 files, 43 without the precompiled header,
+switches above and the per-file settings (416 files, 43 without the precompiled header,
 c_te_firebullets1.obj), then the link with the vcproj's linker settings and /MAP. Objects are
 linked in project order, as the IDE did. Output in `<work>/out/msvc/client`: client.dll,
 client.map, client.pdb, a `.obj.log` per file, client.dll.log, and build.tsv (file, OK or FAIL,

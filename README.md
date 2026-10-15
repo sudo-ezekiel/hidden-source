@@ -13,7 +13,7 @@ It is a private copy for the Hidden: Source team. Please do not publish it.
 - Commit 494f72c is that SDK, unmodified. It is identical to `src_mod` in
   [Source-SDK-Archives/source-sdk-2004](https://github.com/Source-SDK-Archives/source-sdk-2004) at
   commit 962ba835 (all 2282 files have the same git blob hashes). So `git diff 494f72c` shows every
-  change Hidden made, as far as it has been rebuilt: 293 files today.
+  change Hidden made, as far as it has been rebuilt: 328 files today.
 - Hidden also took parts of Valve's mid-2005 SDK update (IGameEventManager2, IPlayerInfo and
   IBotController, the newer navigation mesh, the HLTV director interface and a few more). Those parts
   were brought in to match the binaries.
@@ -25,29 +25,34 @@ It is a private copy for the Hidden: Source team. Please do not publish it.
 
 ## How close it is
 
-**Linux server.** Built with GCC 3.4, the compiler of Hidden's Linux server, 18366 of 18413 functions
+**Linux server.** Built with GCC 3.4, the compiler of Hidden's Linux server, 18377 of 18413 functions
 compile to the same instructions, with the same constants, as Hidden's `server_i486.so` of 18 August 2006
-(beta 4b1). The 47 that still differ are listed, with every form tried, in `rebuild/SERVER-STATUS.md`. Hidden's
-exact compiler build (Debian gcc-3.4 3.4.5-2) gives the same result for every function, so they are not a
-compiler-version effect.
+(beta 4b1). Every function in Hidden's file has one of the same name in ours, and ours has none Hidden's
+lacks. The 36 that still differ are listed, with every form tried, in `rebuild/SERVER-STATUS.md`: register
+choice, instruction scheduling and block order, plus a few functions where the form that matches one of
+Hidden's compilers breaks the other. Hidden's exact compiler build (Debian gcc-3.4 3.4.5-2) gives the same
+result for every function, so they are not a compiler-version effect.
 
 **Windows server.** Built with Hidden's own compiler (Visual C++ .NET 2003, cl 13.10.3077, run under Wine),
-our server.dll has the same size, imports and object counts as Hidden's server.dll of the same day. 30158 of
-its 30701 functions are paired with ours: 30007 are the same and 151 differ (38 of them in Microsoft's C
-runtime library). `rebuild/msvc/MSVC.md` and `rebuild/SERVER-STATUS.md` have the breakdown.
+our server.dll has the same size, imports and object counts as Hidden's server.dll of the same day. 30193 of
+its 30701 functions are paired with ours: 30079 are the same and 114 differ (38 of them in Microsoft's C
+runtime library). The unpaired ones are small copies of the same inline code, CRT pieces and tool limits,
+apart from one 12-instruction function that nothing in Hidden's DLL calls. `rebuild/msvc/MSVC.md` and
+`rebuild/SERVER-STATUS.md` have the breakdown.
 
 **Client.** Built the same way, our client.dll is paired with Hidden's client.dll of 14 June 2006
-(beta 4b): 23623 of its 24320 functions are paired, 23275 of those are the same and 348 differ.
-`rebuild/CLIENT.md` section 5 has the breakdown.
+(beta 4b): 23922 of its 24320 functions are paired, 23781 of those are the same and 141 differ (54 of them
+in the C runtime). `rebuild/CLIENT.md` section 5 has the breakdown and the unpaired functions.
 
 Both references are the official 2006 files: the server from `hidden-beta4b1-server.zip` and the
 client from `hsb4b-full.zip`, as published on hidden-source.com (checked by CRC-32 against archived
 copies). Later community changes, such as the GHSI "Enhanced Edition" fixes, are not in this source.
 
-"The same" means identical instructions with addresses masked: the two builds place code and data at
-different addresses, so calls and pointers may differ in their target address and in nothing else. The
-Linux comparison also checks the constants, strings and floats behind those addresses
-(`rebuild/STRICT-COMPARE.md`); the Windows comparisons do not check those yet.
+"The same" means identical instructions, constants and data: the two builds place code and data at
+different addresses, so an address is compared by what it points at (the function or global by name, or
+the float, string or table stored there) and not by its value. The relocation tables of both builds say
+which numbers are addresses (`rebuild/STRICT-COMPARE.md`). Each compare also has a `--loose` mode that
+masks addresses without looking behind them, as the first versions did.
 
 **Names.** Function, class and global variable names in the server are Hidden's own: the Linux server
 kept its symbol table. Hidden's own debug file for its May 2006 server (server.pdb, from a 2006 server
@@ -59,7 +64,13 @@ read it. Code written after May has no such record: where we picked a name, a `/
 own files, published on hidden-source.com (dated 2005-10-22) and copied unchanged. Everything else
 Hidden wrote is rebuilt.
 
-**Not done yet.** The rebuilt DLLs have not been run in the game.
+**In the game.** The rebuilt client.dll and server.dll were run together on 16 October 2026 (Steam's
+Source SDK Base under Proton, listen server on ovr_docks with bots): the client connects, bots join,
+rounds restart, and the team and weapon menus draw the marine model. The first run found one fault, a
+receive table declared with the wrong array form (`DT_SDKGameRules`), and it is fixed. Two things seen in
+that test still have to be compared against Hidden's original DLLs: the radio and taunt menu sits off
+centre at 2560x1440, and the Support class's weapon choices show no tick. The code of both menus is the
+same as client.dll's, so the original may well do the same. The Linux server has not been run yet.
 
 ## Building on Windows with Visual Studio .NET 2003
 
@@ -141,7 +152,7 @@ LFS. This repository holds only the code.
 
 - `SERVER-STATUS.md`: the server, and the functions that still differ.
 - `PDB.md`: Hidden's May 2006 server PDB and the reader for it.
-- `STRICT-COMPARE.md`: what the Linux comparison checks.
+- `STRICT-COMPARE.md`: what the comparisons check, on Linux and Windows.
 - `CLIENT.md`: the client, its checks and the comparison with Hidden's client.dll.
 - `msvc/MSVC.md`: the 2003 compiler, where it comes from and how it runs under Wine.
 - `tools/`: the comparison and analysis scripts the notes refer to.
