@@ -46,24 +46,25 @@ private:
 // It creates a function which instances an object of the specified type
 // It them hooks that function up to the helper list so that the CHud objects can create
 //  the elements by name, with no header file dependency, etc.
+// REBUILD: "##" next to punctuation removed from the macros below (MSVC ignores it, GCC rejects it).
 #define DECLARE_HUDELEMENT( className )											\
-	static CHudElement *Create_##className##( void )							\
+	static CHudElement *Create_##className( void )							\
 		{																		\
 			return new className( #className );									\
 		};																		\
-	static CHudElementHelper g_##className##_Helper( Create_##className##, 50 );
+	static CHudElementHelper g_##className##_Helper( Create_##className, 50 );
 
 #define DECLARE_HUDELEMENT_DEPTH( className, depth )											\
-	static CHudElement *Create_##className##( void )							\
+	static CHudElement *Create_##className( void )							\
 		{																		\
 			return new className( #className );									\
 		};																		\
-	static CHudElementHelper g_##className##_Helper( Create_##className##, depth );
+	static CHudElementHelper g_##className##_Helper( Create_##className, depth );
 
 
 // This macro can be used to get a pointer to a specific hud element
 #define GET_HUDELEMENT( className )												\
-	(##className##*)gHUD.FindElement( #className )
+	(className*)gHUD.FindElement( #className )
 
 // Things that inherit from vgui::Panel, too, will have ambiguous new operators
 //  so this should disambiguate them

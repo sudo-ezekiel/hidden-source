@@ -21,10 +21,11 @@
 	LINK_ENTITY_TO_CLASS( entityName, className );
 
 
+// REBUILD: "##" next to punctuation removed from the macros below (MSVC ignores it, GCC rejects it).
 #define STUB_WEAPON_CLASS( entityName, className, baseClassName )	\
-	class C_##className## : public baseClassName					\
+	class C_##className : public baseClassName					\
 	{																\
-		DECLARE_CLASS( C_##className##, baseClassName );							\
+		DECLARE_CLASS( C_##className, baseClassName );							\
 	public:															\
 		DECLARE_PREDICTABLE();										\
 		DECLARE_CLIENTCLASS();										\
