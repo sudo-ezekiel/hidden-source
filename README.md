@@ -59,8 +59,10 @@ source file of every function and its original line order; `rebuild/PDB.md` says
 read it. Code written after May has no such record: where we picked a name, a `// REBUILD:` comment says so.
 
 **Original files.** `game_shared/hidden/hdn_lasersight.cpp` and `hdn_lasersight.h` are the team's
-own files, published on hidden-source.com (dated 2005-10-22) and copied unchanged. Everything else
-Hidden wrote is rebuilt.
+own files, published on hidden-source.com (dated 2005-10-22). The 2006 client.dll has one check the 2005
+file lacks (no dot without an owner), so it was added, marked `// Hidden:`. The comments in those files
+are Valve's, from the HL2 multiplayer RPG laser dot the team started from. Everything else Hidden wrote
+is rebuilt, and no comment written by the Hidden team survives: the binaries and the PDB hold none.
 
 **In the game.** The rebuilt client.dll and server.dll were run together on 16 October 2026 (Steam's
 Source SDK Base under Proton, listen server on ovr_docks with bots): the client connects, bots join,
