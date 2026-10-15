@@ -27,6 +27,8 @@ static ConVar overview_locked( "overview_locked", "1", 0, "Locks map angle, does
 
 static CMapOverview *s_pMapOverview = NULL; // we assume only one overview is created
 
+static ConVar *mp_fadetoblack = NULL;	// REBUILD: name; Hidden: the server's cvar, looked up by SetMap
+
 CON_COMMAND( overview_zoomabs, "Sets overview map zoom: <zoom>" )
 {
 	if ( !s_pMapOverview || engine->Cmd_Argc() < 2 )
@@ -214,9 +216,13 @@ void CMapOverview::Paint()
 
 	DrawMapTexture();
 
-	DrawMapPlayerTrails();
+	// Hidden: no players on the overview while mp_fadetoblack is on
+	if ( !mp_fadetoblack || !mp_fadetoblack->GetInt() )
+	{
+		DrawMapPlayerTrails();
 
-	DrawMapPlayers();
+		DrawMapPlayers();
+	}
 
 	BaseClass::Paint();
 }
@@ -551,6 +557,9 @@ void CMapOverview::SetTime( float time )
 
 void CMapOverview::SetMap(const char * levelname)
 {
+	if ( !mp_fadetoblack )
+		mp_fadetoblack = (ConVar *)cvar->FindVar( "mp_fadetoblack" );
+
 	// load new KeyValues
 
 	if ( m_MapKeyValues && Q_strcmp( levelname, m_MapKeyValues->GetName() ) == 0 )

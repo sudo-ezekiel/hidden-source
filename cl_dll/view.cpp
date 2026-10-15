@@ -69,8 +69,9 @@ static VMatrix g_matCamInverse;
 extern ConVar cl_forwardspeed;
 
 #ifndef CSTRIKE_DLL
-static CViewRender g_ViewRender;
-IViewRender *view = ( IViewRender * )&g_ViewRender;
+// Hidden: the 2006 SDK hookup; CHLClient::Init points view here if no mod creates its own
+CViewRender g_DefaultViewRender;
+IViewRender *view = NULL;
 #endif
 
 
