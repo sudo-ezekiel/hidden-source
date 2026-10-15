@@ -52,11 +52,7 @@ void CHudBaseTimer::PaintTime(HFont font, int xpos, int ypos, int mins, int secs
 
 void CHudBaseTimer::Paint()
 {
-	float alpha = m_flAlphaOverride / 255;
-	Color fgColor = GetFgColor();
-	fgColor[3] *= alpha;
-	SetFgColor( fgColor );
-	
+	// Hidden: client.dll does not scale the color by m_flAlphaOverride here
 	surface()->DrawSetTextColor(GetFgColor());
 	PaintTime( m_hNumberFont, digit_xpos, digit_ypos, m_iMinutes, m_iSeconds );
 

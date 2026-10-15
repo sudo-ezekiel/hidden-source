@@ -65,16 +65,14 @@ void HDNMenu::LayoutPanels( void )
 
 	for ( i = 1; i < 7; i++ )
 	{
-		ImagePanel *pImage = m_Images[i];
-
-		pImage->SetWide( pImage->GetWide() * m_flScaleX );
-		pImage->SetTall( pImage->GetTall() * m_flScaleY );
+		m_Images[i]->SetWide( m_Images[i]->GetWide() * m_flScaleX );
+		m_Images[i]->SetTall( m_Images[i]->GetTall() * m_flScaleY );
 
 		int x, y;
-		pImage->GetPos( x, y );
-		pImage->SetPos( x * m_flScaleX, y * m_flScaleY );
+		m_Images[i]->GetPos( x, y );
+		m_Images[i]->SetPos( x * m_flScaleX, y * m_flScaleY );
 
-		pImage->SetVisible( true );
+		m_Images[i]->SetVisible( true );
 	}
 }
 
@@ -110,14 +108,15 @@ void HDNMenu::SendCommand( const char *command )
 int HDNMenu::GetCommandValue( const char *command )
 {
 	char token[64];
+	int iValue = -1;	// REBUILD: name
 
 	const char *p = nexttoken( token, command, ' ' );
 	nexttoken( token, p, ' ' );
 
 	if ( token[0] )
-		return atol( token );
+		iValue = atoi( token );
 
-	return -1;
+	return iValue;
 }
 
 //-----------------------------------------------------------------------------
