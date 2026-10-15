@@ -28,6 +28,7 @@ public:
 	~C_DynamicProp( void );
 
 	void GetRenderBounds( Vector& theMins, Vector& theMaxs );
+	unsigned int ComputeClientSideAnimationFlags();
 
 private:
 	C_DynamicProp( const C_DynamicProp & );
@@ -82,6 +83,20 @@ void C_DynamicProp::GetRenderBounds( Vector& theMins, Vector& theMaxs )
 	}
 
 	BaseClass::GetRenderBounds( theMins, theMaxs );
+}
+
+unsigned int C_DynamicProp::ComputeClientSideAnimationFlags()
+{
+	if ( GetSequence() != -1 )
+	{
+		if ( GetSequenceCycleRate( GetSequence() ) != 0.0f )
+		{
+			return BaseClass::ComputeClientSideAnimationFlags();
+		}
+	}
+
+	// no sequence or no cycle rate, don't do any per-frame calcs
+	return 0;
 }
 
 // ------------------------------------------------------------------------------------------ //

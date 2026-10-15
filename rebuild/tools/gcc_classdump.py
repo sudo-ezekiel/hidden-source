@@ -3,7 +3,7 @@
 GCC (Itanium ABI) and MSVC lay out virtual tables differently:
 - GCC gives a virtual destructor two slots (complete and deleting); MSVC one (scalar deleting).
 - A GCC primary vtable also gets an entry for every function that overrides a virtual of a
-  secondary base; MSVC only has it in that base's vftable.
+  secondary base (destructors included); MSVC only has it in that base's vftable.
 - MSVC groups the overloads of one name that a class introduces at the first one's position, in
   reverse declaration order; GCC keeps declaration order.
 Everything else (declaration order, one vftable per polymorphic base subobject) is shared.
@@ -214,17 +214,25 @@ class Layouts:
         return self._pure_names.get((cls, idx))
 
     def secondary_methods(self, name):
-        """Method names in the secondary groups of class `name`. A new primary entry with one of
-        these names overrides a secondary base's virtual: GCC repeats it in the primary vtable
-        (as a thunk target, or as __cxa_pure_virtual when the override is pure), MSVC does not."""
+        """(qualified names, pure method names) in the secondary groups of class `name`. A new
+        primary entry that also appears there overrides a secondary base's virtual: GCC repeats it
+        in the primary vtable (the secondary slot holds a thunk to the same function, or
+        __cxa_pure_virtual when the override is pure), MSVC does not. Qualified names keep a new
+        overload that only shares a secondary virtual's method name (C_ParticleSmokeGrenade's
+        GetParticlePosition( Particle *, Vector & ) next to IParticleEffect's) in the table."""
         c = self.classes[name]
-        out = set()
+        qualified = set()
+        pure = set()
         for off, sub, start, count in c.groups()[1:]:
             for idx, w in enumerate(c.raw[start:start + count]):
-                m = self.slot_method(sub, idx, w)
-                if m:
-                    out.add(m)
-        return out
+                nm, kind = entry_name(w)
+                if nm:
+                    qualified.add(nm)
+                else:
+                    m = self.slot_method(sub, idx, w)
+                    if m:
+                        pure.add(m)
+        return qualified, pure
 
     def order(self, name, _stack=()):
         if name in self._order:
@@ -242,17 +250,20 @@ class Layouts:
             if bo is not None and bw is not None:
                 base_order = list(bo)
                 base_len = len(bw)
-        extras = self.secondary_methods(name)
+        extras, extras_pure = self.secondary_methods(name)
         new = []
         i = base_len
         while i < len(words):
             nm, kind = entry_name(words[i])
             if kind == "dtor":
-                new.append((i, "~"))
-                i += 2  # complete + deleting destructor -> one scalar deleting destructor
+                # complete + deleting destructor -> one scalar deleting destructor; none at all when
+                # it only overrides a secondary base's destructor (no virtual one in the primary chain)
+                if nm not in extras:
+                    new.append((i, "~"))
+                i += 2
                 continue
             m = self.slot_method(name, i, words[i])
-            if not (kind in ("method", "pure") and m in extras):
+            if not ((kind == "method" and nm in extras) or (kind == "pure" and m in extras_pure)):
                 new.append((i, m))
             i += 1
         # MSVC: overloads introduced together are grouped at the first one, in reverse order.

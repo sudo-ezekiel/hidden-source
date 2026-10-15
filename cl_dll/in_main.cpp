@@ -107,6 +107,9 @@ static	kbutton_t	in_alt1;
 static	kbutton_t	in_score;
 static	kbutton_t	in_break;
 static	kbutton_t	in_zoom;
+static	kbutton_t	in_pounce;		// Hidden
+static	kbutton_t	in_aura;		// Hidden
+static	kbutton_t	in_radiomenu;	// Hidden
 
 /*
 ===========
@@ -457,6 +460,30 @@ void IN_GraphDown(void) {KeyDown(&in_graph);}
 void IN_GraphUp(void) {KeyUp(&in_graph);}
 void IN_ZoomDown(void) {KeyDown(&in_zoom);}
 void IN_ZoomUp(void) {KeyUp(&in_zoom);}
+void IN_PounceDown(void) {KeyDown(&in_pounce);}
+void IN_PounceUp(void) {KeyUp(&in_pounce);}
+void IN_AuraDown(void) {KeyDown(&in_aura);}
+void IN_AuraUp(void) {KeyUp(&in_aura);}
+
+// Hidden: the radio menu (the viewport's "radio" panel) shows while the key is held
+void IN_RadioMenuDown(void)
+{
+	KeyDown(&in_radiomenu);
+	if ( C_BasePlayer::GetLocalPlayer() && gViewPortInterface )
+	{
+		gViewPortInterface->ShowPanel( "radio", true );
+	}
+}
+
+void IN_RadioMenuUp(void)
+{
+	KeyUp(&in_radiomenu);
+	if ( C_BasePlayer::GetLocalPlayer() && gViewPortInterface )
+	{
+		gViewPortInterface->ShowPanel( "radio", false );
+		GetClientVoiceMgr()->StopSquelchMode();
+	}
+}
 
 void IN_AttackDown(void)
 {
@@ -1142,6 +1169,8 @@ int CInput::GetButtonBits( int bResetState )
 	CalcButtonBits( bits, IN_ALT1, s_ClearInputState, &in_alt1, bResetState );
 	CalcButtonBits( bits, IN_SCORE, s_ClearInputState, &in_score, bResetState );
 	CalcButtonBits( bits, IN_ZOOM, s_ClearInputState, &in_zoom, bResetState );
+	CalcButtonBits( bits, IN_AURA, s_ClearInputState, &in_aura, bResetState );
+	CalcButtonBits( bits, IN_BULLRUSH, s_ClearInputState, &in_pounce, bResetState );
 
 	// Cancel is a special flag
 	if (in_cancel)
@@ -1288,6 +1317,12 @@ static ConCommand force_centerview("force_centerview", IN_CenterView_f);
 static ConCommand joyadvancedupdate("joyadvancedupdate", IN_Joystick_Advanced_f);
 static ConCommand startzoom("+zoom", IN_ZoomDown);
 static ConCommand endzoom("-zoom", IN_ZoomUp);
+static ConCommand startpounce("+pounce", IN_PounceDown);
+static ConCommand endpounce("-pounce", IN_PounceUp);
+static ConCommand startaura("+aura", IN_AuraDown);
+static ConCommand endaura("-aura", IN_AuraUp);
+static ConCommand startradiomenu("+radiomenu", IN_RadioMenuDown);
+static ConCommand endradiomenu("-radiomenu", IN_RadioMenuUp);
 
 /*
 ============

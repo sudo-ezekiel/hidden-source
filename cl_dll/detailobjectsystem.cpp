@@ -17,9 +17,14 @@
 #include "engine/ivmodelinfo.h"
 #include "materialsystem/IMesh.h"
 #include "model_types.h"
+#include "env_detail_controller.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
+
+// REBUILD: file scope, as in Valve's 2006 SDK, so env_detail_controller can change them per map
+ConVar cl_detaildist( "cl_detaildist", "1200", 0, "Distance at which detail props are no longer visible" );
+ConVar cl_detailfade( "cl_detailfade", "400", 0, "Distance across which detail props fade in" );
 
 //-----------------------------------------------------------------------------
 // forward declarations
@@ -103,12 +108,17 @@ public:
 	virtual ~CDetailObjectSystem();
 
 	// Init, shutdown
-	virtual bool Init() { return true; }
+	virtual bool Init()
+	{
+		m_flDefaultFadeStart = cl_detailfade.GetFloat();
+		m_flDefaultFadeEnd = cl_detaildist.GetFloat();
+		return true;
+	}
 	virtual void Shutdown() {}
 
 	// Level init, shutdown
 	virtual void LevelInitPreEntity();
-	virtual void LevelInitPostEntity() {}
+	virtual void LevelInitPostEntity();
 	virtual void LevelShutdownPreEntity();
 	virtual void LevelShutdownPostEntity();
 
@@ -199,6 +209,9 @@ private:
 	int m_nFirstSprite;
 	int m_nSortedLeaf;
 	SortInfo_t m_pSortInfo[MAX_SPRITES_PER_LEAF];
+
+	float m_flDefaultFadeStart;
+	float m_flDefaultFadeEnd;
 };
 
 
@@ -658,6 +671,21 @@ void CDetailObjectSystem::LevelInitPreEntity()
 	}
 }
 
+void CDetailObjectSystem::LevelInitPostEntity()
+{
+	if ( GetDetailController() )
+	{
+		cl_detailfade.SetValue( min( m_flDefaultFadeStart, GetDetailController()->m_flFadeStartDist ) );
+		cl_detaildist.SetValue( min( m_flDefaultFadeEnd, GetDetailController()->m_flFadeEndDist ) );
+	}
+	else
+	{
+		// revert to default values if the map doesn't specify
+		cl_detailfade.SetValue( m_flDefaultFadeStart );
+		cl_detaildist.SetValue( m_flDefaultFadeEnd );
+	}
+}
+
 void CDetailObjectSystem::LevelShutdownPreEntity()
 {
 	m_DetailObjects.RemoveAll();
@@ -1097,9 +1125,6 @@ void CDetailObjectSystem::BuildDetailObjectRenderLists( )
 			modelinfo->RecomputeTranslucency( m_DetailObjectDict[i].m_pModel );
 		}
 	}
-
-	static ConVar	cl_detaildist( "cl_detaildist", "1200", 0, "Distance at which detail props are no longer visible" );
-	static ConVar	cl_detailfade( "cl_detailfade", "400", 0, "Distance across which detail props fade in" );
 
 	float factor = 1.0f;
 	C_BasePlayer *local = C_BasePlayer::GetLocalPlayer();

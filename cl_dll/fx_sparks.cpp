@@ -34,6 +34,8 @@ CLIENTEFFECT_MATERIAL( "effects/combinemuzzle2_nocull" )
 CLIENTEFFECT_MATERIAL( "effects/yellowflare_noz" )
 CLIENTEFFECT_REGISTER_END()
 
+ConVar hdn_sparks( "hdn_sparks", "1" );	// Hidden; REBUILD: client.dll registers it between tracer_extra and the spark effects and never reads it
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Input  : &pos - 

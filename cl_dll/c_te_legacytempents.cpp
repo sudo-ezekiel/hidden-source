@@ -59,6 +59,10 @@ ConVar cl_ejectbrass( "cl_ejectbrass", "1" );
 
 ConVar func_break_max_pieces( "func_break_max_pieces", "15", FCVAR_ARCHIVE | FCVAR_REPLICATED );
 
+// Hidden
+ConVar cl_jimmeh( "cl_jimmeh", "0" );
+ConVar cl_brasslife( "cl_brasslife", "90" );
+
 
 #if !defined( HL1_CLIENT_DLL )		// HL1 implements a derivative of CTempEnts
 // Temp entity interface
@@ -1319,7 +1323,7 @@ void CTempEnts::EjectBrass( const Vector &pos1, const QAngle &angles, const QAng
 						dir[1] + random->RandomFloat(-64,64),
 						dir[2] + random->RandomFloat(  0,64) ) );
 
-	pTemp->die = gpGlobals->curtime + 1.0f + random->RandomFloat( 0.0f, 1.0f );	// Add an extra 0-1 secs of life	
+	pTemp->die = gpGlobals->curtime + 10.0f;	// Hidden: 10 seconds (client.dll's 241d8500)
 }
 
 //-----------------------------------------------------------------------------
@@ -2003,9 +2007,10 @@ void CTempEnts::LevelInit()
 	m_pSpriteCombineFlash[0] = (model_t *)engine->LoadModel( "effects/combinemuzzle1.vmt" );
 	m_pSpriteCombineFlash[1] = (model_t *)engine->LoadModel( "effects/combinemuzzle2.vmt" );
 
-	m_pShells[0] = (model_t *) engine->LoadModel( "models/weapons/shell.mdl" );
-	m_pShells[1] = (model_t *) engine->LoadModel( "models/weapons/rifleshell.mdl" );
-	m_pShells[2] = (model_t *) engine->LoadModel( "models/weapons/shotgun_shell.mdl" );
+	m_pShells[0] = (model_t *) engine->LoadModel( "models/Shells/shell_556.mdl" );
+	m_pShells[1] = (model_t *) engine->LoadModel( "models/Shells/shell_57.mdl" );
+	m_pShells[2] = (model_t *) engine->LoadModel( "models/Shells/shell_9mm.mdl" );
+	m_pShells[3] = (model_t *) engine->LoadModel( "models/Shells/shell_12gauge.mdl" );
 
 #if defined( HL1_CLIENT_DLL )
 	m_pHL1Shell			= (model_t *)engine->LoadModel( "models/shell.mdl" );
@@ -2013,12 +2018,16 @@ void CTempEnts::LevelInit()
 #endif
 
 #if defined( CSTRIKE_DLL ) || defined ( SDK_DLL )
-	m_pCS_9MMShell		= (model_t *)engine->LoadModel( "models/Shells/shell_9mm.mdl" );
 	m_pCS_57Shell		= (model_t *)engine->LoadModel( "models/Shells/shell_57.mdl" );
-	m_pCS_12GaugeShell	= (model_t *)engine->LoadModel( "models/Shells/shell_12gauge.mdl" );
 	m_pCS_556Shell		= (model_t *)engine->LoadModel( "models/Shells/shell_556.mdl" );
-	m_pCS_762NATOShell	= (model_t *)engine->LoadModel( "models/Shells/shell_762nato.mdl" );
-	m_pCS_338MAGShell	= (model_t *)engine->LoadModel( "models/Shells/shell_338mag.mdl" );
+	m_pCS_9MMShell		= (model_t *)engine->LoadModel( "models/Shells/shell_9mm.mdl" );
+	m_pCS_12GaugeShell	= (model_t *)engine->LoadModel( "models/Shells/shell_12gauge.mdl" );
+
+	m_pJimmehClip		= (model_t *)engine->LoadModel( "models/generic/jimmy.mdl" );
+	m_pPistolClip		= (model_t *)engine->LoadModel( "models/weapons/fnp9/w_fnp9mag.mdl" );
+	m_pFN2000Clip		= (model_t *)engine->LoadModel( "models/weapons/f2000/w_f2000mag.mdl" );
+	m_pFN303Clip		= (model_t *)engine->LoadModel( "models/weapons/fn303/w_fn303mag.mdl" );
+	m_pFNP90Clip		= (model_t *)engine->LoadModel( "models/weapons/p90/w_p90mag.mdl" );
 #endif
 }
 
@@ -2054,8 +2063,6 @@ void CTempEnts::Init (void)
 	m_pCS_57Shell		= NULL;
 	m_pCS_12GaugeShell	= NULL;
 	m_pCS_556Shell		= NULL;
-	m_pCS_762NATOShell	= NULL;
-	m_pCS_338MAGShell	= NULL;
 #endif
 
 	// Clear out lists to start
@@ -3002,6 +3009,70 @@ void CTempEnts::HL1EjectBrass( const Vector &vecPosition, const QAngle &angAngle
 	pTemp->die = gpGlobals->curtime + 2.5;
 }
 
+//-----------------------------------------------------------------------------
+// Purpose: Hidden: drops an empty magazine, like EjectBrass drops a shell
+//-----------------------------------------------------------------------------
+void CTempEnts::EjectClip( const Vector &pos1, const QAngle &angles, int type )
+{
+	if ( cl_ejectbrass.GetBool() == false )
+		return;
+
+	const model_t *pModel;
+
+	switch ( type )
+	{
+	default:
+	case HDN_CLIP_PISTOL:
+		pModel = m_pPistolClip;
+		break;
+	case HDN_CLIP_FN2000:
+		pModel = m_pFN2000Clip;
+		break;
+	case HDN_CLIP_FNP90:
+		pModel = m_pFNP90Clip;
+		break;
+	case HDN_CLIP_FN303:
+		pModel = m_pFN303Clip;
+		break;
+	}
+
+	if ( cl_jimmeh.GetInt() )
+		pModel = m_pJimmehClip;
+
+	if ( pModel == NULL )
+		return;
+
+	C_LocalTempEntity	*pTemp = TempEntAlloc( pos1, ( model_t * ) pModel );
+
+	if ( pTemp == NULL )
+		return;
+
+	pTemp->m_nBody	= 0;
+
+	pTemp->flags |= ( FTENT_COLLIDEWORLD | FTENT_FADEOUT | FTENT_GRAVITY | FTENT_ROTATE );
+
+	pTemp->m_vecTempEntAngVelocity[0] = random->RandomFloat(-1024,1024);
+	pTemp->m_vecTempEntAngVelocity[1] = random->RandomFloat(-1024,1024);
+	pTemp->m_vecTempEntAngVelocity[2] = random->RandomFloat(-1024,1024);
+
+	pTemp->SetAbsAngles( angles );
+
+	pTemp->SetRenderMode( kRenderNormal );
+	pTemp->tempent_renderamt = 255;		// Set this for fadeout
+
+	Vector	dir;
+
+	AngleVectors( angles, &dir );
+
+	dir *= random->RandomFloat( 150.0f, 200.0f );
+
+	pTemp->SetVelocity( Vector(dir[0] + random->RandomFloat(-64,64),
+						dir[1] + random->RandomFloat(-64,64),
+						dir[2] + random->RandomFloat(  0,64) ) );
+
+	pTemp->die = gpGlobals->curtime + cl_brasslife.GetInt();
+}
+
 #define SHELLTYPE_PISTOL	0
 #define SHELLTYPE_RIFLE		1
 #define SHELLTYPE_SHOTGUN	2
@@ -3009,6 +3080,10 @@ void CTempEnts::HL1EjectBrass( const Vector &vecPosition, const QAngle &angAngle
 
 void CTempEnts::CSEjectBrass( const Vector &vecPosition, const QAngle &angVelocity, int nVelocity, int shellType, CBasePlayer *pShooter )
 {
+	// Hidden: cl_ejectbrass turns these off too
+	if ( cl_ejectbrass.GetBool() == false )
+		return;
+
 	const model_t *pModel = NULL;
 	int hitsound = TE_BOUNCE_SHELL;
 
@@ -3017,31 +3092,26 @@ void CTempEnts::CSEjectBrass( const Vector &vecPosition, const QAngle &angVeloci
 	switch( shellType )
 	{
 	default:
-	case CS_SHELL_9MM:
-		hitsound = TE_PISTOL_SHELL;
-		pModel = m_pCS_9MMShell;
-		break;
 	case CS_SHELL_57:
 		hitsound = TE_PISTOL_SHELL;
 		pModel = m_pCS_57Shell;
+		break;
+	case CS_SHELL_556:
+		hitsound = TE_PISTOL_SHELL;	// Hidden: the pistol sound for the rifle shell too
+		pModel = m_pCS_556Shell;
+		break;
+	case CS_SHELL_9MM:
+		hitsound = TE_PISTOL_SHELL;
+		pModel = m_pCS_9MMShell;
 		break;
 	case CS_SHELL_12GAUGE:
 		hitsound = TE_SHOTGUN_SHELL;
 		pModel = m_pCS_12GaugeShell;
 		break;
-	case CS_SHELL_556:
-		hitsound = TE_RIFLE_SHELL;
-		pModel = m_pCS_556Shell;
-		break;
-	case CS_SHELL_762NATO:
-		hitsound = TE_RIFLE_SHELL;
-		pModel = m_pCS_762NATOShell;
-		break;
-	case CS_SHELL_338MAG:
-		hitsound = TE_RIFLE_SHELL;
-		pModel = m_pCS_338MAGShell;
-		break;
 	}
+
+	if ( cl_jimmeh.GetInt() )
+		pModel = m_pJimmehClip;
 #endif
 
 	if ( pModel == NULL )
@@ -3079,7 +3149,8 @@ void CTempEnts::CSEjectBrass( const Vector &vecPosition, const QAngle &angVeloci
 	pTemp->SetGravity( 0.4 );
 
 	pTemp->m_nBody	= 0;
-	pTemp->flags = FTENT_FADEOUT | FTENT_GRAVITY | FTENT_COLLIDEALL | FTENT_HITSOUND | FTENT_ROTATE | FTENT_CHANGERENDERONCOLLIDE;
+	// Hidden: no FTENT_CHANGERENDERONCOLLIDE and no view model render group (client.dll's 241d69f0)
+	pTemp->flags = FTENT_FADEOUT | FTENT_GRAVITY | FTENT_COLLIDEALL | FTENT_HITSOUND | FTENT_ROTATE;
 
 	pTemp->m_vecTempEntAngVelocity[0] = random->RandomFloat(-256,256);
 	pTemp->m_vecTempEntAngVelocity[1] = random->RandomFloat(-256,256);
@@ -3087,32 +3158,5 @@ void CTempEnts::CSEjectBrass( const Vector &vecPosition, const QAngle &angVeloci
 	pTemp->SetRenderMode( kRenderNormal );
 	pTemp->tempent_renderamt = 255;
 	
-	pTemp->die = gpGlobals->curtime + 10;
-
-	bool bViewModelBrass = false;
-
-	if ( pShooter && pShooter->GetObserverMode() == OBS_MODE_IN_EYE )
-	{
-		// we are spectating the shooter in first person view
-		pShooter = ToBasePlayer( pShooter->GetObserverTarget() );
-		bViewModelBrass = true;
-	}
-
-	if ( pShooter )
-	{
-		pTemp->clientIndex = pShooter->entindex();
-		bViewModelBrass |= pShooter->IsLocalPlayer();
-	}
-	else
-	{
-		pTemp->clientIndex = 0;
-	}
-
-	if ( bViewModelBrass )
-	{
-		// for viewmodel brass put it in the viewmodel renderer group
-		pTemp->m_RenderGroup = RENDER_GROUP_VIEW_MODEL_OPAQUE;
-	}
-
-	
+	pTemp->die = gpGlobals->curtime + cl_brasslife.GetInt();
 }

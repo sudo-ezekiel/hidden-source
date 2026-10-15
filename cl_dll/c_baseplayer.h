@@ -292,7 +292,7 @@ public:
 	int				GetSecondary( void ) { return m_iSecondary; }
 	int				GetNewClass( void ) { return m_iNewClass; }
 	bool			GetNoHidden( void ) { return m_bNoHidden; }
-	int				GetWeighting( void ) { return m_iWeighting; }	// REBUILD: name
+	int				GetWeighting( void );	// REBUILD: name; out of line in client.dll (2409a230)
 	bool			IsStunned( void ) { return m_bStunned; }
 	float			GetBlur( void ) { return m_flBlur; }			// REBUILD: name
 	bool			NightVisionEnabled( void ) { return m_bNightVision; }
@@ -350,7 +350,9 @@ protected:
 	void				CalcPlayerView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
 	void				CalcVehicleView(IClientVehicle *pVehicle, Vector& eyeOrigin, QAngle& eyeAngles,
 							float& zNear, float& zFar, float& fov );
-	void				CalcObserverView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
+	// REBUILD: virtual in client.dll (the slot after ExitLadder), as in Valve's 2006 SDK
+	virtual void		CalcObserverView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
+	void				CalcFixedView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );	// REBUILD: name
 	void				CalcChaseCamView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
 	void				CalcInEyeCamView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );
 	void				CalcDeathCamView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov );

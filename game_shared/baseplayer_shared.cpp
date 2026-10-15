@@ -1408,20 +1408,14 @@ void CBasePlayer::CalcVehicleView(
 void CBasePlayer::CalcObserverView( Vector& eyeOrigin, QAngle& eyeAngles, float& fov )
 {
 #if defined( CLIENT_DLL )
+	// Hidden: only the fixed cameras, the death cam and the in-eye view (client.dll's 2405d390)
 	switch ( GetObserverMode() )
 	{
-
-		case OBS_MODE_DEATHCAM	:	CalcDeathCamView( eyeOrigin, eyeAngles, fov );
-									break;
-
-		case OBS_MODE_ROAMING	:	// just copy current position without view offset
-		case OBS_MODE_FIXED		:	CalcRoamingView( eyeOrigin, eyeAngles, fov );
+		case OBS_MODE_FIXED		:
+		case OBS_MODE_DEATHCAM	:	CalcFixedView( eyeOrigin, eyeAngles, fov );
 									break;
 
 		case OBS_MODE_IN_EYE	:	CalcInEyeCamView( eyeOrigin, eyeAngles, fov );
-									break;
-
-		case OBS_MODE_CHASE		:	CalcChaseCamView( eyeOrigin, eyeAngles, fov  );
 									break;
 	}
 #else
