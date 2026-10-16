@@ -166,9 +166,17 @@ the files to it. On the player's PC the installer finds Steam in the registry, a
 Source SDK Base 2006 if it is missing and waits for it, installs the mod in Steam's sourcemods folder,
 applies the server browser fix with a backup (the same layout as `ghsi.py`, so either one can undo
 it), and offers to restart Steam so the game shows in the library. `HiddenSourceInstaller.exe
--undo-browser-fix` puts Source SDK Base's own files back. Tested under Wine with a stand-in Steam: the
-installed mod equals the staged one file for file, the browser fix equals GHSI's, and both undos
-give back the original files.
+-undo-browser-fix` puts Source SDK Base's own files back.
+
+On Linux the same .exe runs under Wine (open it, or `wine HiddenSourceInstaller.exe`). It then installs
+for Linux's own Steam, which runs the game with Proton: it finds Steam in the home folder
+(`~/.steam/steam`, `~/.local/share/Steam`, Flatpak's or Snap's), reads the Linux paths of its library
+folders, and asks Steam for Source SDK Base through `winebrowser`. It does not restart Linux's Steam;
+it says to.
+
+Tested under Wine with a stand-in Steam, Windows and Linux layouts both: the installed mod equals the
+staged one file for file, the browser fix equals GHSI's, a second run over an installed game works,
+and both undos give back the original files.
 
 ## Hammer and the other SDK tools
 

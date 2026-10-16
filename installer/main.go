@@ -1,7 +1,8 @@
 //go:build windows
 
 // Command installer installs Hidden: Source, built from this repository's source, with GHSI's
-// Enhanced Edition files, on Windows. installer/build.sh appends the game files to the .exe as a
+// Enhanced Edition files, on Windows, or under Wine on Linux for Linux's own Steam (see findSteam).
+// installer/build.sh appends the game files to the .exe as a
 // tar.gz with two trees: sourcemods/ (the mod, as ghsi.py client installs it) and sdkbase/ (the
 // server browser fix's files for Source SDK Base, apart from engine.dll, which is patched in place).
 //
@@ -83,11 +84,10 @@ func main() {
 }
 
 func run() error {
-	steam, err := regString(`Software\Valve\Steam`, "SteamPath")
+	steam, err := findSteam()
 	if err != nil {
-		return fmt.Errorf("Steam is not installed (no SteamPath in the registry): %v", err)
+		return err
 	}
-	steam = filepath.Clean(filepath.FromSlash(steam))
 	fmt.Println("Steam:", steam)
 
 	sdk, err := findSDKBase(steam)
@@ -99,7 +99,7 @@ func run() error {
 	}
 	if sdk == "" {
 		fmt.Println("Source SDK Base 2006 is not installed. Asking Steam to install it...")
-		if exec.Command("cmd", "/c", "start", "", "steam://install/215").Run() != nil {
+		if openSteamURL("steam://install/215") != nil {
 			fmt.Println("Steam did not open. Install it from Steam yourself: Library, Tools, Source SDK Base 2006.")
 		}
 		fmt.Println("Waiting for Steam to finish installing Source SDK Base 2006 (close this window to stop).")
@@ -112,11 +112,12 @@ func run() error {
 	}
 	fmt.Println("Source SDK Base 2006:", sdk)
 
-	mods, err := regString(`Software\Valve\Steam`, "SourceModInstallPath")
-	if err != nil || mods == "" {
-		mods = filepath.Join(steam, "steamapps", "sourcemods")
+	mods := filepath.Join(steam, "steamapps", "sourcemods") // where Linux's Steam always has them
+	if !linuxSteam {
+		if m, err := regString(`Software\Valve\Steam`, "SourceModInstallPath"); err == nil && m != "" {
+			mods = filepath.Clean(filepath.FromSlash(m))
+		}
 	}
-	mods = filepath.Clean(filepath.FromSlash(mods))
 	fmt.Println("Mods folder:", mods)
 
 	for running("hl2.exe") {
@@ -169,10 +170,22 @@ func run() error {
 	}
 	fmt.Println("Installed the game in", filepath.Join(mods, "hidden"))
 	fmt.Println("Applied the server browser fix to", sdk)
-	fmt.Println("(undo it with: HiddenSourceInstaller.exe -undo-browser-fix)")
+	if linuxSteam {
+		fmt.Println("(undo it with: wine HiddenSourceInstaller.exe -undo-browser-fix)")
+	} else {
+		fmt.Println("(undo it with: HiddenSourceInstaller.exe -undo-browser-fix)")
+	}
 
 	fmt.Println()
-	if running("steam.exe") {
+	if linuxSteam {
+		// Linux's Steam cannot be stopped from inside Wine: winebrowser turns steam://exit into
+		// steam://exit/, which has not been tried.
+		if running("steam") {
+			fmt.Println("Restart Steam (Steam menu, Exit, then open it again) and the game is in the library as")
+			fmt.Println("\"HIDDEN: SOURCE - Enhanced Edition\".")
+			return nil
+		}
+	} else if running("steam.exe") {
 		if *yes || !askYes("Steam has to restart before the game shows in the library. Restart Steam now? [Y/n] ") {
 			fmt.Println("Restart Steam yourself; the game is in the library as \"HIDDEN: SOURCE - Enhanced Edition\".")
 			return nil
@@ -189,13 +202,98 @@ func run() error {
 	return nil
 }
 
+// linuxSteam is set when the installer runs under Wine on Linux and installs for Linux's own Steam,
+// which runs the game with Proton. That Steam is found in the home folder rather than the registry,
+// its files name Unix paths, and its processes are not in Wine's process list.
+var linuxSteam bool
+
+// findSteam returns Steam's folder. Under Wine it looks for Linux's Steam first, then for a Windows
+// Steam installed in the Wine prefix itself.
+func findSteam() (string, error) {
+	var home string
+	if underWine() {
+		home = strings.TrimPrefix(os.Getenv("WINEHOMEDIR"), `\??\`)
+		for _, d := range []string{
+			`.steam\steam`,
+			`.local\share\Steam`,
+			`.var\app\com.valvesoftware.Steam\.local\share\Steam`, // Flatpak
+			`snap\steam\common\.local\share\Steam`,
+			`.steam\debian-installation`,
+		} {
+			dir := filepath.Join(home, d)
+			if st, err := os.Stat(filepath.Join(dir, "steamapps")); home != "" && err == nil && st.IsDir() {
+				linuxSteam = true
+				return dir, nil
+			}
+		}
+	}
+	steam, err := regString(`Software\Valve\Steam`, "SteamPath")
+	if err == nil && steam != "" {
+		return filepath.Clean(filepath.FromSlash(steam)), nil
+	}
+	if underWine() {
+		return "", fmt.Errorf("Steam was not found in %s (in .steam\\steam, .local\\share\\Steam, or Flatpak's or "+
+			"Snap's folder). Install Steam, start it once, then run this installer again", home)
+	}
+	return "", errors.New("Steam is not installed on this PC. Install it from store.steampowered.com, start it " +
+		"once, then run this installer again")
+}
+
+// openSteamURL hands a steam:// link to Steam. Under Wine, winebrowser passes it to Linux (xdg-open).
+func openSteamURL(url string) error {
+	if linuxSteam {
+		return exec.Command("winebrowser", url).Run()
+	}
+	return exec.Command("cmd", "/c", "start", "", url).Run()
+}
+
+var (
+	kernel32       = syscall.NewLazyDLL("kernel32.dll")
+	wineGetDOSName = kernel32.NewProc("wine_get_dos_file_name") // only Wine's kernel32 has it
+	getProcessHeap = kernel32.NewProc("GetProcessHeap")
+	heapFree       = kernel32.NewProc("HeapFree")
+)
+
+func underWine() bool { return wineGetDOSName.Find() == nil }
+
+// dosPath returns the Windows path Wine gives a Unix path (Z:\... with the usual drive setup), or "".
+func dosPath(unix string) string {
+	b, err := syscall.BytePtrFromString(unix)
+	if err != nil || !underWine() {
+		return ""
+	}
+	r, _, _ := wineGetDOSName.Call(uintptr(unsafe.Pointer(b)))
+	if r == 0 {
+		return ""
+	}
+	p := *(**uint16)(unsafe.Pointer(&r)) // a UTF-16 string on the process heap
+	n := 0
+	for *(*uint16)(unsafe.Add(unsafe.Pointer(p), 2*n)) != 0 {
+		n++
+	}
+	s := syscall.UTF16ToString(unsafe.Slice(p, n))
+	heap, _, _ := getProcessHeap.Call()
+	heapFree.Call(heap, 0, r)
+	return s
+}
+
+// libraryPath turns a library folder named in libraryfolders.vdf into a path the installer can open.
+func libraryPath(p string) string {
+	if linuxSteam && strings.HasPrefix(p, "/") {
+		return dosPath(p)
+	}
+	return filepath.Clean(strings.ReplaceAll(p, `\\`, `\`))
+}
+
 // findSDKBase returns the Source SDK Base 2006 folder (Steam app 215) once Steam has fully installed
 // it, or "" if it is not installed.
 func findSDKBase(steam string) (string, error) {
 	libs := []string{steam}
 	if vdf, err := os.ReadFile(filepath.Join(steam, "steamapps", "libraryfolders.vdf")); err == nil {
 		for _, m := range regexp.MustCompile(`"path"\s+"([^"]+)"`).FindAllSubmatch(vdf, -1) {
-			libs = append(libs, filepath.Clean(strings.ReplaceAll(string(m[1]), `\\`, `\`)))
+			if lib := libraryPath(string(m[1])); lib != "" {
+				libs = append(libs, lib)
+			}
 		}
 	}
 	for _, lib := range libs {
@@ -444,7 +542,23 @@ func undoBrowserFix(sdk string) error {
 	return nil
 }
 
+// running says whether a program is running. For Linux's Steam it reads Linux's process list, where
+// both Steam and the game under Proton (another Wine) are: Wine's tasklist sees neither.
 func running(image string) bool {
+	if linuxSteam {
+		proc := dosPath("/proc")
+		ents, _ := os.ReadDir(proc)
+		for _, e := range ents {
+			if c := e.Name()[0]; c < '0' || c > '9' {
+				continue
+			}
+			comm, err := os.ReadFile(filepath.Join(proc, e.Name(), "comm"))
+			if err == nil && strings.EqualFold(strings.TrimSpace(string(comm)), image) {
+				return true
+			}
+		}
+		return false
+	}
 	out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq "+image, "/NH").Output()
 	return err == nil && bytes.Contains(bytes.ToLower(out), []byte(strings.ToLower(image)))
 }
