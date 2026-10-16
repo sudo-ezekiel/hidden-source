@@ -20,6 +20,10 @@ recompiled until our builds matched Hidden's binaries function by function.
   template code, as Hidden changed it, is in `dlls/sdk`, `game_shared/sdk` and `cl_dll/sdk`. Hidden's
   additions to Valve classes, such as the player's stamina, aura and stun state, are in Valve's files.
 - `rebuild/`: the tools and notes used to rebuild and check the code. The game does not need them.
+- `ghsi/`: GHSI's "Enhanced Edition", the community version most players use, on top of the rebuild.
+  GHSI changes no code (its DLLs are Hidden's 2006 files), so this is its text files, a manifest of
+  its maps, plugins and server browser fix, and `ghsi/ghsi.py` to fetch and install them with the
+  rebuilt DLLs. `ghsi/README.md` lists every change.
 
 ## How close it is
 
@@ -44,7 +48,7 @@ in the C runtime). `rebuild/CLIENT.md` section 5 has the breakdown and the unpai
 
 Both references are the official 2006 files: the server from `hidden-beta4b1-server.zip` and the
 client from `hsb4b-full.zip`, as published on hidden-source.com (checked by CRC-32 against archived
-copies). Later community changes, such as the GHSI "Enhanced Edition" fixes, are not in this source.
+copies). The code matches those files; the community's later fixes are in `ghsi/`.
 
 "The same" means identical instructions, constants and data: the two builds place code and data at
 different addresses, so an address is compared by what it points at (the function or global by name, or
