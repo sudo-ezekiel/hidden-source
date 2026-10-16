@@ -44,7 +44,9 @@ Maps, the server browser files and the plugins are binary, and the maps alone ar
 are not in git. `manifest.tsv` lists each file GHSI adds or changes that is not text here, with its
 sha256 and size. `ghsi.py` downloads GHSI's three files from GitHub (checked by sha256: 1.0 GB, 4.5 MB
 and 1.7 GB), unpacks them without running anything from them, and installs. It needs Python 3.12 or
-later, and 7-Zip (`7z`) for the server package.
+later, and 7-Zip (`7z`) for the server package. Run the commands below from the repository's top
+folder. The downloads go to `~/.cache/hidden-source-ghsi`; to keep them elsewhere, put
+`--cache DIR` before the command (`ghsi.py --cache DIR sdkbase ...`).
 
 ```bash
 python3 -I ghsi/ghsi.py fetch
