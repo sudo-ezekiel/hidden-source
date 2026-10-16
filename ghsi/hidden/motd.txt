@@ -3,15 +3,17 @@
 <head>
 <title>Hidden Source MOTD</title>
 <style type="text/css">
-pre 	{
+span 	{
 		font-family:Verdana,Tahoma;
 		color:#FFB000;
     	}
 body	{
 		background:#000000;
-		margin-left:8px;
-		margin-top:0px;
-		}
+		margin-top: 32px;
+		display: block;
+		text-align: center;
+		font-size: xx-large;
+	}
 a	{
     	text-decoration:    underline;
 	}
@@ -30,11 +32,12 @@ a:hover {
     }
 </style>
 </head>
-<body scroll="no">
-<pre>
-Hidden : Source Beta 4b
-Please report any problems on our forums - <a href="http://forum.hidden-source.com">http://forum.hidden-source.com</a>
 
-</pre>
+<body scroll="no">
+
+<span>Unofficial community Discord:</span>
+<br>
+<a href="https://discord.gg/8fvmPxjfaF">https://discord.gg/8fvmPxjfaF</a>
+
 </body>
 </html>

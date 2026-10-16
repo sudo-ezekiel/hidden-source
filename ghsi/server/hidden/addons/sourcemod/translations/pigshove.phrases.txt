@@ -1,0 +1,37 @@
+"Phrases"
+{
+	"Rage Mode Center"
+	{
+		"en"			"RAGE MODE"
+	}
+
+	"Rage Mode"
+	{
+		"en"			"Rage Mode: Normal PS Enabled"
+	}
+	
+	"Shove"
+	{
+		"en"			"Shove"
+	}
+	
+	"Punt"
+	{
+		"en"			"Punt"
+	}
+	
+	"Push"
+	{
+		"en"			"Push"
+	}
+	
+	"Rage"
+	{
+		"en"			"Rage"
+	}
+	
+	"Pigstick"
+	{
+		"en"			"Pigstick"
+	}
+}

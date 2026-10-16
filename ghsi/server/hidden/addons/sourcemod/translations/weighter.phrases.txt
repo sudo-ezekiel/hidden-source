@@ -1,0 +1,13 @@
+"Phrases"
+{
+	"Chance"
+	{
+		"#format"		"{1:i},{2:i},{3:i}"
+		"en"			"You have a {1} in {2} ({3}%%) chance to be hidden"
+	}
+
+	"WillBe"
+	{
+		"en"			"You will be Hidden next round"
+	}
+}

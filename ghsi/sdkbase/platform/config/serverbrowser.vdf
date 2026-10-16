@@ -11,7 +11,7 @@
 			"NoEmpty"		"0"
 			"NoPassword"		"0"
 			"Secure"		"0"
-			"location"		"0"
+			"Location"		"0"
 		}
 		"FavoriteGames"
 		{
@@ -21,6 +21,7 @@
 			"NoEmpty"		"0"
 			"NoPassword"		"0"
 			"Secure"		"0"
+			"gametype"		"notags"
 		}
 		"HistoryGames"
 		{
@@ -30,6 +31,7 @@
 			"NoEmpty"		"0"
 			"NoPassword"		"0"
 			"Secure"		"0"
+			"gametype"		"notags"
 		}
 		"SpectateGames"
 		{
@@ -39,7 +41,8 @@
 			"NoEmpty"		"0"
 			"NoPassword"		"0"
 			"Secure"		"0"
-			"location"		"0"
+			"Location"		"0"
+			"gametype"		"notags"
 		}
 		"LanGames"
 		{
@@ -49,11 +52,22 @@
 			"NoEmpty"		"0"
 			"NoPassword"		"0"
 			"Secure"		"0"
+			"gametype"		"notags"
 		}
 		"FriendsGames"
 		{
 			"appid"		"0"
 			"ping"		"0"
+			"NoFull"		"0"
+			"NoEmpty"		"0"
+			"NoPassword"		"0"
+			"Secure"		"0"
+			"gametype"		"notags"
+		}
+		"CustomGames"
+		{
+			"ping"		"0"
+			"Location"		"0"
 			"NoFull"		"0"
 			"NoEmpty"		"0"
 			"NoPassword"		"0"

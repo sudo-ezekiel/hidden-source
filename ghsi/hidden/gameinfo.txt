@@ -1,6 +1,6 @@
 "GameInfo"
 {	
-	game		"Hidden: Source Beta 4b"
+	game		"HIDDEN: SOURCE - Enhanced Edition"
 	title		"< HIDDEN SOURCE >"
 	title2		"beta 4b"
 	type 		"multiplayer_only"

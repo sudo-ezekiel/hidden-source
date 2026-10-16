@@ -14,7 +14,7 @@ WeaponData
 	"bucket_position"		"0"
 
 	"clip_amount"			"3"
-	"clip_size"			"15"
+	"clip_size"			"20"
 
 	"primary_ammo"			"XBowBolt"
 	"secondary_ammo"		"None"
