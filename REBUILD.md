@@ -1,8 +1,9 @@
-# Hidden: Source, rebuilt source code
+# How the code was rebuilt
 
-This is the C++ source code of Hidden: Source (beta 4b, 2006), the Half-Life 2 mod, rebuilt from
-the mod's own shipped binaries after the original source was lost. The code was reconstructed and
-recompiled until our builds matched Hidden's binaries function by function.
+This repository is the C++ source code of Hidden: Source (beta 4b, 2006), the Half-Life 2 mod, rebuilt
+from the mod's own shipped binaries after the original source was lost. The code was reconstructed and
+recompiled until our builds matched Hidden's binaries function by function. `README.md` says how to
+build and run it in one step; this file has the details.
 
 ## What is here
 
@@ -37,7 +38,7 @@ result for every function, so they are not a compiler-version effect.
 
 **Windows server.** Built with Hidden's own compiler (Visual C++ .NET 2003, cl 13.10.3077, run under Wine),
 our server.dll has the same size, imports and object counts as Hidden's server.dll of the same day. 30193 of
-its 30701 functions are paired with ours: 30079 are the same and 114 differ (38 of them in Microsoft's C
+its 30703 functions are paired with ours: 30079 are the same and 114 differ (38 of them in Microsoft's C
 runtime library). The unpaired ones are small copies of the same inline code, CRT pieces and tool limits,
 apart from one 12-instruction function that nothing in Hidden's DLL calls. `rebuild/msvc/MSVC.md` and
 `rebuild/SERVER-STATUS.md` have the breakdown.
@@ -104,6 +105,9 @@ This route has not been tried in Visual Studio itself. The Wine build below uses
 files and switches and is tested.
 
 ## Building on Linux
+
+`rebuild/install.sh` runs the three builds below side by side and installs the results in the mod
+folder (`README.md`). Each build on its own:
 
 **Server (GCC 3.4 in Docker).** Make the `hsrebuild-gcc34` image first: `rebuild/docker/README.md`
 lists the Debian 4.0 packages and how each was checked, and how to add Hidden's exact
