@@ -150,6 +150,26 @@ The build reads three environment variables: `MSVC71` (the unpacked tree), `WINE
 tier0.lib and vstdlib.lib are import libraries, so only their names matter, and nvtc.lib is the same
 file in both SDKs. The client build makes vgui_controls.lib from `vgui2/controls`.
 
+## The Windows installer for players
+
+`installer/build.sh` makes `HiddenSourceInstaller.exe`, one file of about 760 MB that installs the game
+on Windows: the mod built from this source with GHSI's Enhanced Edition files (`ghsi/`), and the server
+browser fix in Source SDK Base. It needs the builds above and Go (1.22 or later):
+
+```bash
+sh installer/build.sh
+```
+
+It builds the three binaries with `rebuild/build_all.sh` (`SKIP_BUILD=1` uses the last ones), stages
+the mod as `ghsi.py client` installs it, compiles `installer/main.go` for 32-bit Windows and appends
+the files to it. On the player's PC the installer finds Steam in the registry, asks Steam to install
+Source SDK Base 2006 if it is missing and waits for it, installs the mod in Steam's sourcemods folder,
+applies the server browser fix with a backup (the same layout as `ghsi.py`, so either one can undo
+it), and offers to restart Steam so the game shows in the library. `HiddenSourceInstaller.exe
+-undo-browser-fix` puts Source SDK Base's own files back. Tested under Wine with a stand-in Steam: the
+installed mod equals the staged one file for file, the browser fix equals GHSI's, and both undos
+give back the original files.
+
 ## Hammer and the other SDK tools
 
 Hammer, the map compilers (vbsp, vvis, vrad), studiomdl and hlmv are in the `bin` folder of the same

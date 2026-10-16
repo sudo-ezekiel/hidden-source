@@ -28,3 +28,4 @@ under Proton.
 - `REBUILD.md`: how the code was rebuilt, how close it is to Hidden's binaries, and how to build each
   part on its own, on Linux or with Visual Studio .NET 2003 on Windows.
 - `ghsi/README.md`: every change GHSI makes, and the tool that installs them.
+- `installer/`: a one-file Windows installer for players, made with `installer/build.sh` (`REBUILD.md`).

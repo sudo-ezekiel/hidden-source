@@ -99,8 +99,8 @@ func run() error {
 	}
 	if sdk == "" {
 		fmt.Println("Source SDK Base 2006 is not installed. Asking Steam to install it...")
-		if err := exec.Command("cmd", "/c", "start", "", "steam://install/215").Run(); err != nil {
-			return fmt.Errorf("could not start the Steam install: %v", err)
+		if exec.Command("cmd", "/c", "start", "", "steam://install/215").Run() != nil {
+			fmt.Println("Steam did not open. Install it from Steam yourself: Library, Tools, Source SDK Base 2006.")
 		}
 		fmt.Println("Waiting for Steam to finish installing Source SDK Base 2006 (close this window to stop).")
 		for sdk == "" {
