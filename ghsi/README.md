@@ -68,8 +68,8 @@ The Windows dedicated server, in a folder of its own:
 python3 -I ghsi/ghsi.py server ~/hidden-server --bin ~/.cache/hsrebuild-msvc-server/out/msvc/server/server.dll
 ```
 
-`client` and `server` give exactly GHSI's files apart from the DLLs given with `--bin`; this was
-checked file by file against GHSI's downloads. Editing a file here (a weapon script, say) and running
+`client` and `server` give exactly GHSI's files apart from the DLLs given with `--bin` and the two
+map lists below; this was checked file by file against GHSI's downloads. Editing a file here (a weapon script, say) and running
 `client` again installs the edited file. `sdkbase` keeps every file it replaces in
 `Source SDK Base/ghsi-backup`, and `sdkbase --restore` puts them back and removes what it added. If
 Steam verifies or updates Source SDK Base it puts its own files back: run `--restore`, then `sdkbase`
@@ -132,6 +132,11 @@ Source SDK Base with the mod and `-console`, then removes the window's borders. 
 opens the port and starts srcds with `-tickrate 128`.
 
 ## Notes
+
+- **One change that is not GHSI's.** GHSI fixed the map lists only in its dedicated server package.
+  Its client package still names hdn_decay, hdn_origin and ovr_decay, which a fresh GHSI install
+  does not have, so a listen server's map cycle runs into missing maps. `hidden/mapcycle.txt` and
+  `hidden/maplist.txt` here are the dedicated server's lists.
 
 - `hidden-4a`: GHSI also puts 39 beta 4a voice files next to the mod in `sourcemods`. `gameinfo.txt`
   does not mount that folder, so the game does not use them. `ghsi.py client` installs it as GHSI
